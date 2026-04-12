@@ -18,34 +18,34 @@ HOST_ARCH := $(shell go env GOARCH 2>/dev/null || uname -m)
 
 # Normalize architecture names
 ifeq ($(HOST_ARCH),x86_64)
-	HOST_ARCH := amd64
+    HOST_ARCH := amd64
 endif
 ifeq ($(HOST_ARCH),aarch64)
-	HOST_ARCH := arm64
+    HOST_ARCH := arm64
 endif
 
 # Map OS names for UI
 ifeq ($(HOST_OS),darwin)
-	OS_NAME := macOS
+    OS_NAME := macOS
 else ifeq ($(HOST_OS),linux)
-	OS_NAME := Linux
+    OS_NAME := Linux
 else
-	OS_NAME := $(HOST_OS)
+    OS_NAME := $(HOST_OS)
 endif
 
 # Determine exact binary filenames for downloads
 ifeq ($(HOST_OS),windows)
-	BINARY_NAME := $(APP_NAME)_$(HOST_OS)_$(HOST_ARCH).exe
-	RELAY_BINARY_NAME := $(RELAY_NAME)_$(HOST_OS)_$(HOST_ARCH).exe
+    BINARY_NAME := $(APP_NAME)_$(HOST_OS)_$(HOST_ARCH).exe
+    RELAY_BINARY_NAME := $(RELAY_NAME)_$(HOST_OS)_$(HOST_ARCH).exe
 else
-	BINARY_NAME := $(APP_NAME)_$(HOST_OS)_$(HOST_ARCH)
-	RELAY_BINARY_NAME := $(RELAY_NAME)_$(HOST_OS)_$(HOST_ARCH)
+    BINARY_NAME := $(APP_NAME)_$(HOST_OS)_$(HOST_ARCH)
+    RELAY_BINARY_NAME := $(RELAY_NAME)_$(HOST_OS)_$(HOST_ARCH)
 endif
 
 DOWNLOAD_URL := https://github.com/$(GITHUB_REPO)/releases/download/$(RELEASE_TAG)/$(BINARY_NAME)
 RELAY_DOWNLOAD_URL := https://github.com/$(GITHUB_REPO)/releases/download/$(RELEASE_TAG)/$(RELAY_BINARY_NAME)
 
-.PHONY: all check-deps build build-all install uninstall clean help setup-deps download-install
+.PHONY: all check-deps build build-agentfm build-relay build-all install uninstall clean help setup-deps download-install
 
 # Default target when someone just types `make`
 all: check-deps build
@@ -84,12 +84,20 @@ endif
 # ==========================================
 # 🔨 NATIVE BUILD (For current machine)
 # ==========================================
-build:
-	@echo "🔨 Building native $(APP_NAME) and $(RELAY_NAME) binaries for $(OS_NAME) ($(HOST_ARCH))..."
+build-agentfm:
+	@echo "🔨 Building native $(APP_NAME) binary for $(OS_NAME) ($(HOST_ARCH))..."
 	@go mod tidy
 	@go build -ldflags "-s -w -X main.Version=$(VERSION)" -o $(APP_NAME) $(MAIN_FILE)
+	@echo "✅ $(APP_NAME) build complete! Run ./$(APP_NAME) --help"
+
+build-relay:
+	@echo "🔨 Building native $(RELAY_NAME) binary for $(OS_NAME) ($(HOST_ARCH))..."
+	@go mod tidy
 	@go build -ldflags "-s -w -X main.Version=$(VERSION)" -o $(RELAY_NAME) $(RELAY_MAIN_FILE)
-	@echo "✅ Build complete! Run ./$(APP_NAME) --help or ./$(RELAY_NAME) --help"
+	@echo "✅ $(RELAY_NAME) build complete! Run ./$(RELAY_NAME) --help"
+
+build: build-agentfm build-relay
+	@echo "✅ Both binaries built successfully!"
 
 # ==========================================
 # 🌍 CROSS-COMPILATION (For Releases)
@@ -174,8 +182,10 @@ clean:
 # ==========================================
 help:
 	@echo "🚀 AgentFM Makefile Commands:"
-	@echo "  make              - Checks deps and builds the native binaries"
-	@echo "  make build        - Compiles agentfm and relay for your current OS"
+	@echo "  make              - Checks deps and builds both native binaries"
+	@echo "  make build        - Compiles BOTH agentfm and relay for your current OS"
+	@echo "  make build-agentfm- Compiles ONLY the agentfm node binary"
+	@echo "  make build-relay  - Compiles ONLY the relay server binary"
 	@echo "  make install      - Compiles and installs both tools globally to $(INSTALL_DIR)"
 	@echo "  make download-install - ⬇️ Downloads pre-built releases and installs them"
 	@echo "  make uninstall    - Removes the tools from your system"
