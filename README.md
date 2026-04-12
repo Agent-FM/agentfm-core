@@ -68,7 +68,7 @@ curl -fsSL https://raw.githubusercontent.com/Agent-FM/agentfm-core/refs/heads/ma
 ```bash
 git clone https://github.com/Agent-FM/agentfm-core.git
 cd agentfm/agentfm-go
-make download-install
+make download-install # only use download-install, for custom development check contribution section in the end
 ```
 ### Test
 ```
