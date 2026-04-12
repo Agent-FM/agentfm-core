@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentfm"
+version = "0.1.0"
+description = "Official Python SDK for the AgentFM Edge Compute Mesh"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "AgentFM Dev", email = "hello@agentfm.network"}
+]
+dependencies = [
+    "requests>=2.25.0",
+    "pydantic>=2.0.0"   # We will use this for rock-solid data validation
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/agentfm-python"

@@ -1,0 +1,36 @@
+# ==========================================
+# 🚀 AgentFM .gitignore
+# ==========================================
+
+**/build/*
+*.out
+*.test
+*.prof
+agentfm_artifacts
+venv/
+my_download.zip
+swarm.key
+.env
+*.pem
+*.crt
+*.key
+*.zip
+*.log
+feedback.log
+*.sqlite
+*.db
+
+vendor/
+go.work
+go.work.sum
+
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
+server.py
+constants.go

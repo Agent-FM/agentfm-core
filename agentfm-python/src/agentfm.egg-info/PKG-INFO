@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: agentfm
+Version: 0.1.0
+Summary: Official Python SDK for the AgentFM Edge Compute Mesh
+Author-email: AgentFM Dev <hello@agentfm.network>
+License: MIT
+Project-URL: Homepage, https://github.com/yourusername/agentfm-python
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: requests>=2.25.0
+Requires-Dist: pydantic>=2.0.0
