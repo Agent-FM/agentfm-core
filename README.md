@@ -731,8 +731,52 @@ Always work on a dedicated branch on your own fork. Do not push directly to `mai
 ### 2. Local Development & Testing
 AgentFM is built in Go. Make sure your local environment is up to standard before committing.
 * Ensure you are running Go 1.25+.
-* Run `go fmt ./...` to automatically format your code to standard Go conventions.
-* Run `go test ./...` to ensure no existing P2P mesh or routing logic is broken.
+
+You must get a small vm on cloud to act as a relay server for hole punching system behind a strict NAT envrionment.
+
+Run this in VPC
+
+1. Build agentfm-relay by ``` make build-relay ``` in agentfm-go directory
+2. Run ``` agentfm -mode relay -port 4001 ```, then you will get output like 
+```sh
+🚀 Starting AgentFM Permanent Lighthouse...
+🔑 Loaded existing permanent identity from relay_identity.key!
+
+✅ Permanent Relay Node is Online!
+--------------------------------------------------
+THIS IS YOUR FOREVER ADDRESS (Port 4001):
+/ip4/<ip>/tcp/4001/p2p/<peer>
+/ip4/127.0.0.1/tcp/4001/p2p/<peer>
+/ip6/::1/tcp/4001/p2p/<peer>
+/ip6/2a01:4f8:1c19:a81c::1/tcp/4001/p2p/<peer>
+--------------------------------------------------
+Press CTRL+C to stop the server.
+```
+3. Note this ``` /ip4/<ip>/tcp/4001/p2p/<peer> ```
+
+Now on your local envrionment 
+1. Create a ```constants.go``` file in ``` agentfm-go/internal/network ```. Should look something like this. Change ``` PublicLighthouse ``` from value you got from above, and change ``` TaskProtocol ```, ``` FeedbackProtocol ```, and ``` ArtifactProtocol ``` tags
+``` go
+package network
+
+const (
+	// PubSub Topics
+	TelemetryTopic = "agentfm-<telemetrytopic>-<version>"
+
+	// Stream Protocols
+	TaskProtocol     = "/agentfm/<task>/<version>"
+	FeedbackProtocol = "/agentfm/feedback/<version>"
+	ArtifactProtocol = "/agentfm/artifacts/<version>"
+
+	// Discovery Strings
+	RendezvousString = "agentfm-rendezvous"
+	MDNSServiceTag   = "agentfm-local"
+	PublicLighthouse = "/ip4/<ip>/tcp/4001/p2p/<peer>"
+)
+
+``` 
+2. Run ``` make build-agentfm ``` locally to build agentfm binary to locally test your changes
+
 
 ### 3. Write Clean Commit Messages
 Clear commit messages help us track the history of the network. Use the imperative mood and be descriptive.
