@@ -15,7 +15,7 @@
   <h2>⚡ Quick Install</h2>
 
   ```bash
-  curl -fsSL https://raw.githubusercontent.com/Agent-FM/agentfm-core/refs/heads/main/agentfm-go/install.sh | bash
+  curl -fsSL https://api.agentfm.net/install.sh | bash
   ```
 
 </div>
