@@ -31,12 +31,12 @@ gpu_memory = {
     3: "23GB"
 }
 
-# ✅ FIX 3: Load directly across all 4 GPUs using device_map
+# Update the device_map to "balanced"
 pipe = DiffusionPipeline.from_pretrained(
     "black-forest-labs/FLUX.1-dev",
     torch_dtype=torch.bfloat16,
-    device_map="auto",
-    max_memory=gpu_memory
+    device_map="balanced",   # ✅ CHANGED FROM "auto"
+    max_memory=gpu_memory    # ✅ This keeps the "balance" strictly on the VRAM!
 )
 
 # ✅ FIX 4: Force the VAE into 32-bit float to decode the math properly into a PNG
