@@ -2,9 +2,12 @@ fastapi
 uvicorn
 pydantic
 torch
-diffusers>=0.30.0
-transformers>=4.43.0
+torchvision
+diffusers
+transformers[vision]
 accelerate
 sentencepiece
 protobuf
 Pillow
+tiktoken
+mistral_common
