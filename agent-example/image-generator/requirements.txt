@@ -2,7 +2,9 @@ fastapi
 uvicorn
 pydantic
 torch
-diffusers
-transformers
+diffusers>=0.30.0
+transformers>=4.43.0
 accelerate
+sentencepiece
+protobuf
 Pillow

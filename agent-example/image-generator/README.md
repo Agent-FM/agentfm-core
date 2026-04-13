@@ -22,9 +22,12 @@ Because FLUX.2 requires ~30GB+ of VRAM, packing it directly into an ephemeral co
 * A GPU with at least 24GB+ VRAM (for FLUX.2 [dev])
 * AgentFM CLI installed
 * Podman or Docker installed
+* Making sure you are authenticated with huggingface through cli -- VERY IMPORTANT
 
 ### Step 1: Fire Up the Host GPU Server
-First, load the FLUX model onto your GPU and start the local API. Create `flux_deploy.py` on your host machine.
+First, load the FLUX model onto your GPU and start the local API. Run `flux_deploy.py` on your host machine. before that install all python dependencies. My python version is Python 3.10.20. You maybe find the agent in the folder ```agent-example/image-generator ```
+
+``` pip install -r requirements.txt ```
 
 <details>
 <summary><b>Click to view flux_deploy.py</b></summary>
