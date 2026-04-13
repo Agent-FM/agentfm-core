@@ -25,7 +25,7 @@ pipe = FluxPipeline.from_pretrained(
 )
 
 
-pipe.enable_sequential_cpu_offload(gpu_id=3)
+pipe.enable_sequential_cpu_offload(gpu_id=0)
 print("FLUX is locked, loaded, and isolated on GPU 3!")
 
 class ImageRequest(BaseModel):
@@ -51,10 +51,10 @@ def generate_image(req: ImageRequest):
         try:
             image = pipe(
                 prompt=req.prompt,
-                height=480,
-                width=720,
+                height=1024,
+                width=1024,
                 guidance_scale=3.5,
-                num_inference_steps=28,
+                num_inference_steps=35,
                 max_sequence_length=512,
                 callback_on_step_end=progress_callback
             ).images[0]
