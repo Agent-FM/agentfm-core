@@ -13,11 +13,18 @@ class EndpointFilter(logging.Filter):
  
 logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
  
-app = FastAPI(title="FLUX.2 [dev] API Engine")
+app = FastAPI(title="FLUX.1 [dev] API Engine")
+
+# ✅ THE ANTI-PIXELATION FIX FOR NVIDIA L4 GPUs
+# This forces PyTorch to use stable math and stops the colored boxes.
+torch.backends.cuda.enable_math_sdp(True)
+torch.backends.cuda.enable_flash_sdp(False)
+torch.backends.cuda.enable_mem_efficient_sdp(False)
+torch.backends.cuda.enable_cudnn_sdp(False)
  
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-print("🟢 Initializing the massive FLUX.2 [dev] model...")
-print("⏳ This will load ~30GB+ of weights. Hang tight!")
+print("🟢 Initializing the massive FLUX.1 [dev] model...")
+print("⏳ This will load ~23GB of weights. Hang tight!")
  
 pipe = DiffusionPipeline.from_pretrained(
     "black-forest-labs/FLUX.1-dev",
@@ -53,7 +60,7 @@ def generate_image(req: ImageRequest):
                 height=1024,
                 width=1024,
                 guidance_scale=3.5,
-                num_inference_steps=50,
+                num_inference_steps=28,
                 max_sequence_length=512,
                 callback_on_step_end=progress_callback
             ).images[0]
