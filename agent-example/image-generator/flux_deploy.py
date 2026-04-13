@@ -26,7 +26,7 @@ pipe = FluxPipeline.from_pretrained(
 
 
 pipe.enable_sequential_cpu_offload(gpu_id=0)
-print("FLUX is locked, loaded, and isolated on GPU 3!")
+print("FLUX is locked, loaded, and isolated on GPU 0!")
 
 class ImageRequest(BaseModel):
     prompt: str

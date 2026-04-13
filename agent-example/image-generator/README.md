@@ -29,7 +29,14 @@ Because FLUX.2 requires ~30GB+ of VRAM, packing it directly into an ephemeral co
 ### Step 1: Fire Up the Host GPU Server
  My python version is Python 3.10.20. You maybe find the agent in the folder ```agent-example/image-generator ```
 
-Install all python packages by  running following commands ``` pip install -r requirements.txt ```
+Install all python packages by  running following commands 
+```sh 
+pip install -r requirements.txt 
+pip install -U --force-reinstall accelerate
+pip install --upgrade --force-reinstall git+https://github.com/huggingface/transformers.git git+https://github.com/huggingface/diffusers.git
+pip install -U tiktoken mistral_common torchvision "transformers[vision]"
+python -m pip install torch torchvision --upgrade --force-reinstall --index-url https://download.pytorch.org/whl/cu121
+```
 
 First, load the FLUX model onto your GPU and start the local API. Run `flux_deploy.py` on your host machine.
 
@@ -123,7 +130,6 @@ if __name__ == "__main__":
 
 **Run the server:**
 ```bash
-pip install fastapi uvicorn diffusers torch pydantic accelerate
 python flux_deploy.py
 ```
 *(Leave this running in the background. It listens on `localhost:8000`.)*
@@ -243,11 +249,11 @@ With your GPU server running in one terminal, open a new terminal and start your
 > Make sure agentdir is right based on your current location 
 ```bash
 agentfm -mode worker \
-  -agentdir "./image-generator" \
+  -agentdir "./agent-example/image-generator/agent" \
   -image "agentfm-flux:latest" \
   -agent "FLUX Visionary" \
   -model "FLUX.2 [dev]" \
-  -desc "High-fidelity AI image generator. Send me a visual prompt." \
+  -desc "High-fidelity AI image generator. Send me a visual prompt. I take around 5 minute to generate an image due to less powerful gpu, so please bare in mind" \
   -author "YourName" \
   -maxtasks 1 \
   -maxgpu 95
