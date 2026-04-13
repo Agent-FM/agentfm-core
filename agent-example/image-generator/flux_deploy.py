@@ -20,7 +20,7 @@ print("🟢 Initializing the massive FLUX.2 [dev] model...")
 print("⏳ This will load ~30GB+ of weights. Hang tight!")
 
 pipe = DiffusionPipeline.from_pretrained(
-    "black-forest-labs/FLUX.2-dev",
+    "black-forest-labs/FLUX.1-dev",
     torch_dtype=torch.bfloat16
 )
 
