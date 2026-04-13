@@ -39,10 +39,8 @@ pipe = DiffusionPipeline.from_pretrained(
     max_memory=gpu_memory    # ✅ This keeps the "balance" strictly on the VRAM!
 )
 
-# ✅ FIX 4: Force the VAE into 32-bit float to decode the math properly into a PNG
-pipe.vae.to(dtype=torch.float32)
 
-# ❌ NOTE: No enable_model_cpu_offload() here! We want everything staying purely on the GPUs!
+
 
 print("✅ FLUX.1 [dev] is locked, loaded natively across 4 GPUs, and ready to generate!")
 
