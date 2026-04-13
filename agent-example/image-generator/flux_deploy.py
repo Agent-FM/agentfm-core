@@ -45,7 +45,7 @@ def generate_image(req: ImageRequest):
         progress_state["status"] = "Drawing image..."
 
         def progress_callback(pipeline, step_index, timestep, callback_kwargs):
-            progress_state["status"] = f"Rendering step {step_index + 1} of 28..."
+            progress_state["status"] = f"Rendering step {step_index + 1} of 35..."
             return callback_kwargs
 
         try:
