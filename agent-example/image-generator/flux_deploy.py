@@ -24,11 +24,8 @@ pipe = FluxPipeline.from_pretrained(
     torch_dtype=torch.bfloat16
 )
 
-# ✅ THE PROPER FIX: Use xFormers to prevent the L4 pixelation bug natively
-# pipe.enable_xformers_memory_efficient_attention()
 
-# 🚀 TWEAKED FOR SPEED: Model offload safely isolates it on GPU 3
-pipe.enable_model_cpu_offload(gpu_id=0)
+pipe.enable_sequential_cpu_offload(gpu_id=3)
 print("FLUX is locked, loaded, and isolated on GPU 3!")
 
 class ImageRequest(BaseModel):
@@ -79,3 +76,4 @@ def generate_image(req: ImageRequest):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
