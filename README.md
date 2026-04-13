@@ -25,7 +25,7 @@
 
 **AgentFM** is a peer-to-peer network that turns everyday computers into a decentralized AI supercomputer. Instead of paying exorbitant fees to centralized monopolies like AWS or OpenAI, AgentFM lets you run massive AI workloads directly across a global mesh of idle CPUs and GPUs.
 
-* 🌍 **Join the Public Mesh:** Package your custom AI agent—whether it is a local LLM, a Python script, or an image generator—into a standard Podman container and broadcast it. Anyone on the internet can securely connect to use your agent, and *you* can instantly route your heavy AI tasks to available GPUs across the globe. 
+* 🌍 **Join the Public Mesh:** Package your custom AI agent, whether it is a local LLM, a Python script, or an image generator, into a standard Podman container and broadcast it. Anyone on the internet can securely connect to use your agent, and *you* can instantly route your heavy AI tasks to available GPUs across the globe. 
 * 🔒 **Create a Private Swarm:** Working on confidential enterprise data? Use a secret `swarm.key` to create a closed, heavily encrypted "Darknet." Safely offload heavy tasks from a weak laptop to a co-worker's powerful GPU workstation in another country, without exposing a single byte of data to the public internet.
 
 ---
@@ -675,7 +675,7 @@ agentfm -mode genkey
 
 ### 📡 Inside the Boss UI (The Command Center)
 
-When you launch AgentFM in `-mode boss`, you aren't just opening a terminal script—you are booting up a live, decentralized radar of global AI compute. 
+When you launch AgentFM in `-mode boss`, you aren't just opening a terminal script, you are booting up a live, decentralized radar of global AI compute. 
 
 Here is exactly what happens during a task lifecycle:
 
