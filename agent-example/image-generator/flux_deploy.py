@@ -19,15 +19,19 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 print("🟢 Initializing the massive FLUX.2 [dev] model...")
 print("⏳ This will load ~30GB+ of weights. Hang tight!")
 
+gpu_memory = {
+    0: "23GB", 
+    1: "23GB", 
+    2: "23GB", 
+    3: "23GB"
+}
+
 pipe = DiffusionPipeline.from_pretrained(
     "black-forest-labs/FLUX.2-dev",
     torch_dtype=torch.bfloat16,
-    device_map="balanced"
+    device_map="auto",          
+    max_memory=gpu_memory       
 )
-
-# pipe.enable_model_cpu_offload()
-# pipe.vae.enable_slicing()
-# pipe.vae.enable_tiling()
 print("✅ FLUX.2 [dev] is locked, loaded, and ready to generate!")
 
 class ImageRequest(BaseModel):
