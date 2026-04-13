@@ -22,12 +22,16 @@ Because FLUX.2 requires ~30GB+ of VRAM, packing it directly into an ephemeral co
 * A GPU with at least 24GB+ VRAM (for FLUX.2 [dev])
 * AgentFM CLI installed
 * Podman or Docker installed
-* Making sure you are authenticated with huggingface through cli -- VERY IMPORTANT
+* Making sure you are authenticated with huggingface through cli by ``` hf auth login ``` -- VERY IMPORTANT
+
+> Just remember: you still must have clicked the "Agree and access repository" button on the FLUX.2-dev Hugging Face page with the account that generated that token, or it will still bounce you!
 
 ### Step 1: Fire Up the Host GPU Server
-First, load the FLUX model onto your GPU and start the local API. Run `flux_deploy.py` on your host machine. before that install all python dependencies. My python version is Python 3.10.20. You maybe find the agent in the folder ```agent-example/image-generator ```
+ My python version is Python 3.10.20. You maybe find the agent in the folder ```agent-example/image-generator ```
 
-``` pip install -r requirements.txt ```
+Install all python packages by  running following commands ``` pip install -r requirements.txt ```
+
+First, load the FLUX model onto your GPU and start the local API. Run `flux_deploy.py` on your host machine.
 
 <details>
 <summary><b>Click to view flux_deploy.py</b></summary>
@@ -127,7 +131,7 @@ python flux_deploy.py
 ---
 
 ### Step 2: Create the AgentFM Sandbox Script
-Create a file named `run.py`. This script runs *inside* the secure container and uses `host.docker.internal` to route traffic safely to your host's GPU server.
+Follwoing is `run.py`. This script runs *inside* the secure container and uses `host.docker.internal` to route traffic safely to your host's GPU server.
 
 <details>
 <summary><b>Click to view run.py</b></summary>
@@ -198,7 +202,7 @@ except Exception as e:
 ---
 
 ### Step 3: Package the Sandbox (Dockerfile)
-Create a `Dockerfile` in the exact same directory as `run.py`.
+Following is  `Dockerfile` in the exact same directory as `run.py`.
 
 <details>
 <summary><b>Click to view Dockerfile</b></summary>
@@ -236,6 +240,7 @@ With your GPU server running in one terminal, open a new terminal and start your
 
 *(Note: We use `-maxtasks 1` and `-maxgpu 95` to ensure the worker only accepts one image request at a time, protecting against OOM crashes).*
 
+> Make sure agentdir is right based on your current location 
 ```bash
 agentfm -mode worker \
   -agentdir "./image-generator" \
