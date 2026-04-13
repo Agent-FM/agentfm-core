@@ -13,10 +13,12 @@ class EndpointFilter(logging.Filter):
 
 logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
-app = FastAPI(title="FLUX.2 [dev] API Engine")
+app = FastAPI(title="FLUX.1 [dev] API Engine")
+
+torch.backends.cuda.enable_cudnn_sdp(False)
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-print("🟢 Initializing the massive FLUX.2 [dev] model...")
+print("🟢 Initializing the massive FLUX.1 [dev] model...")
 print("⏳ This will load ~30GB+ of weights. Hang tight!")
 
 pipe = DiffusionPipeline.from_pretrained(
@@ -24,8 +26,10 @@ pipe = DiffusionPipeline.from_pretrained(
     torch_dtype=torch.bfloat16
 )
 
+pipe.vae.to(dtype=torch.float32)
+
 pipe.enable_sequential_cpu_offload(gpu_id=0)
-print("✅ FLUX.2 [dev] is locked, loaded, and ready to generate!")
+print("✅ FLUX.1 [dev] is locked, loaded, and ready to generate!")
 
 class ImageRequest(BaseModel):
     prompt: str
