@@ -24,7 +24,7 @@ pipe = DiffusionPipeline.from_pretrained(
     torch_dtype=torch.bfloat16
 )
 
-pipe.enable_sequential_cpu_offload(gpu_id=0)
+pipe.enable_model_cpu_offload()
 print("✅ FLUX.2 [dev] is locked, loaded, and ready to generate!")
 
 class ImageRequest(BaseModel):
