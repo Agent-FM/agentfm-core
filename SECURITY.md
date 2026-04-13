@@ -14,7 +14,7 @@ AgentFM is actively maintained. Below are the versions of the project that are c
 We take the security of our peer-to-peer AI mesh grid very seriously. If you discover a security vulnerability in AgentFM, please **DO NOT** report it by creating a public GitHub issue.
 
 Instead, please practice responsible disclosure and privately report it to our core team by emailing:
-**security@agentfm.network**
+**info@agentfm.net**
 
 ### What to include in your report
 To help us verify and resolve the issue as quickly as possible, please include:
