@@ -25,6 +25,8 @@ pipe = DiffusionPipeline.from_pretrained(
 )
 
 pipe.enable_model_cpu_offload()
+pipe.vae.enable_slicing()
+pipe.vae.enable_tiling()
 print("✅ FLUX.2 [dev] is locked, loaded, and ready to generate!")
 
 class ImageRequest(BaseModel):
