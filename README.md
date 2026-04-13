@@ -754,16 +754,16 @@ Press CTRL+C to stop the server.
 3. Note this ``` /ip4/<ip>/tcp/4001/p2p/<peer> ```
 
 Now on your local envrionment 
-1. Create a ```constants.go``` file in ``` agentfm-go/internal/network ```. Should look something like this. Change ``` PublicLighthouse ``` from value you got from above, and change ``` TaskProtocol ```, ``` FeedbackProtocol ```, and ``` ArtifactProtocol ``` tags
+1. Create a ```constants.go``` file in ``` agentfm-go/internal/network ```. Should look something like this. Change ``` PublicLighthouse ``` from value you got from above, and change ``` TaskProtocol ``` version, ``` FeedbackProtocol ``` cersion, and ``` ArtifactProtocol ``` version tags
 ``` go
 package network
 
 const (
 	// PubSub Topics
-	TelemetryTopic = "agentfm-<telemetrytopic>-<version>"
+	TelemetryTopic = "agentfm-telemetry-<version>"
 
 	// Stream Protocols
-	TaskProtocol     = "/agentfm/<task>/<version>"
+	TaskProtocol     = "/agentfm/task/<version>"
 	FeedbackProtocol = "/agentfm/feedback/<version>"
 	ArtifactProtocol = "/agentfm/artifacts/<version>"
 
