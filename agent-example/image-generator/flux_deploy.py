@@ -29,7 +29,7 @@ gpu_memory = {
 pipe = DiffusionPipeline.from_pretrained(
     "black-forest-labs/FLUX.2-dev",
     torch_dtype=torch.bfloat16,
-    device_map="auto",          
+    device_map="balanced",          
     max_memory=gpu_memory       
 )
 print("✅ FLUX.2 [dev] is locked, loaded, and ready to generate!")
