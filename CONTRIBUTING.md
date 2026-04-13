@@ -78,7 +78,7 @@ Press CTRL+C to stop the server.
 Now, configure your local machine to connect to your dedicated testing relay.
 
 1. Create or edit the `constants.go` file located at `agentfm-go/internal/network/constants.go`.
-2. Update the `PublicLighthouse` constant with the value you got from your cloud VM. Change the `<task>`, `<telemetrytopic>`, `<version>`, etc., to match your testing environment.
+2. Update the `PublicLighthouse` constant with the value you got from your cloud VM. Change the `<version>` tags as well ., to match your testing environment.
 
 Your file should look like this:
 
@@ -87,10 +87,10 @@ package network
 
 const (
 	// PubSub Topics
-	TelemetryTopic = "agentfm-<telemetrytopic>-<version>"
+	TelemetryTopic = "agentfm-telemetry-<version>"
 
 	// Stream Protocols
-	TaskProtocol     = "/agentfm/<task>/<version>"
+	TaskProtocol     = "/agentfm/task/<version>"
 	FeedbackProtocol = "/agentfm/feedback/<version>"
 	ArtifactProtocol = "/agentfm/artifacts/<version>"
 
