@@ -15,31 +15,27 @@ logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
 app = FastAPI(title="FLUX.2 [dev] API Engine")
 
-# ✅ ANTI-PIXELATION FIX: Stops the L4 GPUs from outputting colored boxes!
+# ✅ ANTI-PIXELATION FIX: Stops the L4 GPUs from outputting colored boxes
 torch.backends.cuda.enable_cudnn_sdp(False)
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-print("🟢 Initializing the massive FLUX model...")
-print("⏳ Spreading weights across all 4 GPUs. Hang tight!")
+print("🟢 Initializing the massive FLUX.2 [dev] model...")
 
-# ✅ THE HARDCODED FIX: 
-# If "balanced" fails, we tell it exactly how to shard the model.
-custom_device_map = {
-    "text_encoder": 0,
-    "text_encoder_2": 0,
-    "tokenizer": 0,
-    "tokenizer_2": 0,
-    "transformer": 1, # The transformer is huge, give it its own GPU
-    "vae": 2
-}
-
+# ✅ STANDARD LOAD: No device_map dicts to crash the library!
 pipe = DiffusionPipeline.from_pretrained(
     "black-forest-labs/FLUX.2-dev",
-    torch_dtype=torch.bfloat16,
-    device_map=custom_device_map # Inject the hardcoded map
+    torch_dtype=torch.bfloat16
 )
 
-print("✅ FLUX is locked, loaded natively across GPUs, and ready to generate!")
+# ✅ SPEED FIX: Load the active component to GPU 0, then evict to RAM. 
+# This avoids the slow multi-GPU PCIe traffic jam!
+pipe.enable_model_cpu_offload(gpu_id=0)
+
+# ✅ MEMORY FIX: Force the VAE to draw the image in smaller chunks so the 24GB GPU doesn't OOM
+pipe.vae.enable_slicing()
+pipe.vae.enable_tiling()
+
+print("✅ FLUX is locked, loaded, and ready to generate FAST on GPU 0!")
 
 class ImageRequest(BaseModel):
     prompt: str
@@ -57,7 +53,7 @@ def generate_image(req: ImageRequest):
     with gpu_lock:
         torch.cuda.empty_cache()  
         print(f"\n🎨 Generating Masterpiece: '{req.prompt}'")
-        progress_state["status"] = "GPUs have accepted the prompt. Warming up..."
+        progress_state["status"] = "GPU 0 has accepted the prompt. Warming up..."
 
         def progress_callback(pipeline, step_index, timestep, callback_kwargs):
             progress_state["status"] = f"Rendering step {step_index + 1} of 28..."
@@ -70,7 +66,7 @@ def generate_image(req: ImageRequest):
                 width=1024,
                 guidance_scale=3.5,
                 num_inference_steps=28,
-                max_sequence_length=512,
+                max_sequence_length=256, # ✅ Reduced to 256 to guarantee it fits in 24GB!
                 callback_on_step_end=progress_callback
             ).images[0]
 
