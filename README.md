@@ -420,7 +420,7 @@ The Relay node acts as the "Lighthouse" for your network, allowing your Boss and
 
 ```bash
 # Build the relay binary
-go build -o agentfm-relay ./cmd/relay
+make build-relay
 
 # Run the relay on port 4001
 ./agentfm-relay -port 4001
@@ -433,7 +433,7 @@ go build -o agentfm-relay ./cmd/relay
 By default, AgentFM routes through the official production Relay. To point your local build to your newly created local Relay, you need to update the source code.
 
 1. Open `internal/network/constant.go`.
-2. Find the `PublicLighthouse` constant at the bottom of the file.
+2. Find the `PublicLighthouse` constant at the bottom of the file. Telemetry, task, and feedback version should also be changed 
 3. Replace the production IP address with the Multiaddress you copied from Step 3.
 
 ```go
@@ -441,19 +441,17 @@ package network
 
 const (
     // PubSub Topics
-    TelemetryTopic = "agentfm-telemetry-v1"
+	TelemetryTopic = "agentfm-telemetry-<version>"
 
-    // Stream Protocols
-    TaskProtocol     = "/agentfm/task/1.0.0"
-    FeedbackProtocol = "/agentfm/feedback/1.0.0"
-    ArtifactProtocol = "/agentfm/artifacts/1.0.0"
+	// Stream Protocols
+	TaskProtocol     = "/agentfm/task/<version>"
+	FeedbackProtocol = "/agentfm/feedback/<version>"
+	ArtifactProtocol = "/agentfm/artifacts/<version>"
 
-    // Discovery Strings
-    RendezvousString = "agentfm-rendezvous"
-    MDNSServiceTag   = "agentfm-local"
-    
-    // 🛑 REPLACE THIS LINE WITH YOUR NEW RELAY MULTIADDRESS:
-    PublicLighthouse = "/ip4/127.0.0.1/tcp/4001/p2p/QmYourRelayPeerID..."
+	// Discovery Strings
+	RendezvousString = "agentfm-rendezvous"
+	MDNSServiceTag   = "agentfm-local"
+	PublicLighthouse = "/ip4/<ip>/tcp/4001/p2p/<peer>"
 )
 ```
 
@@ -461,10 +459,11 @@ const (
 
 Now that the source code is pointing to your custom Relay, compile the main AgentFM executable.
 
-```bash
-# Build the AgentFM binary
-go build -o agentfm ./cmd/agentfm
 
+Build agentfm by ``` make build-agentfm ``` in agentfm-go directory
+
+Now verify 
+```bash
 # Verify the build was successful
 ./agentfm --help
 ```
