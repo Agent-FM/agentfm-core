@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/logo-ver-2.png" alt="AgentFM Logo" width="400" />
+  <img src="assets/logo-git.png" alt="AgentFM Logo" width="400" />
 
   <br />
   <br />
