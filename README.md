@@ -18,6 +18,12 @@
   curl -fsSL https://api.agentfm.net/install.sh | bash
   ```
 
+  <br />
+
+<img src="assets/image1.png" alt="AgentFM Screenshot 1" width="45%" />
+&nbsp;&nbsp;&nbsp;
+<img src="assets/image2.png" alt="AgentFM Screenshot 2" width="45%" />
+
 </div>
 
 ---
