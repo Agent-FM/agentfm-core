@@ -150,7 +150,6 @@ class AgentFMClient:
             
             while pending_prompts or future_to_prompt:
                 try:
-                    # 🔥 We pass the models filter down to the discovery engine!
                     all_workers = self.discover_workers(models=models)
                     
                     available_workers = [
