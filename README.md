@@ -61,7 +61,7 @@
 ### 1-Click Install (macOS & Linux)
 The fastest way to install AgentFM directly to your system path:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Agent-FM/agentfm-core/refs/heads/main/agentfm-go/install.sh | sh 
+curl -fsSL https://api.agentfm.net/install.sh | bash
 ```
 
 ### Build from Source
