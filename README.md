@@ -20,16 +20,11 @@
 
   <br />
 
-<table>
-<tr>
-<td align="center">
-<img src="assets/image1.png" alt="AgentFM Screenshot 1" width="100%" />
-</td>
-<td align="center">
-<img src="assets/image2.png" alt="AgentFM Screenshot 2" width="100%" />
-</td>
-</tr>
-</table>
+<img src="assets/image1.png" alt="AgentFM Terminal Interface" width="800" />
+
+<br /><br />
+
+<img src="assets/image2.png" alt="AgentFM Generation Example" width="800" />
 
 </div>
 
