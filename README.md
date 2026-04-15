@@ -11,7 +11,7 @@
 
   <h3>AgentFM turns idle hardware into a secure, decentralized AI supercomputer.</h3>
   <p><i>Zero-config P2P networking • Hardware-aware routing • Live artifact streaming</i></p>
-  <p><strong>🌐 <a href="https://agentfm.net">agentfm.net</a></strong></p>
+  <p><strong>🌐 <a href="https://agentfm.net">https://agentfm.net</a></strong></p>
 
   <h2>⚡ Quick Install</h2>
 
