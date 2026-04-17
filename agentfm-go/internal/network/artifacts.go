@@ -79,7 +79,6 @@ type progressWriter struct {
 }
 
 func (pw *progressWriter) Write(p []byte) (n int, err error) {
-	time.Sleep(2 * time.Millisecond)
 	n, err = pw.Writer.Write(p)
 	if n > 0 && pw.pb != nil {
 		pw.pb.Add(n)

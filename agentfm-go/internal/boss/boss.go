@@ -14,8 +14,6 @@ import (
 	"github.com/pterm/pterm"
 )
 
-const AppVersion = "1.0.0"
-
 type Boss struct {
 	node          *network.MeshNode
 	activeWorkers map[string]types.WorkerProfile

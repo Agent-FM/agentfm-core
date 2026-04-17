@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
 
@@ -99,12 +98,4 @@ func (w *Worker) waitForShutdown(ctx context.Context) {
 		pterm.Error.Printfln("Host close error: %v", err)
 	}
 	pterm.Success.Println("Safely offline. Goodbye!")
-}
-
-func (w *Worker) truncateWords(text string, maxWords int) string {
-	words := strings.Fields(text)
-	if len(words) <= maxWords {
-		return text
-	}
-	return strings.Join(words[:maxWords], " ") + "..."
 }

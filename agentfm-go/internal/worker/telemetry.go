@@ -18,6 +18,14 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 )
 
+func (w *Worker) truncateWords(text string, maxWords int) string {
+	words := strings.Fields(text)
+	if len(words) <= maxWords {
+		return text
+	}
+	return strings.Join(words[:maxWords], " ") + "..."
+}
+
 func getGPUStats() (hasGPU bool, usedGB float64, totalGB float64, usagePct float64) {
 	cmd := exec.Command("nvidia-smi", "--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits")
 	out, err := cmd.Output()

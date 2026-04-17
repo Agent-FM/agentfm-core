@@ -105,7 +105,12 @@ func loadOrGenerateIdentity(mode string) (crypto.PrivKey, error) {
 }
 
 func createHost(cfg Config, bootstrapAddr string) (host.Host, error) {
-	listenAddr := fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", cfg.ListenPort)
+	// Listen on both v4 and v6 to match the relay binary's dual-stack
+	// config. A v6-only home network would otherwise be unreachable.
+	listenAddrs := []string{
+		fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", cfg.ListenPort),
+		fmt.Sprintf("/ip6/::/tcp/%d", cfg.ListenPort),
+	}
 
 	privKey, err := loadOrGenerateIdentity(cfg.Mode)
 	if err != nil {
@@ -113,7 +118,7 @@ func createHost(cfg Config, bootstrapAddr string) (host.Host, error) {
 	}
 
 	options := []libp2p.Option{
-		libp2p.ListenAddrStrings(listenAddr),
+		libp2p.ListenAddrStrings(listenAddrs...),
 		libp2p.NATPortMap(),
 		libp2p.Identity(privKey), // Attach permanent identity to libp2p
 	}
