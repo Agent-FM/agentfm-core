@@ -27,7 +27,7 @@ func isDirEmpty(name string) bool {
 	return err != nil
 }
 
-func (w *Worker) handleTaskStream(s netcore.Stream) {
+func (w *Worker) handleTaskStream(rootCtx context.Context, s netcore.Stream) {
 	// Default to Reset on any early/error exit. A caller that reaches the
 	// normal end of the task flips this to a graceful Close.
 	reset := true
@@ -107,9 +107,33 @@ func (w *Worker) handleTaskStream(s netcore.Stream) {
 	// Payload accepted. Extend deadline to cover long-running stdout streaming.
 	_ = s.SetDeadline(time.Now().Add(network.TaskExecutionTimeout))
 
+	// Task-scoped ctx: cancels on worker shutdown (rootCtx), on
+	// TaskExecutionTimeout, and on remote conn death (watcher below).
+	// Passed to executePodman so exec.CommandContext SIGKILLs the
+	// container the instant the tunnel dies.
+	taskCtx, cancelTask := context.WithTimeout(rootCtx, network.TaskExecutionTimeout)
+	defer cancelTask()
+
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-taskCtx.Done():
+				return
+			case <-ticker.C:
+				if s.Conn().IsClosed() {
+					pterm.Warning.Println("Remote Boss connection died; cancelling sandbox...")
+					cancelTask()
+					return
+				}
+			}
+		}
+	}()
+
 	pterm.Info.Printfln("Executing task %s in Podman sandbox...", payload.TaskID)
 
-	outputDir := w.executePodman(payload.Data, s, s)
+	outputDir := w.executePodman(taskCtx, payload.Data, s, s)
 	defer os.RemoveAll(outputDir)
 
 	if !isDirEmpty(outputDir) {
@@ -121,11 +145,11 @@ func (w *Worker) handleTaskStream(s netcore.Stream) {
 
 		if err := utils.ZipDirectory(outputDir, zipPath); err == nil {
 			pterm.Info.Println("Routing artifacts to Boss over secure channel...")
-			artifactCtx, cancel := context.WithTimeout(context.Background(), network.ArtifactStreamTimeout)
+			artifactCtx, cancelArtifact := context.WithTimeout(rootCtx, network.ArtifactStreamTimeout)
 			if sendErr := network.SendArtifacts(artifactCtx, w.node.Host, bossID, zipPath, payload.TaskID); sendErr != nil {
 				pterm.Error.Printfln("Failed to route artifacts: %v", sendErr)
 			}
-			cancel()
+			cancelArtifact()
 		} else {
 			pterm.Error.Printfln("Failed to zip artifacts: %v", err)
 		}
@@ -137,7 +161,7 @@ func (w *Worker) handleTaskStream(s netcore.Stream) {
 	reset = false
 }
 
-func (w *Worker) handleFeedbackStream(s netcore.Stream) {
+func (w *Worker) handleFeedbackStream(_ context.Context, s netcore.Stream) {
 	reset := true
 	defer func() {
 		if reset {

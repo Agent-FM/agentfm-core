@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -33,10 +34,17 @@ func (w *Worker) buildSandboxImage() error {
 	return nil
 }
 
-func (w *Worker) executePodman(prompt string, outStream, errStream io.Writer) string {
+func (w *Worker) executePodman(ctx context.Context, prompt string, outStream, errStream io.Writer) string {
 	sessionID := time.Now().UnixNano()
 	containerName := fmt.Sprintf("agentfm-sandbox-%d", sessionID)
-	defer exec.Command("podman", "rm", "-f", containerName).Run()
+	// Cleanup runs on a detached, bounded ctx so a cancelled parent doesn't
+	// short-circuit the `podman rm -f` that catches orphaned containers
+	// from SIGKILLed `podman run` processes.
+	defer func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_ = exec.CommandContext(cleanupCtx, "podman", "rm", "-f", containerName).Run()
+	}()
 
 	baseDir, err := os.Getwd()
 	if err != nil {
@@ -46,8 +54,10 @@ func (w *Worker) executePodman(prompt string, outStream, errStream io.Writer) st
 	agentTempBase := filepath.Join(baseDir, ".agentfm_temp")
 	absOutputDir := filepath.Join(agentTempBase, fmt.Sprintf("run_%d", sessionID))
 
-	os.MkdirAll(absOutputDir, 0777)
-	os.Chmod(absOutputDir, 0777)
+	if err := os.MkdirAll(absOutputDir, 0755); err != nil {
+		fmt.Fprintf(errStream, "❌ Failed to create output dir: %v\n", err)
+		return absOutputDir
+	}
 
 	podmanArgs := []string{"run", "--rm", "--name", containerName, "--network", "host"}
 	hasGPU, _, _, _ := getGPUStats()
@@ -65,14 +75,22 @@ func (w *Worker) executePodman(prompt string, outStream, errStream io.Writer) st
 	podmanArgs = append(podmanArgs, "-e", fmt.Sprintf("AGENTFM_MODEL=%s", w.config.ModelName))
 	podmanArgs = append(podmanArgs, w.config.ImageName, prompt)
 
-	cmd := exec.Command("podman", podmanArgs...)
+	// exec.CommandContext wires ctx cancellation to SIGKILL of the process.
+	// When the task ctx is cancelled (shutdown, stream death, or timeout),
+	// the Podman sandbox is torn down instantly instead of running to
+	// natural completion.
+	cmd := exec.CommandContext(ctx, "podman", podmanArgs...)
 	cmd.Stdout = outStream
 	cmd.Stderr = errStream
 
 	if err := cmd.Start(); err != nil {
 		fmt.Fprintf(errStream, "❌ Failed to start task: %v\n", err)
-	} else {
-		cmd.Wait()
+		return absOutputDir
+	}
+	if err := cmd.Wait(); err != nil {
+		// Non-zero exits and ctx-triggered kills both land here. We surface
+		// the error to the caller's stream so the Boss sees it.
+		fmt.Fprintf(errStream, "⚠️  Sandbox exited: %v\n", err)
 	}
 
 	return absOutputDir

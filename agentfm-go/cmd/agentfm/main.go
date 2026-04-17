@@ -123,7 +123,9 @@ func main() {
 			}
 		}
 
-		err := worker.RunLocalTest(cfg, promptToUse)
+		testCtx, stopTest := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+		defer stopTest()
+		err := worker.RunLocalTest(testCtx, cfg, promptToUse)
 		if err != nil {
 			pterm.Fatal.Printfln("❌ Local test failed: %v", err)
 		}
