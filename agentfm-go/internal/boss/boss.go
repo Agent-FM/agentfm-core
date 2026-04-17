@@ -3,6 +3,7 @@ package boss
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -41,11 +42,19 @@ func (b *Boss) Run(ctx context.Context) {
 	go b.listenTelemetry(ctx)
 
 	for {
-		worker, ok := b.selectWorkerInteractive()
+		worker, ok, quit := b.selectWorkerInteractive(ctx)
+		if quit || ctx.Err() != nil {
+			break
+		}
 		if !ok {
 			continue
 		}
 		b.executeFlow(worker)
+	}
+
+	fmt.Println("\nShutting down Boss node...")
+	if err := b.node.Host.Close(); err != nil {
+		pterm.Error.Printfln("Host close error: %v", err)
 	}
 }
 

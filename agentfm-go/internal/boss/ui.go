@@ -3,7 +3,6 @@ package boss
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,8 +36,14 @@ func renderCPUBar(percent float64) string {
 	return pterm.Green(fmt.Sprintf("[%s] %5.1f%%", bar, percent))
 }
 
-func (b *Boss) selectWorkerInteractive() (types.WorkerProfile, bool) {
-	uiCtx, cancelUI := context.WithCancel(context.Background())
+// selectWorkerInteractive blocks on keyboard input and returns
+// (selected, confirmed, quit). `quit=true` means the user pressed Ctrl+C
+// and Boss.Run should break out of its loop and shut down cleanly — we
+// don't call os.Exit from the key callback because that skips every
+// pending defer (cancelUI, area.Stop) and can leave the terminal in a
+// bad state on some setups.
+func (b *Boss) selectWorkerInteractive(parentCtx context.Context) (types.WorkerProfile, bool, bool) {
+	uiCtx, cancelUI := context.WithCancel(parentCtx)
 	defer cancelUI()
 
 	selectedIndex := 0
@@ -162,15 +167,12 @@ func (b *Boss) selectWorkerInteractive() (types.WorkerProfile, bool) {
 	draw()
 
 	var selected types.WorkerProfile
-	var confirmed bool
+	var confirmed, quit bool
 
 	keyboard.Listen(func(key keys.Key) (stop bool, err error) {
 		if key.Code == keys.CtrlC {
-			b.mu.Lock()
-			fmt.Println("\nShutting down Boss node...")
-			b.node.Host.Close()
-			b.mu.Unlock()
-			os.Exit(0)
+			quit = true
+			return true, nil
 		}
 
 		// Use a local copy of length to prevent data races
@@ -196,5 +198,5 @@ func (b *Boss) selectWorkerInteractive() (types.WorkerProfile, bool) {
 		}
 		return false, nil
 	})
-	return selected, confirmed
+	return selected, confirmed, quit
 }
