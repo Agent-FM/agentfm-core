@@ -200,15 +200,30 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to connect to worker via DHT or Relay", http.StatusInternalServerError)
 		return
 	}
-	defer s.Close()
+
+	streamSuccess := false
+	defer func() {
+		if streamSuccess {
+			_ = s.Close()
+		} else {
+			_ = s.Reset()
+		}
+	}()
+
+	if err := s.SetWriteDeadline(time.Now().Add(network.TaskPayloadReadTimeout)); err != nil {
+		http.Error(w, "Failed to set write deadline", http.StatusInternalServerError)
+		return
+	}
 
 	taskJSON := fmt.Sprintf(`{"version": "%s", "task": "agent_task", "data": "%s", "task_id": "%s"}`, version.AppVersion, req.Prompt, req.TaskID)
-	_, err = s.Write([]byte(taskJSON))
-	if err != nil {
+	if _, err := s.Write([]byte(taskJSON)); err != nil {
 		http.Error(w, "Failed to send prompt", http.StatusInternalServerError)
 		return
 	}
-	s.CloseWrite()
+	if err := s.CloseWrite(); err != nil {
+		http.Error(w, "Failed to half-close task stream", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -219,9 +234,18 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 	buf := make([]byte, 1024) // Read in small 1KB chunks
 
 	for {
+		// Idle deadline: each read gets up to TaskExecutionTimeout. A task that
+		// never produces output within that window is treated as ghosted.
+		if err := s.SetReadDeadline(time.Now().Add(network.TaskExecutionTimeout)); err != nil {
+			pterm.Error.Printfln("Failed to refresh read deadline: %v", err)
+			return
+		}
 		n, err := s.Read(buf)
 		if n > 0 {
-			w.Write(buf[:n])
+			if _, werr := w.Write(buf[:n]); werr != nil {
+				pterm.Error.Printfln("HTTP client disconnected: %v", werr)
+				return
+			}
 			if flusherSupported {
 				flusher.Flush()
 			}
@@ -229,11 +253,13 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			if err != io.EOF {
 				pterm.Error.Printfln("Stream error: %v", err)
+				return
 			}
 			break
 		}
 	}
 
+	streamSuccess = true
 	pterm.Success.Println("✅ API Task Complete. Text streamed to client.")
 }
 
@@ -280,14 +306,39 @@ func (b *Boss) handleAsyncExecuteTask(w http.ResponseWriter, r *http.Request) {
 		if s == nil {
 			return
 		}
-		defer s.Close()
+
+		streamSuccess := false
+		defer func() {
+			if streamSuccess {
+				_ = s.Close()
+			} else {
+				_ = s.Reset()
+			}
+		}()
+
+		if err := s.SetWriteDeadline(time.Now().Add(network.TaskPayloadReadTimeout)); err != nil {
+			pterm.Error.Printfln("Async task: failed to set write deadline: %v", err)
+			return
+		}
 
 		taskJSON := fmt.Sprintf(`{"version": "%s", "task": "agent_task", "data": "%s", "task_id": "%s"}`, version.AppVersion, req.Prompt, taskID)
-		s.Write([]byte(taskJSON))
-		s.CloseWrite()
+		if _, err := s.Write([]byte(taskJSON)); err != nil {
+			pterm.Error.Printfln("Async task: failed to send prompt: %v", err)
+			return
+		}
+		if err := s.CloseWrite(); err != nil {
+			pterm.Error.Printfln("Async task: failed to half-close: %v", err)
+			return
+		}
 
+		deadman := &timeoutReader{stream: s, timeout: network.TaskExecutionTimeout}
 		var outputBuffer bytes.Buffer
-		io.Copy(&outputBuffer, s)
+		if _, err := io.Copy(&outputBuffer, deadman); err != nil {
+			pterm.Error.Printfln("Async task: stream read failed: %v", err)
+			return
+		}
+
+		streamSuccess = true
 
 		time.Sleep(2 * time.Second)
 

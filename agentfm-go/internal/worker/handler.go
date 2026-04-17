@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"agentfm/internal/network"
 	"agentfm/internal/utils"
@@ -27,7 +28,21 @@ func isDirEmpty(name string) bool {
 }
 
 func (w *Worker) handleTaskStream(s netcore.Stream) {
-	defer s.Close()
+	// Default to Reset on any early/error exit. A caller that reaches the
+	// normal end of the task flips this to a graceful Close.
+	reset := true
+	defer func() {
+		if reset {
+			_ = s.Reset()
+		} else {
+			_ = s.Close()
+		}
+	}()
+
+	// Short deadline for the incoming task JSON. Extended below once the
+	// payload is accepted and we start streaming stdout back.
+	_ = s.SetDeadline(time.Now().Add(network.TaskPayloadReadTimeout))
+
 	fmt.Println()
 	pterm.Info.Println("Incoming P2P task tunnel established...")
 
@@ -37,7 +52,9 @@ func (w *Worker) handleTaskStream(s netcore.Stream) {
 	if w.currentTasks >= w.config.MaxConcurrentTasks {
 		w.mu.Unlock()
 		pterm.Error.Printfln("Rejected task: Worker is at max capacity (%d/%d).", w.currentTasks, w.config.MaxConcurrentTasks)
-		s.Write([]byte(fmt.Sprintf("❌ ERROR: Worker is at max capacity (%d/%d). Try another worker.\n", w.currentTasks, w.config.MaxConcurrentTasks)))
+		_, _ = s.Write([]byte(fmt.Sprintf("❌ ERROR: Worker is at max capacity (%d/%d). Try another worker.\n", w.currentTasks, w.config.MaxConcurrentTasks)))
+		// App-level rejection delivered — close gracefully so the peer sees the message.
+		reset = false
 		return
 	}
 
@@ -53,14 +70,16 @@ func (w *Worker) handleTaskStream(s netcore.Stream) {
 
 	if cpuLoad >= w.config.MaxCPU { // Dynamic Threshold
 		pterm.Error.Printfln("Rejected task: Worker CPU is overloaded at %.1f%%.", cpuLoad)
-		s.Write([]byte(fmt.Sprintf("❌ ERROR: Worker is under heavy load (CPU %.1f%%). Try again later.\n", cpuLoad)))
+		_, _ = s.Write([]byte(fmt.Sprintf("❌ ERROR: Worker is under heavy load (CPU %.1f%%). Try again later.\n", cpuLoad)))
+		reset = false
 		return
 	}
 
 	hasGPU, _, _, gpuPct := getGPUStats()
 	if hasGPU && gpuPct > w.config.MaxGPU { // Dynamic Threshold
 		pterm.Error.Printfln("Rejected task: Worker GPU VRAM is busy (%.1f%% used).", gpuPct)
-		s.Write([]byte(fmt.Sprintf("❌ ERROR: Worker GPU is busy (%.1f%% VRAM used). Try another worker.\n", gpuPct)))
+		_, _ = s.Write([]byte(fmt.Sprintf("❌ ERROR: Worker GPU is busy (%.1f%% VRAM used). Try another worker.\n", gpuPct)))
+		reset = false
 		return
 	}
 
@@ -74,14 +93,19 @@ func (w *Worker) handleTaskStream(s netcore.Stream) {
 	limitedReader := io.LimitReader(s, 1*1024*1024)
 
 	if err := json.NewDecoder(limitedReader).Decode(&payload); err != nil {
+		// Invalid / truncated payload — Reset, per CLAUDE.md §1.1.
 		pterm.Error.Println("Failed to decode incoming task payload (or payload exceeded 1MB limit).")
 		return
 	}
 
 	if payload.Version != version.AppVersion {
-		s.Write([]byte(fmt.Sprintf("❌ ERROR: Version mismatch! Worker is running v%s.\n", version.AppVersion)))
+		_, _ = s.Write([]byte(fmt.Sprintf("❌ ERROR: Version mismatch! Worker is running v%s.\n", version.AppVersion)))
+		reset = false
 		return
 	}
+
+	// Payload accepted. Extend deadline to cover long-running stdout streaming.
+	_ = s.SetDeadline(time.Now().Add(network.TaskExecutionTimeout))
 
 	pterm.Info.Printfln("Executing task %s in Podman sandbox...", payload.TaskID)
 
@@ -89,7 +113,7 @@ func (w *Worker) handleTaskStream(s netcore.Stream) {
 	defer os.RemoveAll(outputDir)
 
 	if !isDirEmpty(outputDir) {
-		s.Write([]byte("\n[AGENTFM: FILES_INCOMING]\n"))
+		_, _ = s.Write([]byte("\n[AGENTFM: FILES_INCOMING]\n"))
 		pterm.Info.Println("Artifacts detected. Preparing zip...")
 
 		zipPath := outputDir + "_payload.zip"
@@ -97,20 +121,34 @@ func (w *Worker) handleTaskStream(s netcore.Stream) {
 
 		if err := utils.ZipDirectory(outputDir, zipPath); err == nil {
 			pterm.Info.Println("Routing artifacts to Boss over secure channel...")
-			if sendErr := network.SendArtifacts(context.Background(), w.node.Host, bossID, zipPath, payload.TaskID); sendErr != nil {
+			artifactCtx, cancel := context.WithTimeout(context.Background(), network.ArtifactStreamTimeout)
+			if sendErr := network.SendArtifacts(artifactCtx, w.node.Host, bossID, zipPath, payload.TaskID); sendErr != nil {
 				pterm.Error.Printfln("Failed to route artifacts: %v", sendErr)
 			}
+			cancel()
 		} else {
 			pterm.Error.Printfln("Failed to zip artifacts: %v", err)
 		}
 	} else {
-		s.Write([]byte("\n[AGENTFM: NO_FILES]\n"))
+		_, _ = s.Write([]byte("\n[AGENTFM: NO_FILES]\n"))
 		pterm.Success.Println("No artifacts generated. Task complete.")
 	}
+
+	reset = false
 }
 
 func (w *Worker) handleFeedbackStream(s netcore.Stream) {
-	defer s.Close()
+	reset := true
+	defer func() {
+		if reset {
+			_ = s.Reset()
+		} else {
+			_ = s.Close()
+		}
+	}()
+
+	_ = s.SetDeadline(time.Now().Add(network.FeedbackStreamTimeout))
+
 	var payload struct {
 		Task      string `json:"task"`
 		Feedback  string `json:"feedback"`
@@ -130,4 +168,6 @@ func (w *Worker) handleFeedbackStream(s netcore.Stream) {
 		defer f.Close()
 		f.WriteString(fmt.Sprintf("[%s] Task: %s | Feedback: %s\n", payload.Timestamp, payload.Task, payload.Feedback))
 	}
+
+	reset = false
 }

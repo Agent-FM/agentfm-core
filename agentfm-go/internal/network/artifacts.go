@@ -18,11 +18,26 @@ import (
 func SendArtifacts(ctx context.Context, h host.Host, bossID peer.ID, zipFilePath string, taskID string) error {
 	fmt.Println("📦 Opening secure artifact channel to Boss...")
 
-	stream, err := h.NewStream(ctx, bossID, ArtifactProtocol)
+	dialCtx, cancel := context.WithTimeout(ctx, StreamDialTimeout)
+	defer cancel()
+
+	stream, err := h.NewStream(dialCtx, bossID, ArtifactProtocol)
 	if err != nil {
 		return fmt.Errorf("failed to open artifact stream: %w", err)
 	}
-	defer stream.Close()
+
+	success := false
+	defer func() {
+		if success {
+			_ = stream.Close()
+		} else {
+			_ = stream.Reset()
+		}
+	}()
+
+	if err := stream.SetWriteDeadline(time.Now().Add(ArtifactStreamTimeout)); err != nil {
+		return fmt.Errorf("failed to set artifact write deadline: %w", err)
+	}
 
 	file, err := os.Open(zipFilePath)
 	if err != nil {
@@ -35,20 +50,17 @@ func SendArtifacts(ctx context.Context, h host.Host, bossID peer.ID, zipFilePath
 		return fmt.Errorf("failed to stat file: %w", err)
 	}
 
-	err = binary.Write(stream, binary.LittleEndian, stat.Size())
-	if err != nil {
-		return err
+	if err := binary.Write(stream, binary.LittleEndian, stat.Size()); err != nil {
+		return fmt.Errorf("failed to write size header: %w", err)
 	}
 
 	taskIDBytes := []byte(taskID)
-	err = binary.Write(stream, binary.LittleEndian, uint8(len(taskIDBytes)))
-	if err != nil {
-		return err
+	if err := binary.Write(stream, binary.LittleEndian, uint8(len(taskIDBytes))); err != nil {
+		return fmt.Errorf("failed to write task id length: %w", err)
 	}
 
-	_, err = stream.Write(taskIDBytes)
-	if err != nil {
-		return err
+	if _, err := stream.Write(taskIDBytes); err != nil {
+		return fmt.Errorf("failed to write task id: %w", err)
 	}
 
 	bytesWritten, err := io.Copy(stream, file)
@@ -56,6 +68,7 @@ func SendArtifacts(ctx context.Context, h host.Host, bossID peer.ID, zipFilePath
 		return fmt.Errorf("failed during artifact stream: %w", err)
 	}
 
+	success = true
 	fmt.Printf("✅ Successfully sent %d bytes of artifacts over the darknet!\n", bytesWritten)
 	return nil
 }
@@ -75,7 +88,19 @@ func (pw *progressWriter) Write(p []byte) (n int, err error) {
 }
 
 func HandleArtifactStream(stream network.Stream) {
-	defer stream.Close()
+	success := false
+	defer func() {
+		if success {
+			_ = stream.Close()
+		} else {
+			_ = stream.Reset()
+		}
+	}()
+
+	if err := stream.SetReadDeadline(time.Now().Add(ArtifactStreamTimeout)); err != nil {
+		pterm.Error.Printfln("Failed to set artifact read deadline: %v", err)
+		return
+	}
 
 	fmt.Println("\n📥 [INCOMING] Artifact stream detected from Worker!")
 
@@ -106,7 +131,10 @@ func HandleArtifactStream(stream network.Stream) {
 		safeTaskID = fmt.Sprintf("fallback_%d", time.Now().UnixNano())
 	}
 
-	os.MkdirAll("./agentfm_artifacts", 0755)
+	if err := os.MkdirAll("./agentfm_artifacts", 0755); err != nil {
+		pterm.Error.Printfln("Failed to create artifacts dir: %v", err)
+		return
+	}
 	destPath := filepath.Join(".", "agentfm_artifacts", safeTaskID+".zip")
 
 	outFile, err := os.Create(destPath)
@@ -116,9 +144,13 @@ func HandleArtifactStream(stream network.Stream) {
 	}
 	defer outFile.Close()
 
+	progressTitle := safeTaskID
+	if len(progressTitle) > 8 {
+		progressTitle = progressTitle[:8]
+	}
 	pb, _ := pterm.DefaultProgressbar.
 		WithTotal(int(fileSize)).
-		WithTitle(fmt.Sprintf("Downloading %s.zip", safeTaskID[:8])).
+		WithTitle(fmt.Sprintf("Downloading %s.zip", progressTitle)).
 		Start()
 
 	pw := &progressWriter{
@@ -133,6 +165,7 @@ func HandleArtifactStream(stream network.Stream) {
 		return
 	}
 	pb.Stop()
+	success = true
 	pterm.Success.Printfln("🎉 Transfer Complete! Securely saved %d bytes to %s", bytesRead, destPath)
 	fmt.Println()
 	pterm.Println(pterm.LightWhite("👉 Press [ENTER] to continue to the feedback menu."))
