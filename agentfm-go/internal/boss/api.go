@@ -179,9 +179,9 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 		req.TaskID = fmt.Sprintf("task_%d", time.Now().UnixNano())
 	}
 
-	b.mu.Lock()
+	b.mu.RLock()
 	_, exists := b.activeWorkers[req.WorkerID]
-	b.mu.Unlock()
+	b.mu.RUnlock()
 
 	if !exists {
 		http.Error(w, "Worker not found or offline", http.StatusNotFound)
@@ -282,9 +282,9 @@ func (b *Boss) handleAsyncExecuteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b.mu.Lock()
+	b.mu.RLock()
 	_, exists := b.activeWorkers[req.WorkerID]
-	b.mu.Unlock()
+	b.mu.RUnlock()
 
 	if !exists {
 		http.Error(w, "Worker not found or offline", http.StatusNotFound)

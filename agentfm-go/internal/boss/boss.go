@@ -19,7 +19,11 @@ type Boss struct {
 	node          *network.MeshNode
 	activeWorkers map[string]types.WorkerProfile
 	lastSeen      map[string]time.Time
-	mu            sync.Mutex
+	// RWMutex because the activeWorkers/lastSeen maps are read heavily
+	// (HTTP /api/workers, /api/execute, /api/execute/async, the TUI redraw
+	// ticker) but written only when a telemetry pulse arrives. Pure-read
+	// call sites use RLock so concurrent API hits don't serialise.
+	mu sync.RWMutex
 }
 
 func New(node *network.MeshNode) *Boss {
