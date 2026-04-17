@@ -123,7 +123,9 @@ func main() {
 			}
 		}
 
-		err := worker.RunLocalTest(cfg, promptToUse)
+		testCtx, stopTest := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+		defer stopTest()
+		err := worker.RunLocalTest(testCtx, cfg, promptToUse)
 		if err != nil {
 			pterm.Fatal.Printfln("❌ Local test failed: %v", err)
 		}
@@ -174,7 +176,9 @@ func main() {
 			pterm.Fatal.Println(err)
 		}
 		b := boss.New(node)
-		b.StartAPIServer(*apiPort)
+		if err := b.StartAPIServer(*apiPort); err != nil {
+			pterm.Fatal.Printfln("❌ API Gateway exited with error: %v", err)
+		}
 
 	} else {
 		pterm.Error.Println("Invalid mode. Use 'boss', 'worker', 'relay', 'api', 'test', or 'genkey'.")
@@ -189,7 +193,8 @@ func setupHelpMenu() {
 			WithBackgroundStyle(pterm.NewStyle(pterm.BgCyan)).
 			WithTextStyle(pterm.NewStyle(pterm.FgBlack)).
 			Printfln("🚀 AGENTFM CLI v%s", version.AppVersion)
-		pterm.Info.Println("A global, peer-to-peer compute grid for containerized local AI.\n")
+		pterm.Info.Println("A global, peer-to-peer compute grid for containerized local AI.")
+		fmt.Println()
 
 		pterm.DefaultSection.Println("Flags & Configuration")
 

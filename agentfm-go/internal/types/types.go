@@ -17,3 +17,13 @@ type WorkerProfile struct {
 	MaxTasks     int     `json:"max_tasks"`
 	Author       string  `json:"author"`
 }
+
+// TaskPayload is the JSON envelope the Boss sends to a Worker over
+// TaskProtocol. Shared between both sides so there is one schema and no
+// hand-rolled JSON formatting in the boss package.
+type TaskPayload struct {
+	Version string `json:"version"`
+	Task    string `json:"task"`
+	Data    string `json:"data"`
+	TaskID  string `json:"task_id"`
+}

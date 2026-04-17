@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
 
 	"agentfm/internal/network"
 
+	netcore "github.com/libp2p/go-libp2p/core/network"
 	"github.com/pterm/pterm"
 )
 
@@ -39,7 +39,7 @@ func New(node *network.MeshNode, cfg Config) *Worker {
 }
 
 // RunLocalTest allows users to test their dockerfile/script locally without libp2p
-func RunLocalTest(cfg Config, prompt string) error {
+func RunLocalTest(ctx context.Context, cfg Config, prompt string) error {
 	w := &Worker{config: cfg}
 
 	if err := w.buildSandboxImage(); err != nil {
@@ -50,7 +50,7 @@ func RunLocalTest(cfg Config, prompt string) error {
 	fmt.Println("--------------------------------------------------")
 
 	// Use os.Stdout for testing locally
-	outputDir := w.executePodman(prompt, os.Stdout, os.Stderr)
+	outputDir := w.executePodman(ctx, prompt, os.Stdout, os.Stderr)
 
 	fmt.Println("\n--------------------------------------------------")
 	pterm.Success.Printfln("✅ Sandbox execution finished.\n📂 Artifacts saved to: %s", outputDir)
@@ -67,33 +67,35 @@ func (w *Worker) Start(ctx context.Context) {
 		os.Exit(1)
 	}
 
+	// Bind the root ctx to OS shutdown signals so every in-flight handler,
+	// including the Podman sub-process it owns, is cancelled when the
+	// operator hits CTRL+C.
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	w.printMetadata()
 	go w.startTelemetry(ctx)
 
-	w.node.Host.SetStreamHandler(network.TaskProtocol, w.handleTaskStream)
-	w.node.Host.SetStreamHandler(network.FeedbackProtocol, w.handleFeedbackStream)
+	w.node.Host.SetStreamHandler(network.TaskProtocol, func(s netcore.Stream) {
+		w.handleTaskStream(ctx, s)
+	})
+	w.node.Host.SetStreamHandler(network.FeedbackProtocol, func(s netcore.Stream) {
+		w.handleFeedbackStream(ctx, s)
+	})
 
-	w.waitForShutdown()
+	w.waitForShutdown(ctx)
 }
 
-func (w *Worker) waitForShutdown() {
+func (w *Worker) waitForShutdown(ctx context.Context) {
 	fmt.Println()
 	pterm.Info.Println("Worker is online and listening. Press CTRL+C to cleanly exit.")
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-	<-ch
+
+	<-ctx.Done()
 
 	fmt.Println()
 	pterm.Warning.Println("Received shutdown signal. Disconnecting from the mesh...")
-	w.node.Host.Close()
-	pterm.Success.Println("Safely offline. Goodbye!")
-	os.Exit(0)
-}
-
-func (w *Worker) truncateWords(text string, maxWords int) string {
-	words := strings.Fields(text)
-	if len(words) <= maxWords {
-		return text
+	if err := w.node.Host.Close(); err != nil {
+		pterm.Error.Printfln("Host close error: %v", err)
 	}
-	return strings.Join(words[:maxWords], " ") + "..."
+	pterm.Success.Println("Safely offline. Goodbye!")
 }

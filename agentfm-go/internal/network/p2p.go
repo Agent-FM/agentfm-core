@@ -88,17 +88,29 @@ func loadOrGenerateIdentity(mode string) (crypto.PrivKey, error) {
 	fmt.Println("🔑 Generating new permanent node identity...")
 	priv, _, err := crypto.GenerateKeyPair(crypto.Ed25519, -1)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("generate identity key: %w", err)
 	}
 
-	keyBytes, _ := crypto.MarshalPrivateKey(priv)
-	os.WriteFile(keyPath, keyBytes, 0600)
+	keyBytes, err := crypto.MarshalPrivateKey(priv)
+	if err != nil {
+		return nil, fmt.Errorf("marshal identity key: %w", err)
+	}
+	if err := os.WriteFile(keyPath, keyBytes, 0600); err != nil {
+		// Not fatal: the node can still run with an ephemeral key, but the
+		// operator needs to know the peer ID won't be stable across restarts.
+		fmt.Printf("⚠️  Failed to persist identity at %s: %v (peer ID will change on restart)\n", keyPath, err)
+	}
 
 	return priv, nil
 }
 
 func createHost(cfg Config, bootstrapAddr string) (host.Host, error) {
-	listenAddr := fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", cfg.ListenPort)
+	// Listen on both v4 and v6 to match the relay binary's dual-stack
+	// config. A v6-only home network would otherwise be unreachable.
+	listenAddrs := []string{
+		fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", cfg.ListenPort),
+		fmt.Sprintf("/ip6/::/tcp/%d", cfg.ListenPort),
+	}
 
 	privKey, err := loadOrGenerateIdentity(cfg.Mode)
 	if err != nil {
@@ -106,7 +118,7 @@ func createHost(cfg Config, bootstrapAddr string) (host.Host, error) {
 	}
 
 	options := []libp2p.Option{
-		libp2p.ListenAddrStrings(listenAddr),
+		libp2p.ListenAddrStrings(listenAddrs...),
 		libp2p.NATPortMap(),
 		libp2p.Identity(privKey), // Attach permanent identity to libp2p
 	}
@@ -174,12 +186,18 @@ func initRoutingAndPubSub(ctx context.Context, h host.Host, isWorker bool) (*pub
 
 func connectToLighthouse(ctx context.Context, h host.Host, relayInfo *peer.AddrInfo) {
 	fmt.Println("🌍 Dialing Bootstrap Node / Relay...")
-	if err := h.Connect(ctx, *relayInfo); err != nil {
+
+	dialCtx, dialCancel := context.WithTimeout(ctx, StreamDialTimeout)
+	defer dialCancel()
+	if err := h.Connect(dialCtx, *relayInfo); err != nil {
 		fmt.Printf("⚠️  Failed to connect to Bootstrap Node: %v\n", err)
 		return
 	}
 	fmt.Println("✅ Successfully connected to Bootstrap Node!")
-	if _, err := client.Reserve(ctx, h, *relayInfo); err != nil {
+
+	reserveCtx, reserveCancel := context.WithTimeout(ctx, StreamDialTimeout)
+	defer reserveCancel()
+	if _, err := client.Reserve(reserveCtx, h, *relayInfo); err != nil {
 		fmt.Printf("⚠️  Failed to secure relay reservation: %v\n", err)
 	} else {
 		fmt.Println("✅ Relay reservation secured! Ready for NAT traversal fallback.")
@@ -208,20 +226,28 @@ func discoverPeers(ctx context.Context, h host.Host, routingDiscovery *routing.R
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			peerChan, err := routingDiscovery.FindPeers(ctx, RendezvousString)
+			// Each DHT sweep is individually bounded so one unresponsive
+			// peer can't stall the tick beyond the next interval.
+			lookupCtx, lookupCancel := context.WithTimeout(ctx, StreamDialTimeout)
+			peerChan, err := routingDiscovery.FindPeers(lookupCtx, RendezvousString)
 			if err != nil {
+				lookupCancel()
 				continue
 			}
 			for p := range peerChan {
 				if p.ID == h.ID() || len(p.Addrs) == 0 {
 					continue
 				}
-				if h.Network().Connectedness(p.ID) != netcore.Connected {
-					if err := h.Connect(ctx, p); err == nil {
-						fmt.Printf("\n🌍 [DHT Fallback] Successfully connected to peer: %s\n", p.ID.String()[:8])
-					}
+				if h.Network().Connectedness(p.ID) == netcore.Connected {
+					continue
 				}
+				dialCtx, dialCancel := context.WithTimeout(ctx, StreamDialTimeout)
+				if err := h.Connect(dialCtx, p); err == nil {
+					fmt.Printf("\n🌍 [DHT Fallback] Successfully connected to peer: %s\n", p.ID.String()[:8])
+				}
+				dialCancel()
 			}
+			lookupCancel()
 		}
 	}
 }
@@ -230,5 +256,12 @@ type mdnsNotifee struct{ h host.Host }
 
 func (n *mdnsNotifee) HandlePeerFound(pi peer.AddrInfo) {
 	fmt.Printf("\n⚡ [mDNS] Discovered local node on Wi-Fi: %s\n", pi.ID.String()[:8])
-	n.h.Connect(context.Background(), pi)
+	// mdns invokes this callback from its own goroutine with no parent
+	// context, so a fresh bounded ctx is the right escape hatch here —
+	// it caps the dial instead of blocking the mdns service indefinitely.
+	ctx, cancel := context.WithTimeout(context.Background(), StreamDialTimeout)
+	defer cancel()
+	if err := n.h.Connect(ctx, pi); err != nil {
+		fmt.Printf("⚠️  [mDNS] Failed to dial %s: %v\n", pi.ID.String()[:8], err)
+	}
 }

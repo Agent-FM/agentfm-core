@@ -3,6 +3,7 @@ package boss
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -13,13 +14,15 @@ import (
 	"github.com/pterm/pterm"
 )
 
-const AppVersion = "1.0.0"
-
 type Boss struct {
 	node          *network.MeshNode
 	activeWorkers map[string]types.WorkerProfile
 	lastSeen      map[string]time.Time
-	mu            sync.Mutex
+	// RWMutex because the activeWorkers/lastSeen maps are read heavily
+	// (HTTP /api/workers, /api/execute, /api/execute/async, the TUI redraw
+	// ticker) but written only when a telemetry pulse arrives. Pure-read
+	// call sites use RLock so concurrent API hits don't serialise.
+	mu sync.RWMutex
 }
 
 func New(node *network.MeshNode) *Boss {
@@ -37,23 +40,37 @@ func (b *Boss) Run(ctx context.Context) {
 	go b.listenTelemetry(ctx)
 
 	for {
-		worker, ok := b.selectWorkerInteractive()
+		worker, ok, quit := b.selectWorkerInteractive(ctx)
+		if quit || ctx.Err() != nil {
+			break
+		}
 		if !ok {
 			continue
 		}
 		b.executeFlow(worker)
+	}
+
+	fmt.Println("\nShutting down Boss node...")
+	if err := b.node.Host.Close(); err != nil {
+		pterm.Error.Printfln("Host close error: %v", err)
 	}
 }
 
 func (b *Boss) listenTelemetry(ctx context.Context) {
 	topic, err := b.node.PubSub.Join(network.TelemetryTopic)
 	if err != nil {
-		pterm.Fatal.Println(err)
+		// Non-fatal: surface the error and return so the caller's
+		// defers still run. Boss keeps working for manually-specified
+		// peers but the radar will be empty.
+		pterm.Error.Printfln("Telemetry listener disabled: failed to join %q: %v", network.TelemetryTopic, err)
+		return
 	}
 	sub, err := topic.Subscribe()
 	if err != nil {
-		pterm.Fatal.Println(err)
+		pterm.Error.Printfln("Telemetry listener disabled: failed to subscribe: %v", err)
+		return
 	}
+	defer sub.Cancel()
 
 	for {
 		msg, err := sub.Next(ctx)
