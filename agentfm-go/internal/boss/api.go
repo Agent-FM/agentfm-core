@@ -36,6 +36,26 @@ type AsyncExecuteRequest struct {
 	WebhookURL string `json:"webhook_url"`
 }
 
+// apiWorker is the response DTO for GET /api/workers. It flattens a
+// WorkerProfile into the fields the SDK/UI consumes and renames a few
+// (PeerID vs peer_id is identical; AgentName becomes name, etc.).
+type apiWorker struct {
+	PeerID       string  `json:"peer_id"`
+	Author       string  `json:"author"`
+	Name         string  `json:"name"`
+	Status       string  `json:"status"`
+	Hardware     string  `json:"hardware"`
+	Description  string  `json:"description"`
+	CPUUsagePct  float64 `json:"cpu_usage_pct"`
+	RAMFreeGB    float64 `json:"ram_free_gb"`
+	CurrentTasks int     `json:"current_tasks"`
+	MaxTasks     int     `json:"max_tasks"`
+	HasGPU       bool    `json:"has_gpu"`
+	GPUUsedGB    float64 `json:"gpu_used_gb"`
+	GPUTotalGB   float64 `json:"gpu_total_gb"`
+	GPUUsagePct  float64 `json:"gpu_usage_pct"`
+}
+
 // corsMiddleware wraps standard handlers to easily attach headers
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -75,6 +95,18 @@ func (b *Boss) StartAPIServer(port string) {
 	srv := &http.Server{
 		Addr:    ":" + port,
 		Handler: mux,
+		// Defensive server timeouts so slow-loris clients cannot exhaust
+		// handler goroutines.
+		// - ReadHeaderTimeout specifically guards against slow header writes
+		//   (the classic slow-loris vector).
+		// - ReadTimeout bounds the whole request body (small JSON).
+		// - WriteTimeout must be larger than TaskExecutionTimeout because
+		//   /api/execute streams worker stdout for the full task window.
+		// - IdleTimeout reaps dormant keep-alive connections.
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      network.TaskExecutionTimeout + 2*time.Minute,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Run server in a background goroutine
@@ -124,24 +156,7 @@ func (b *Boss) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	type APIWorker struct {
-		PeerID       string  `json:"peer_id"`
-		Author       string  `json:"author"`
-		Name         string  `json:"name"`
-		Status       string  `json:"status"`
-		Hardware     string  `json:"hardware"`
-		Description  string  `json:"description"`
-		CPUUsagePct  float64 `json:"cpu_usage_pct"`
-		RAMFreeGB    float64 `json:"ram_free_gb"`
-		CurrentTasks int     `json:"current_tasks"`
-		MaxTasks     int     `json:"max_tasks"`
-		HasGPU       bool    `json:"has_gpu"`
-		GPUUsedGB    float64 `json:"gpu_used_gb"`
-		GPUTotalGB   float64 `json:"gpu_total_gb"`
-		GPUUsagePct  float64 `json:"gpu_usage_pct"`
-	}
-
-	agents := make([]APIWorker, 0)
+	agents := make([]apiWorker, 0, len(b.activeWorkers))
 
 	for peerIDStr, profile := range b.activeWorkers {
 
@@ -158,7 +173,7 @@ func (b *Boss) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
 			hardwareStr = fmt.Sprintf("%s (GPU VRAM: %.1f/%.1f GB)", profile.Model, profile.GPUUsedGB, profile.GPUTotalGB)
 		}
 
-		agents = append(agents, APIWorker{
+		agents = append(agents, apiWorker{
 			PeerID:       profile.PeerID,
 			Author:       profile.Author,
 			Name:         profile.AgentName,
