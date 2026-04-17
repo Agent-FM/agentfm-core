@@ -101,21 +101,21 @@ The whole system has three cooperating node roles:
   'lineColor':'#94A3B8',
   'textColor':'#E5E7EB',
   'edgeLabelBackground':'#1F2937',
+  'tertiaryColor':'#1F2937',
   'fontFamily':'ui-sans-serif, system-ui, sans-serif',
   'fontSize':'14px'
 }}}%%
 flowchart LR
-    B["💻 Boss<br/><i>TUI or API Gateway</i>"]
-    R[("🗼 Relay<br/><i>public lighthouse</i>")]
-    W1["🖥️ Worker A<br/><i>📦 Podman · CPU · llama3.2</i>"]
-    W2["🖥️ Worker B<br/><i>📦 Podman · GPU · FLUX</i>"]
+    R[("🗼 Relay<br/><i>permanent VPS</i><br/>DHT · Circuit Relay v2")]
+    B["💻 Boss<br/><i>orchestrator</i><br/>TUI · API Gateway"]
+    W1["🖥️ Worker A<br/><i>Podman sandbox</i><br/>CPU · small LLM"]
+    W2["🖥️ Worker B<br/><i>Podman sandbox</i><br/>RTX 4090 · FLUX"]
 
-    W1 -- telemetry --> R
-    W2 -- telemetry --> R
-    R -. discover + NAT punch .-> B
-
-    B ==>|"direct P2P streams<br/>task · artifact · feedback"| W1
-    B ==> W2
+    W1 -- GossipSub telemetry --> R
+    W2 -- GossipSub telemetry --> R
+    B -- discover via DHT + PubSub --> R
+    B -.->|"direct encrypted P2P<br/>(NAT-punched)"| W1
+    B -.->|"direct encrypted P2P<br/>(NAT-punched)"| W2
 
     classDef relay  fill:#4F46E5,stroke:#A5B4FC,stroke-width:2px,color:#FFFFFF
     classDef boss   fill:#DB2777,stroke:#F9A8D4,stroke-width:2px,color:#FFFFFF
@@ -125,15 +125,7 @@ flowchart LR
     class W1,W2 worker
 ```
 
-**How to read it:**
-
-| Arrow | Meaning |
-|---|---|
-| `-->` *thin solid* | Workers push **telemetry** (hardware + queue state) to the Relay every 2 seconds. |
-| `-.->` *dotted* | The Relay helps the Boss **discover peers + NAT-punch** (control-plane setup only; it doesn't carry task data). |
-| `==>` *thick solid* | Once peers find each other, the Boss opens a **direct encrypted P2P tunnel** to the chosen Worker — the actual work flows here, never through the Relay. |
-
-> **🎨 Node legend:** 🟣 Relay · 🩷 Boss · 🟢 Worker. External SDK clients (Python, Next.js, n8n) connect to the Boss in `-mode api`; LAN peers on the same Wi-Fi skip the Relay entirely via mDNS. Both are covered in the subsections below.
+> **🎨 Color legend:** 🟣 indigo = Relay lighthouse · 🩷 pink = Boss orchestrator · 🟢 emerald = Worker compute node.
 
 ### The three node roles
 
