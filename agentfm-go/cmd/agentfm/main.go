@@ -193,7 +193,8 @@ func setupHelpMenu() {
 			WithBackgroundStyle(pterm.NewStyle(pterm.BgCyan)).
 			WithTextStyle(pterm.NewStyle(pterm.FgBlack)).
 			Printfln("🚀 AGENTFM CLI v%s", version.AppVersion)
-		pterm.Info.Println("A global, peer-to-peer compute grid for containerized local AI.\n")
+		pterm.Info.Println("A global, peer-to-peer compute grid for containerized local AI.")
+		fmt.Println()
 
 		pterm.DefaultSection.Println("Flags & Configuration")
 

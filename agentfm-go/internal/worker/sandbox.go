@@ -30,7 +30,8 @@ func (w *Worker) buildSandboxImage() error {
 		return fmt.Errorf("podman build failed: %w", err)
 	}
 
-	pterm.Success.Println("✅ Sandbox Image Built Successfully!\n")
+	pterm.Success.Println("✅ Sandbox Image Built Successfully!")
+	fmt.Println()
 	return nil
 }
 

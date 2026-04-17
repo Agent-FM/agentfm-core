@@ -212,7 +212,9 @@ func (b *Boss) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		pterm.Error.Printfln("Failed to encode /api/workers response: %v", err)
+	}
 }
 
 func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
