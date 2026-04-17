@@ -72,7 +72,7 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (b *Boss) StartAPIServer(port string) {
+func (b *Boss) StartAPIServer(port string) error {
 	// Root ctx cancels on SIGINT/SIGTERM so every downstream goroutine
 	// (telemetry listener, async task workers, webhook POSTs) observes
 	// the same shutdown signal.
@@ -109,17 +109,31 @@ func (b *Boss) StartAPIServer(port string) {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	// Run server in a background goroutine
+	// Run the server in a background goroutine and route its terminal
+	// error through a channel instead of calling pterm.Fatal (which
+	// would os.Exit(1) from inside a goroutine, skipping every defer
+	// in StartAPIServer). A caller-observable return value lets
+	// main.go decide the exit code.
+	serverErrCh := make(chan error, 1)
 	go func() {
 		pterm.Success.Printfln("🚀 AgentFM Local API Gateway listening on http://127.0.0.1:%s", port)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			pterm.Fatal.Printfln("❌ API Server failed: %v", err)
-		}
+		serverErrCh <- srv.ListenAndServe()
 	}()
 
-	<-ctx.Done()
-
-	pterm.Warning.Println("\nShutting down API Gateway gracefully...")
+	var listenErr error
+	select {
+	case <-ctx.Done():
+		pterm.Warning.Println("\nShutting down API Gateway gracefully...")
+	case err := <-serverErrCh:
+		// Server exited before a shutdown signal — typically a bind
+		// failure at startup. Fall through to the drain path so
+		// telemetry/async goroutines still get cleaned up, then
+		// propagate the error to main.
+		if err != nil && err != http.ErrServerClosed {
+			pterm.Error.Printfln("API Server failed: %v", err)
+			listenErr = err
+		}
+	}
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
@@ -145,6 +159,7 @@ func (b *Boss) StartAPIServer(port string) {
 	}
 
 	pterm.Success.Println("API Gateway offline.")
+	return listenErr
 }
 
 func (b *Boss) handleGetWorkers(w http.ResponseWriter, r *http.Request) {

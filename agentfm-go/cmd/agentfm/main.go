@@ -176,7 +176,9 @@ func main() {
 			pterm.Fatal.Println(err)
 		}
 		b := boss.New(node)
-		b.StartAPIServer(*apiPort)
+		if err := b.StartAPIServer(*apiPort); err != nil {
+			pterm.Fatal.Printfln("❌ API Gateway exited with error: %v", err)
+		}
 
 	} else {
 		pterm.Error.Println("Invalid mode. Use 'boss', 'worker', 'relay', 'api', 'test', or 'genkey'.")
