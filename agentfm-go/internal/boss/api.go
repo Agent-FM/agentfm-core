@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -20,6 +21,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pterm/pterm"
 )
+
+const webhookTimeout = 30 * time.Second
 
 type ExecuteRequest struct {
 	WorkerID string `json:"worker_id"`
@@ -50,8 +53,16 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (b *Boss) StartAPIServer(port string) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	// Root ctx cancels on SIGINT/SIGTERM so every downstream goroutine
+	// (telemetry listener, async task workers, webhook POSTs) observes
+	// the same shutdown signal.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Tracks in-flight async task goroutines spawned by /api/execute/async.
+	// http.Server.Shutdown only drains HTTP handlers; these goroutines
+	// outlive the handler return, so we drain them explicitly below.
+	var asyncWG sync.WaitGroup
 
 	b.node.Host.SetStreamHandler(network.ArtifactProtocol, network.HandleArtifactStream)
 	go b.listenTelemetry(ctx)
@@ -59,7 +70,7 @@ func (b *Boss) StartAPIServer(port string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/workers", corsMiddleware(b.handleGetWorkers))
 	mux.HandleFunc("/api/execute", corsMiddleware(b.handleExecuteTask))
-	mux.HandleFunc("/api/execute/async", corsMiddleware(b.handleAsyncExecuteTask))
+	mux.HandleFunc("/api/execute/async", corsMiddleware(b.asyncExecuteHandler(ctx, &asyncWG)))
 
 	srv := &http.Server{
 		Addr:    ":" + port,
@@ -74,10 +85,7 @@ func (b *Boss) StartAPIServer(port string) {
 		}
 	}()
 
-	// Handle graceful shutdown
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	<-ctx.Done()
 
 	pterm.Warning.Println("\nShutting down API Gateway gracefully...")
 
@@ -88,8 +96,23 @@ func (b *Boss) StartAPIServer(port string) {
 		pterm.Error.Printfln("Server forced to shutdown: %v", err)
 	}
 
+	// Wait for async task goroutines to finish, bounded so a hung webhook
+	// cannot block shutdown forever.
+	drainCtx, drainCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer drainCancel()
+	drained := make(chan struct{})
+	go func() {
+		asyncWG.Wait()
+		close(drained)
+	}()
+	select {
+	case <-drained:
+		pterm.Success.Println("Async tasks drained.")
+	case <-drainCtx.Done():
+		pterm.Warning.Println("Drain deadline hit — some async tasks still in flight.")
+	}
+
 	pterm.Success.Println("API Gateway offline.")
-	os.Exit(0)
 }
 
 func (b *Boss) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
@@ -269,101 +292,155 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 	pterm.Success.Println("✅ API Task Complete. Text streamed to client.")
 }
 
-func (b *Boss) handleAsyncExecuteTask(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req AsyncExecuteRequest
-	limitedReader := io.LimitReader(r.Body, 1*1024*1024)
-	if err := json.NewDecoder(limitedReader).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
-		return
-	}
-
-	b.mu.RLock()
-	_, exists := b.activeWorkers[req.WorkerID]
-	b.mu.RUnlock()
-
-	if !exists {
-		http.Error(w, "Worker not found or offline", http.StatusNotFound)
-		return
-	}
-
-	peerID, err := peer.Decode(req.WorkerID)
-	if err != nil {
-		http.Error(w, "Invalid Worker ID format", http.StatusBadRequest)
-		return
-	}
-
-	taskID := fmt.Sprintf("task_%d", time.Now().UnixNano())
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{
-		"task_id": taskID,
-		"status":  "queued",
-		"message": "Task dispatched to P2P mesh.",
-	})
-
-	go func() {
-		s := b.dialOmni(peerID)
-		if s == nil {
+// asyncExecuteHandler returns the /api/execute/async handler wired to the
+// server-lifetime rootCtx and an inflight WaitGroup. The handler spawns a
+// background goroutine after responding 202; that goroutine inherits rootCtx
+// (so SIGINT cancels it) and calls wg.Done() on exit so StartAPIServer can
+// wait for an orderly drain.
+func (b *Boss) asyncExecuteHandler(rootCtx context.Context, wg *sync.WaitGroup) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		streamSuccess := false
-		defer func() {
-			if streamSuccess {
-				_ = s.Close()
-			} else {
-				_ = s.Reset()
-			}
+		var req AsyncExecuteRequest
+		limitedReader := io.LimitReader(r.Body, 1*1024*1024)
+		if err := json.NewDecoder(limitedReader).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+			return
+		}
+
+		b.mu.RLock()
+		_, exists := b.activeWorkers[req.WorkerID]
+		b.mu.RUnlock()
+
+		if !exists {
+			http.Error(w, "Worker not found or offline", http.StatusNotFound)
+			return
+		}
+
+		peerID, err := peer.Decode(req.WorkerID)
+		if err != nil {
+			http.Error(w, "Invalid Worker ID format", http.StatusBadRequest)
+			return
+		}
+
+		taskID := fmt.Sprintf("task_%d", time.Now().UnixNano())
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		if err := json.NewEncoder(w).Encode(map[string]string{
+			"task_id": taskID,
+			"status":  "queued",
+			"message": "Task dispatched to P2P mesh.",
+		}); err != nil {
+			pterm.Error.Printfln("Async task: failed to write ack: %v", err)
+			return
+		}
+
+		// Budget the whole background job (stream + webhook) by the task
+		// execution timeout so a ghosted worker can't hold a goroutine
+		// past server shutdown.
+		taskCtx, cancelTask := context.WithTimeout(rootCtx, network.TaskExecutionTimeout)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer cancelTask()
+
+			b.runAsyncTask(taskCtx, peerID, taskID, req)
 		}()
+	}
+}
 
-		if err := s.SetWriteDeadline(time.Now().Add(network.TaskPayloadReadTimeout)); err != nil {
-			pterm.Error.Printfln("Async task: failed to set write deadline: %v", err)
-			return
-		}
+func (b *Boss) runAsyncTask(ctx context.Context, peerID peer.ID, taskID string, req AsyncExecuteRequest) {
+	s := b.dialOmni(peerID)
+	if s == nil {
+		return
+	}
 
-		payload := types.TaskPayload{
-			Version: version.AppVersion,
-			Task:    "agent_task",
-			Data:    req.Prompt,
-			TaskID:  taskID,
-		}
-		if err := json.NewEncoder(s).Encode(&payload); err != nil {
-			pterm.Error.Printfln("Async task: failed to send prompt: %v", err)
-			return
-		}
-		if err := s.CloseWrite(); err != nil {
-			pterm.Error.Printfln("Async task: failed to half-close: %v", err)
-			return
-		}
-
-		deadman := &timeoutReader{stream: s, timeout: network.TaskExecutionTimeout}
-		var outputBuffer bytes.Buffer
-		if _, err := io.Copy(&outputBuffer, deadman); err != nil {
-			pterm.Error.Printfln("Async task: stream read failed: %v", err)
-			return
-		}
-
-		streamSuccess = true
-
-		time.Sleep(2 * time.Second)
-
-		if req.WebhookURL != "" {
-			webhookPayload := map[string]string{
-				"task_id":   taskID,
-				"worker_id": req.WorkerID,
-				"status":    "completed",
-			}
-			jsonData, _ := json.Marshal(webhookPayload)
-			resp, err := http.Post(req.WebhookURL, "application/json", bytes.NewBuffer(jsonData))
-			if err == nil {
-				resp.Body.Close()
-			}
+	streamSuccess := false
+	defer func() {
+		if streamSuccess {
+			_ = s.Close()
+		} else {
+			_ = s.Reset()
 		}
 	}()
+
+	if err := s.SetWriteDeadline(time.Now().Add(network.TaskPayloadReadTimeout)); err != nil {
+		pterm.Error.Printfln("Async task: failed to set write deadline: %v", err)
+		return
+	}
+
+	payload := types.TaskPayload{
+		Version: version.AppVersion,
+		Task:    "agent_task",
+		Data:    req.Prompt,
+		TaskID:  taskID,
+	}
+	if err := json.NewEncoder(s).Encode(&payload); err != nil {
+		pterm.Error.Printfln("Async task: failed to send prompt: %v", err)
+		return
+	}
+	if err := s.CloseWrite(); err != nil {
+		pterm.Error.Printfln("Async task: failed to half-close: %v", err)
+		return
+	}
+
+	deadman := &timeoutReader{stream: s, timeout: network.TaskExecutionTimeout}
+	var outputBuffer bytes.Buffer
+	if _, err := io.Copy(&outputBuffer, deadman); err != nil {
+		pterm.Error.Printfln("Async task: stream read failed: %v", err)
+		return
+	}
+
+	streamSuccess = true
+
+	// Brief grace period so the out-of-band artifact stream (handled by
+	// HandleArtifactStream on a separate libp2p stream) lands on disk
+	// before we notify the webhook. Aborted early if the server is
+	// shutting down.
+	select {
+	case <-time.After(2 * time.Second):
+	case <-ctx.Done():
+		return
+	}
+
+	if req.WebhookURL == "" {
+		return
+	}
+
+	webhookPayload := map[string]string{
+		"task_id":   taskID,
+		"worker_id": req.WorkerID,
+		"status":    "completed",
+	}
+	jsonData, err := json.Marshal(webhookPayload)
+	if err != nil {
+		pterm.Error.Printfln("Async task: failed to marshal webhook payload: %v", err)
+		return
+	}
+
+	// Bounded webhook POST. The default http.Client has NO timeout, so a
+	// hostile or slow webhook URL would otherwise stall this goroutine —
+	// and therefore the server drain — indefinitely.
+	webhookCtx, webhookCancel := context.WithTimeout(ctx, webhookTimeout)
+	defer webhookCancel()
+
+	httpReq, err := http.NewRequestWithContext(webhookCtx, http.MethodPost, req.WebhookURL, bytes.NewReader(jsonData))
+	if err != nil {
+		pterm.Error.Printfln("Async task: failed to build webhook request: %v", err)
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: webhookTimeout}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		pterm.Error.Printfln("Async task: webhook delivery failed: %v", err)
+		return
+	}
+	_ = resp.Body.Close()
 }
