@@ -83,7 +83,15 @@ Meanwhile, there's a gaming PC in your bedroom, a workstation at your co-worker'
 
 ## 🏗️ How It Works
 
-AgentFM is built in Go on top of the **libp2p** stack (the same networking layer that powers IPFS and Ethereum). The system has three cooperating node roles:
+### Foundation: why libp2p
+
+AgentFM is built in Go on top of the [**libp2p**](https://libp2p.io) stack — the same networking layer that powers IPFS, Ethereum, Polkadot, and Filecoin. We chose it for three reasons that matter for a distributed AI compute grid:
+
+- **Identity-first addressing.** Peers are identified by an Ed25519 public key, not an IP address. A Worker's IP can change, its NAT can flip, it can roam between Wi-Fi networks — the peer ID stays stable, and the mesh rediscovers it automatically.
+- **Transport agnosticism.** TCP today, QUIC tomorrow, over Tor if you want. The protocol contract is just "a bidirectional authenticated byte stream to peer X."
+- **Built-in NAT traversal.** 90% of the nodes AgentFM runs on are behind some kind of NAT (home routers, office firewalls, mobile hotspots). libp2p's AutoNAT + Circuit Relay v2 + hole-punching stack does the hard work so we don't.
+
+The whole system has three cooperating node roles:
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
@@ -135,20 +143,199 @@ flowchart LR
 | **🛡️ Worker** | Any machine with hardware to donate | Advertises capabilities via GossipSub telemetry, accepts task streams, and executes them inside ephemeral **Podman** containers. Requires Podman; auto-detects Nvidia GPUs and attaches `nvidia.com/gpu=all`. |
 | **🧠 Boss** | Any laptop or server | Stateless thin-client. Either the interactive `pterm` radar TUI, or the headless HTTP gateway (`-mode api`). Discovers workers, opens encrypted P2P tunnels, streams stdout back, receives artifact zips. |
 
-### The four libp2p protocols
+#### 🗼 Relay — the lighthouse
 
-AgentFM talks over four versioned protocol strings. Change any of them without bumping versions and your mesh will silently partition.
+A Relay is a **stateless public coordinator**, not a gateway. It doesn't route task traffic, it doesn't see prompts or artifacts — it only helps peers *find* each other and, when strict NAT gets in the way, briefly helps them *punch a hole* to one another. One $5/mo VPS can serve thousands of peers because it's handling metadata, not compute.
 
-| Protocol | Direction | Purpose |
-|---|---|---|
-| `agentfm-telemetry-v1` *(GossipSub)* | Worker → mesh | Heartbeat broadcast of CPU / GPU / RAM / queue state every 2s. |
-| `/agentfm/task/1.0.0` | Boss → Worker | Prompt JSON in, streaming stdout out. 10-minute idle deadline per read. |
-| `/agentfm/feedback/1.0.0` | Boss → Worker | Post-task feedback message for the node operator. |
-| `/agentfm/artifacts/1.0.0` | Worker → Boss | Zipped `/tmp/output` contents after the task finishes. |
+The Relay's peer identity is persisted to `relay_identity.key` (mode `0600`) so its multiaddr stays stable across restarts — crucial because every Worker and Boss hard-codes the public Relay's multiaddr as their bootstrap. Lose that key, lose that address.
 
-Every stream in the system has an explicit deadline on accept. Error paths `Reset()` the stream (RST-equivalent); only happy paths `Close()` it. Task containers run under `exec.CommandContext` so when the tunnel dies — or the operator hits Ctrl+C — the Podman sandbox gets SIGKILLed instantly.
+#### 🛡️ Worker — the compute node
 
-> **💬 Pro-Tip:** If you want to fork the repo and run your own isolated mesh, change the version suffixes in `agentfm-go/internal/network/constants.go`. A bumped `TaskProtocol` is the cleanest way to partition your dev swarm from production.
+A Worker turns a specific directory into an advertised AI agent. The directory must contain a `Dockerfile` (or `Containerfile`); on startup the Worker runs `podman build --no-cache` to produce the image, then starts publishing telemetry about its hardware and capacity. Workers are the *only* nodes that need Podman — Bosses and Relays don't.
+
+Each Worker enforces three hard **circuit breakers** (`-maxtasks`, `-maxcpu`, `-maxgpu`) that auto-reject tasks and flip the advertised status to 🔴 BUSY once exceeded, so a node serving the public mesh can't be DoS'd into hurting its own operator.
+
+#### 🧠 Boss — the orchestrator
+
+A Boss holds **zero state on disk**. It's either an interactive terminal radar (`-mode boss`) that lets a human pick a Worker and watch the stream live, or a headless HTTP gateway (`-mode api`) that exposes three endpoints so Python / Node / n8n / Next.js can fire P2P tasks over plain HTTP. Both share the same underlying libp2p dialer and stream-handler code — the UI is just a different front-end for the same routing engine.
+
+---
+
+### Peer discovery & NAT traversal
+
+One of AgentFM's defining promises is "zero-config networking." That's not marketing — it's four independent libp2p subsystems composed in layers, each with a different failure mode. Knowing which one kicked in tells you a lot about why your node connected:
+
+| Mechanism | When it engages | Scope | What it gives you |
+|---|---|---|---|
+| **mDNS** | Always, in the background | Local LAN | Sub-second peer discovery on the same Wi-Fi / subnet. Your laptop finds the desktop under your kitchen table instantly. |
+| **Kademlia DHT** | Every 10s after boot | Global WAN | Distributed peer lookup across the public internet. The Rendezvous string `agentfm-rendezvous` is how peers find each other without a central index. |
+| **AutoNAT** | On startup | Single node | Tests whether this node is publicly reachable. If not, the node switches into "I need a relay" mode and starts opportunistically using Circuit Relay v2. |
+| **Circuit Relay v2** | On demand, when AutoNAT reports closed NAT | Two peers + relay | A pre-existing Relay (like your VPS lighthouse) forwards a *single* setup packet between two peers behind strict NAT, and they coordinate a direct hole-punch. After that the relay drops out and the connection is truly peer-to-peer. |
+
+> **💬 Pro-Tip:** If you see `🌍 [DHT Fallback]` logs in your Boss, it's the 10-second Kademlia sweep finding peers the initial GossipSub telemetry didn't surface. `⚡ [mDNS]` means you connected to a LAN peer without even touching the internet.
+
+The net effect: you launch a Worker on a laptop behind your home router and a Boss at a coffee shop behind enterprise firewalls, and they form a direct encrypted TCP tunnel — with no port-forwarding, no VPN, and no cloud router in the data path. The Relay coordinated the introduction, then got out of the way.
+
+---
+
+### The four wire protocols
+
+AgentFM talks over four versioned protocol strings. They're defined in `agentfm-go/internal/network/constants.go` and every peer on the mesh must agree on them exactly.
+
+| Protocol | Direction | Deadline | Purpose |
+|---|---|---|---|
+| `agentfm-telemetry-v1` *(GossipSub)* | Worker → mesh | — (pubsub) | Heartbeat broadcast of CPU / GPU / RAM / queue state every 2s. |
+| `/agentfm/task/1.0.0` | Boss → Worker | 10 min idle | JSON envelope in, streaming stdout back. Reads refresh the deadline. |
+| `/agentfm/feedback/1.0.0` | Boss → Worker | 30 s | Post-task feedback message, persisted to `feedback.log` in the agent dir. |
+| `/agentfm/artifacts/1.0.0` | Worker → Boss | 30 min | Size-headered zip of `/tmp/output` on a dedicated stream. |
+
+**Stream hygiene rules** (enforced throughout the codebase):
+
+- Every stream gets an explicit `SetDeadline` / `SetReadDeadline` / `SetWriteDeadline` on accept. No unbounded streams, ever.
+- Error paths call `stream.Reset()` (RST-equivalent — aborts and signals the peer). Only happy paths call `stream.Close()` (graceful FIN).
+- Incoming task JSON is capped at **1 MB** via `io.LimitReader`. Malicious peers can't OOM the Worker with an infinite payload.
+- The artifact stream is length-prefixed: the first 8 bytes are the zip size as a little-endian int64. The Boss reads exactly that many bytes or aborts.
+
+**Task envelope** (what the Boss writes to `/agentfm/task/1.0.0`):
+
+```json
+{
+  "version": "1.0.0",
+  "task":    "agent_task",
+  "data":    "<the user's prompt>",
+  "task_id": "task_1718923891000"
+}
+```
+
+**Stream markers** (what the Worker writes back on stdout, before closing):
+
+| Marker | Meaning |
+|---|---|
+| `\n[AGENTFM: FILES_INCOMING]\n` | "I'm about to open an artifact stream on `/agentfm/artifacts/1.0.0` — start expecting a zip." |
+| `\n[AGENTFM: NO_FILES]\n` | "Task finished with no artifacts. Don't wait." |
+
+The Boss and Python SDK parse these out of the stdout stream so users never see them in the rendered output.
+
+> **💬 Pro-Tip:** If you're forking the repo to run your own isolated mesh, bump the version suffixes in `constants.go` (`TaskProtocol`, `FeedbackProtocol`, `ArtifactProtocol`, `TelemetryTopic`). A `/agentfm/task/1.0.0` Boss will happily ignore a `/agentfm/task/1.0.1` Worker's existence at the libp2p protocol-negotiation layer — the cleanest way to partition dev from prod.
+
+---
+
+### Execution model: inside the Podman sandbox
+
+When a task stream arrives at a Worker, the sequence is fully scripted:
+
+1. **Capacity check.** The Worker grabs its mutex, compares current task count against `-maxtasks`, checks `-maxcpu` against its latest CPU sample, and queries `nvidia-smi` for current VRAM usage against `-maxgpu`. If any threshold is hit, the Worker writes a human-readable rejection message onto the stream and gracefully closes — no sandbox starts. This is the **circuit breaker**.
+2. **Payload decode.** Reads up to 1 MB of JSON through an `io.LimitReader`, decodes into the shared `types.TaskPayload` struct, and rejects anything whose `version` doesn't match the Worker's own `version.AppVersion`.
+3. **Sandbox assembly.** A per-task scratch directory `./.agentfm_temp/run_<session_id>/` is created (mode `0755`) and bind-mounted to `/tmp/output` inside the container with SELinux relabelling (`:z`). If the agent directory contains a `.env` file, Podman loads it via `--env-file`. The advertised `-model` is injected as `AGENTFM_MODEL=<model>`. If nvidia-smi reported a GPU, `--device nvidia.com/gpu=all` is added.
+4. **Sub-process launch.** The container runs via `exec.CommandContext(taskCtx, "podman", "run", "--rm", ...)` — the `taskCtx` is bounded by `TaskExecutionTimeout` (10 min) *and* watched by a goroutine that cancels it if `s.Conn().IsClosed()`. The net result: **if the Boss disappears mid-task, the Podman container is SIGKILLed within 2 seconds**, not left running to natural completion.
+5. **Streaming.** The container's stdout and stderr are wired directly to the libp2p stream as `io.Writer`s. Provided the agent follows the [Three Golden Rules](#-authoring-agents-the-three-golden-rules-of-streaming), output flows to the Boss's terminal in real time.
+6. **Artifact handoff.** After the sandbox exits, the Worker checks `/tmp/output`. If non-empty, it writes `[AGENTFM: FILES_INCOMING]` onto the task stream, zips the directory, opens a fresh libp2p stream on `/agentfm/artifacts/1.0.0`, and uploads the zip (with its own `ArtifactStreamTimeout` deadline). Otherwise it writes `[AGENTFM: NO_FILES]` and closes.
+7. **Cleanup.** A deferred `podman rm -f <container>` runs on a detached 10-second ctx so shutdown doesn't orphan containers. The scratch directory and its zip are `os.RemoveAll`'d.
+
+> **⚠️ Sandbox guarantees and non-guarantees:** Podman's `--rm --network host` gives you process isolation, filesystem isolation (the container sees only what you mount), and user-namespace isolation in rootless mode. It does **not** give you network isolation (host mode) or kernel-level isolation — containers share the host kernel. If your threat model requires kernel isolation, run AgentFM inside a gVisor / Firecracker / Kata VM.
+
+---
+
+### Telemetry & circuit breakers
+
+Every 2 seconds, every Worker publishes a `WorkerProfile` to the `agentfm-telemetry-v1` GossipSub topic. The profile is JSON and carries exactly the shape the radar UI and `/api/workers` endpoint render:
+
+```json
+{
+  "peer_id": "12D3KooW...",
+  "agent_name": "HR Specialist",
+  "agent_desc": "Handles sick leave policies...",
+  "model": "llama3.2",
+  "author": "Anonymous",
+  "status": "AVAILABLE",
+  "cpu_cores": 12,
+  "cpu_usage_pct": 14.2,
+  "ram_free_gb": 12.5,
+  "has_gpu": false,
+  "gpu_used_gb": 0.0,
+  "gpu_total_gb": 0.0,
+  "gpu_usage_pct": 0.0,
+  "current_tasks": 0,
+  "max_tasks": 10
+}
+```
+
+The `status` field is derived on each tick from the circuit-breaker logic. A Worker flips to `BUSY` when **any** of these is true:
+
+- `current_tasks >= max_tasks` (queue full)
+- `cpu_usage_pct >= -maxcpu` (CPU saturated)
+- `has_gpu && gpu_usage_pct > -maxgpu` (VRAM saturated)
+
+The Boss-side radar consumes this topic, de-dupes by peer ID, and **ages out** entries after 15 seconds of silence — so a Worker that crashes or loses the network disappears from the radar on its own. No central registry, no heartbeat timeout service, no Kubernetes. Just 2-second pulses over GossipSub.
+
+---
+
+### Data flow of a single task
+
+Putting it all together, here's the full wire-level sequence from "user hits Enter in the TUI" to "zip extracted to `./agentfm_artifacts/`":
+
+```
+┌──────┐                          ┌─────────┐                     ┌────────┐
+│ Boss │                          │  Relay  │                     │ Worker │
+└──┬───┘                          └────┬────┘                     └───┬────┘
+   │                                   │                              │
+   │   (1) Subscribe to telemetry ─────►                              │
+   │                                   ◄───── GossipSub heartbeat ────┤
+   │                                   │                              │
+   │   (2) User selects worker in TUI  │                              │
+   │                                   │                              │
+   │   (3) libp2p NAT punch ──────────►│◄─────── relay coordination ──┤
+   │                                   │                              │
+   │   (4) Direct encrypted stream ────┼──────────────────────────────►
+   │       { "version": "1.0.0",       │                              │
+   │         "task": "agent_task",     │                      Pull image
+   │         "data": "<prompt>" }      │                      Start Podman
+   │                                   │                      exec.CommandContext
+   │                                   │                              │
+   │   (5) ◄──── live stdout stream ───┼───────────────── PYTHONUNBUFFERED
+   │                                   │                              │
+   │   (6) ◄──── [AGENTFM: FILES_INCOMING] ────────────────────────── │
+   │                                   │                              │
+   │   (7) ◄──── /agentfm/artifacts/1.0.0 stream (zip) ─────────────── │
+   │       (separate libp2p stream with its own 30-min deadline)      │
+   │                                   │                              │
+   │   (8) Extract to ./agentfm_artifacts/  ✅                        │
+   │                                   │                              │
+   │   (9) ──── /agentfm/feedback/1.0.0 ──────────────────────────────►
+```
+
+Steps 1–3 happen continuously in the background. Steps 4–8 are the task hot path. Step 9 is optional — the operator can leave feedback for the node owner, which lands in `feedback.log` in the agent directory.
+
+---
+
+### Failure modes & graceful degradation
+
+Because AgentFM runs across the messy public internet — not inside a single datacenter — we designed it to degrade predictably when things go wrong.
+
+| What breaks | What happens |
+|---|---|
+| **Boss disappears mid-task** | Worker's task ctx watcher detects `s.Conn().IsClosed()` within 2s and SIGKILLs the Podman container. No wasted compute. |
+| **Worker disappears mid-task** | Boss's `timeoutReader` hits its idle deadline and the `io.Copy` returns with a timeout error. Stream is `Reset()`ed, user sees `⏳ WORKER GHOSTED`. |
+| **Worker overloaded when task arrives** | Capacity check rejects the task with a human-readable message; the stream closes gracefully (not Reset) so the Boss sees the reason. Status flips to 🔴 BUSY on the next telemetry tick. |
+| **Artifact zip too slow** | 30-min `ArtifactStreamTimeout` caps the transfer. Partial zip is discarded, stream is Reset. |
+| **Operator hits Ctrl+C on Worker** | `signal.NotifyContext` cancels the root ctx → task ctx inherits cancellation → `exec.CommandContext` SIGKILLs running container → libp2p `Host.Close()` → clean exit. |
+| **Operator hits Ctrl+C on Boss TUI** | Keyboard callback sets a quit flag, defers unwind (cancel UI, stop progress area), `Host.Close` runs, clean exit. |
+| **API gateway webhook URL hangs** | Webhook POST is bounded by a 30s `http.Client{Timeout}` and a `context.WithTimeout` tied to the task ctx. A hostile webhook can't stall server shutdown. |
+| **Pubsub join fails at startup** | Telemetry degrades: Worker still accepts direct-dialed tasks, but won't appear on the radar until restarted. Logged at `Error`, not fatal. |
+
+No goroutine in the system calls `os.Exit` or `pterm.Fatal`. Every libp2p stream has a deadline. Every sub-process is tied to a ctx. The design target is: **any failure propagates cleanly to the operator as a logged error, never as a zombie process or a silently ghosted task.**
+
+---
+
+### Private swarms at the protocol level
+
+A public AgentFM mesh uses only libp2p's default Noise / TLS encryption between peers — which is plenty for "don't let the coffee shop Wi-Fi sniff my prompt," but not enough for "my laptop and my co-worker's GPU workstation must not be visible to any other AgentFM user."
+
+For that, AgentFM wraps every libp2p transport in a **Pre-Shared Key (PSK)** via libp2p's `pnet` package. You generate a key once with `agentfm -mode genkey` (32 random bytes + a mandatory libp2p header), distribute it out-of-band, and pass `-swarmkey ./swarm.key` to every node.
+
+Under the hood: when any peer tries to open a connection, the `pnet` transport XORs the stream with the PSK before the Noise handshake even begins. Peers without the right key see ciphertext garbage at the TCP layer and the connection is dropped **before a single byte of AgentFM protocol is exchanged**. The result is a darknet-level isolation: your private swarm is literally invisible and unjoinable to the public internet, running over the same libp2p machinery.
+
+> **🛡️ Operational note:** Relay nodes can serve either public *or* private swarms — never both simultaneously, because a PSK-gated Relay will drop all public traffic. If you want a shared lighthouse for a private team, run a dedicated `agentfm-relay -swarmkey ./swarm.key -port 4001` on the VPS.
 
 ### Data flow of a single task
 
