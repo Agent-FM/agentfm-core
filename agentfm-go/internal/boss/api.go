@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"agentfm/internal/network"
+	"agentfm/internal/types"
 	"agentfm/internal/version"
 
 	netcore "github.com/libp2p/go-libp2p/core/network"
@@ -215,8 +216,13 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	taskJSON := fmt.Sprintf(`{"version": "%s", "task": "agent_task", "data": "%s", "task_id": "%s"}`, version.AppVersion, req.Prompt, req.TaskID)
-	if _, err := s.Write([]byte(taskJSON)); err != nil {
+	payload := types.TaskPayload{
+		Version: version.AppVersion,
+		Task:    "agent_task",
+		Data:    req.Prompt,
+		TaskID:  req.TaskID,
+	}
+	if err := json.NewEncoder(s).Encode(&payload); err != nil {
 		http.Error(w, "Failed to send prompt", http.StatusInternalServerError)
 		return
 	}
@@ -321,8 +327,13 @@ func (b *Boss) handleAsyncExecuteTask(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		taskJSON := fmt.Sprintf(`{"version": "%s", "task": "agent_task", "data": "%s", "task_id": "%s"}`, version.AppVersion, req.Prompt, taskID)
-		if _, err := s.Write([]byte(taskJSON)); err != nil {
+		payload := types.TaskPayload{
+			Version: version.AppVersion,
+			Task:    "agent_task",
+			Data:    req.Prompt,
+			TaskID:  taskID,
+		}
+		if err := json.NewEncoder(s).Encode(&payload); err != nil {
 			pterm.Error.Printfln("Async task: failed to send prompt: %v", err)
 			return
 		}

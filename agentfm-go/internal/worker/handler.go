@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"agentfm/internal/network"
+	"agentfm/internal/types"
 	"agentfm/internal/utils"
 	"agentfm/internal/version"
 
@@ -83,12 +84,7 @@ func (w *Worker) handleTaskStream(rootCtx context.Context, s netcore.Stream) {
 		return
 	}
 
-	var payload struct {
-		Version string `json:"version"`
-		Task    string `json:"task"`
-		Data    string `json:"data"`
-		TaskID  string `json:"task_id"`
-	}
+	var payload types.TaskPayload
 
 	limitedReader := io.LimitReader(s, 1*1024*1024)
 

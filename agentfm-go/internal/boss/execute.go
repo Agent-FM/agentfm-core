@@ -63,8 +63,12 @@ func (b *Boss) executeFlow(worker types.WorkerProfile) {
 		return
 	}
 
-	taskJSON := fmt.Sprintf(`{"version": "%s", "task": "agent_task", "data": "%s"}`, version.AppVersion, prompt)
-	if _, err := s.Write([]byte(taskJSON)); err != nil {
+	payload := types.TaskPayload{
+		Version: version.AppVersion,
+		Task:    "agent_task",
+		Data:    prompt,
+	}
+	if err := json.NewEncoder(s).Encode(&payload); err != nil {
 		pterm.Error.Printfln("Failed to send prompt: %v", err)
 		return
 	}
