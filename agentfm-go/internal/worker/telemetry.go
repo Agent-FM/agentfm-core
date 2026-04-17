@@ -26,21 +26,31 @@ func getGPUStats() (hasGPU bool, usedGB float64, totalGB float64, usagePct float
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines) > 0 {
-		parts := strings.Split(lines[0], ",")
-		if len(parts) >= 2 {
-			usedMB, _ := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
-			totalMB, _ := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
-
-			usedGB = usedMB / 1024.0
-			totalGB = totalMB / 1024.0
-			if totalGB > 0 {
-				usagePct = (usedGB / totalGB) * 100.0
-			}
-			return true, usedGB, totalGB, usagePct
-		}
+	if len(lines) == 0 {
+		return false, 0, 0, 0
 	}
-	return false, 0, 0, 0
+	parts := strings.Split(lines[0], ",")
+	if len(parts) < 2 {
+		return false, 0, 0, 0
+	}
+
+	// If either number fails to parse the nvidia-smi output is malformed;
+	// treat the probe as a miss rather than publishing garbage telemetry.
+	usedMB, err := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
+	if err != nil {
+		return false, 0, 0, 0
+	}
+	totalMB, err := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
+	if err != nil {
+		return false, 0, 0, 0
+	}
+
+	usedGB = usedMB / 1024.0
+	totalGB = totalMB / 1024.0
+	if totalGB > 0 {
+		usagePct = (usedGB / totalGB) * 100.0
+	}
+	return true, usedGB, totalGB, usagePct
 }
 
 func (w *Worker) printMetadata() {
@@ -55,11 +65,20 @@ func (w *Worker) printMetadata() {
 func (w *Worker) startTelemetry(ctx context.Context) {
 	topic, err := w.node.PubSub.Join(network.TelemetryTopic)
 	if err != nil {
-		pterm.Fatal.Println(err)
+		// Non-fatal: surface the error and return so parent defers still
+		// run. The worker continues to serve tasks but won't appear on
+		// the radar until it's restarted.
+		pterm.Error.Printfln("Telemetry disabled: failed to join %q topic: %v", network.TelemetryTopic, err)
+		return
 	}
 
 	safeDesc := w.truncateWords(w.config.AgentDesc, 50)
 	totalCores := runtime.NumCPU()
+
+	// Sensor / publish errors are noisy if logged every tick. Track the
+	// last logged message so we only surface changes, not steady-state
+	// failures.
+	var lastSensorErr, lastPublishErr string
 
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -69,7 +88,13 @@ func (w *Worker) startTelemetry(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			cpuPercent, _ := cpu.Percent(time.Second, false)
+			cpuPercent, cpuErr := cpu.Percent(time.Second, false)
+			if cpuErr != nil {
+				if msg := cpuErr.Error(); msg != lastSensorErr {
+					pterm.Warning.Printfln("cpu sensor read failed: %v", cpuErr)
+					lastSensorErr = msg
+				}
+			}
 
 			hasGPU, gpuUsed, gpuTotal, gpuPct := getGPUStats()
 
@@ -91,7 +116,13 @@ func (w *Worker) startTelemetry(ctx context.Context) {
 				status = "BUSY"
 			}
 
-			vMem, _ := mem.VirtualMemory()
+			vMem, memErr := mem.VirtualMemory()
+			if memErr != nil {
+				if msg := memErr.Error(); msg != lastSensorErr {
+					pterm.Warning.Printfln("memory sensor read failed: %v", memErr)
+					lastSensorErr = msg
+				}
+			}
 			freeRAM := 0.0
 			if vMem != nil {
 				freeRAM = float64(vMem.Available) / (1024 * 1024 * 1024)
@@ -115,8 +146,19 @@ func (w *Worker) startTelemetry(ctx context.Context) {
 				MaxTasks:     maxTasks,
 			}
 
-			payloadBytes, _ := json.Marshal(profile)
-			topic.Publish(ctx, payloadBytes)
+			payloadBytes, marshalErr := json.Marshal(profile)
+			if marshalErr != nil {
+				pterm.Error.Printfln("failed to marshal telemetry profile: %v", marshalErr)
+				continue
+			}
+			if pubErr := topic.Publish(ctx, payloadBytes); pubErr != nil {
+				if msg := pubErr.Error(); msg != lastPublishErr {
+					pterm.Warning.Printfln("telemetry publish failed: %v", pubErr)
+					lastPublishErr = msg
+				}
+			} else {
+				lastPublishErr = ""
+			}
 
 			if status == "BUSY" {
 				if hasGPU {

@@ -52,12 +52,18 @@ func (b *Boss) Run(ctx context.Context) {
 func (b *Boss) listenTelemetry(ctx context.Context) {
 	topic, err := b.node.PubSub.Join(network.TelemetryTopic)
 	if err != nil {
-		pterm.Fatal.Println(err)
+		// Non-fatal: surface the error and return so the caller's
+		// defers still run. Boss keeps working for manually-specified
+		// peers but the radar will be empty.
+		pterm.Error.Printfln("Telemetry listener disabled: failed to join %q: %v", network.TelemetryTopic, err)
+		return
 	}
 	sub, err := topic.Subscribe()
 	if err != nil {
-		pterm.Fatal.Println(err)
+		pterm.Error.Printfln("Telemetry listener disabled: failed to subscribe: %v", err)
+		return
 	}
+	defer sub.Cancel()
 
 	for {
 		msg, err := sub.Next(ctx)
