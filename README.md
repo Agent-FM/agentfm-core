@@ -98,42 +98,86 @@ The whole system has three cooperating node roles:
   'primaryColor':'#4F46E5',
   'primaryTextColor':'#FFFFFF',
   'primaryBorderColor':'#A5B4FC',
-  'lineColor':'#818CF8',
-  'secondaryColor':'#6366F1',
-  'tertiaryColor':'#312E81',
-  'clusterBkg':'#1E1B4B',
-  'clusterBorder':'#6366F1',
-  'edgeLabelBackground':'#312E81',
+  'lineColor':'#94A3B8',
+  'textColor':'#E5E7EB',
+  'edgeLabelBackground':'#1F2937',
+  'tertiaryColor':'#1F2937',
   'fontFamily':'ui-sans-serif, system-ui, sans-serif',
-  'fontSize':'14px'
+  'fontSize':'13px'
 }}}%%
-flowchart LR
-    subgraph LIGHT["🗼 Lighthouse Layer"]
-        R[("Relay<br/><i>permanent VPS node</i><br/>DHT · Circuit Relay v2")]
-    end
+flowchart TB
+    %% --- External consumers ---
+    C1["🐍 Python SDK"]
+    C2["⚡ Next.js · n8n · Slack bot"]
 
-    subgraph ROUTE["🧠 Routing Layer"]
-        B["💻 Boss<br/><i>orchestrator</i><br/>TUI · API Gateway"]
-    end
+    %% --- Lighthouse ---
+    R[("🗼 Relay Lighthouse<br/><i>agentfm-relay :4001</i><br/>Kademlia DHT · Circuit Relay v2 · AutoNAT")]
 
-    subgraph COMPUTE["🛡️ Compute Layer"]
-        W1["🖥️ Worker A<br/><i>Podman sandbox</i><br/>CPU + small LLM"]
-        W2["🖥️ Worker B<br/><i>Podman sandbox</i><br/>RTX 4090 + FLUX"]
-    end
+    %% --- Boss variants (same binary, different -mode) ---
+    BA["🌐 API Gateway<br/><i>agentfm -mode api :8080</i><br/>/api/execute · async webhooks"]
+    BT["💻 TUI Radar<br/><i>agentfm -mode boss</i><br/>pterm keyboard-driven"]
 
-    W1 -- GossipSub telemetry --> R
-    W2 -- GossipSub telemetry --> R
-    B -- discover via DHT + PubSub --> R
-    B -.->|"direct encrypted P2P<br/>(NAT-punched)"| W1
-    B -.->|"direct encrypted P2P<br/>(NAT-punched)"| W2
+    %% --- Workers ---
+    W1["🖥️ Worker A<br/><i>agentfm -mode worker</i><br/>CPU · llama3.2 · maxtasks 10"]
+    W2["🖥️ Worker B<br/><i>agentfm -mode worker</i><br/>RTX 4090 · FLUX · maxtasks 3"]
 
-    classDef relay    fill:#4F46E5,stroke:#A5B4FC,stroke-width:2px,color:#FFFFFF
-    classDef boss     fill:#DB2777,stroke:#F9A8D4,stroke-width:2px,color:#FFFFFF
-    classDef worker   fill:#059669,stroke:#6EE7B7,stroke-width:2px,color:#FFFFFF
+    %% --- Podman sandboxes (ephemeral, per-task) ---
+    S1[["📦 Podman sandbox A<br/>/tmp/output :z mount<br/>exec.CommandContext"]]
+    S2[["📦 Podman sandbox B<br/>--device nvidia.com/gpu=all<br/>exec.CommandContext"]]
+
+    %% --- LAN peer via mDNS ---
+    LAN["⚡ LAN Peer<br/><i>mDNS · agentfm-local</i>"]
+
+    %% === Consumer → Boss API ===
+    C1 -->|HTTP| BA
+    C2 -->|HTTP POST| BA
+    BA -.->|"async webhook POST<br/>(30s client timeout)"| C2
+
+    %% === Bootstrap dials (control plane) ===
+    BA -.-> R
+    BT -.-> R
+    W1 -.-> R
+    W2 -.-> R
+
+    %% === GossipSub telemetry (continuous 2s pulses) ===
+    W1 -->|"agentfm-telemetry-v1<br/>every 2s"| R
+    W2 --> R
+    R -->|pubsub fanout| BA
+    R -->|pubsub fanout| BT
+
+    %% === Direct P2P streams — the actual work, NAT-punched via Relay ===
+    BA ==>|"/agentfm/task/1.0.0<br/>(10min idle)"| W2
+    BT ==>|"/agentfm/task/1.0.0"| W1
+    W1 ==>|"/agentfm/artifacts/1.0.0<br/>(30min)"| BT
+    W2 ==>|"/agentfm/artifacts/1.0.0"| BA
+    BT ==>|"/agentfm/feedback/1.0.0"| W1
+
+    %% === Worker → Sandbox (per-task, ephemeral) ===
+    W1 -->|"spawns"| S1
+    W2 -->|"spawns"| S2
+
+    %% === mDNS local discovery bypasses the relay ===
+    BT <-.->|"mDNS<br/>(same Wi-Fi)"| LAN
+
+    %% --- Styling ---
+    classDef relay   fill:#4F46E5,stroke:#A5B4FC,stroke-width:2px,color:#FFFFFF
+    classDef boss    fill:#DB2777,stroke:#F9A8D4,stroke-width:2px,color:#FFFFFF
+    classDef worker  fill:#059669,stroke:#6EE7B7,stroke-width:2px,color:#FFFFFF
+    classDef sandbox fill:#0F766E,stroke:#5EEAD4,stroke-width:2px,color:#FFFFFF
+    classDef ext     fill:#F59E0B,stroke:#FCD34D,stroke-width:2px,color:#000000
+    classDef lan     fill:#7C3AED,stroke:#C4B5FD,stroke-width:2px,color:#FFFFFF
+
     class R relay
-    class B boss
+    class BA,BT boss
     class W1,W2 worker
+    class S1,S2 sandbox
+    class C1,C2 ext
+    class LAN lan
 ```
+
+> **🎨 Color legend:** 🟣 indigo = Relay lighthouse · 🩷 pink = Boss (TUI or API Gateway) · 🟢 emerald = Worker daemon · 🟢 teal = ephemeral Podman sandbox · 🟠 amber = external client · 🟪 violet = LAN peer via mDNS.
+>
+> **➡️ Edge legend:** `-.->` *dotted* = control-plane setup (bootstrap dial, webhook callback, LAN discovery) · `-->` *thin* = background pubsub traffic (telemetry fanout) · `==>` *thick* = direct P2P data-plane streams (task / artifact / feedback — the actual work).
 
 ### The three node roles
 
