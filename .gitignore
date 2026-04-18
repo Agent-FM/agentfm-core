@@ -22,7 +22,6 @@ feedback.log
 vendor/
 go.work
 go.work.sum
-
 .DS_Store
 .AppleDouble
 .LSOverride
