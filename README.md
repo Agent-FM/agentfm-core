@@ -839,13 +839,6 @@ See [`agentfm-go/test/README.md`](agentfm-go/test/README.md) for the full layout
 
 ---
 
-
-### License
-
-[MIT](LICENSE) — do whatever you want with it. Attribution appreciated but not required.
-
----
-
 <div align="center">
 
 **Built with Go, libp2p, and a belief that compute should belong to everyone.**
