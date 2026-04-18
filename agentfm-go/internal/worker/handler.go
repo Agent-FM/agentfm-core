@@ -89,7 +89,6 @@ func (w *Worker) handleTaskStream(rootCtx context.Context, s netcore.Stream) {
 	limitedReader := io.LimitReader(s, 1*1024*1024)
 
 	if err := json.NewDecoder(limitedReader).Decode(&payload); err != nil {
-		// Invalid / truncated payload — Reset, per CLAUDE.md §1.1.
 		pterm.Error.Println("Failed to decode incoming task payload (or payload exceeded 1MB limit).")
 		return
 	}

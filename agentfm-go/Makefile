@@ -45,7 +45,8 @@ endif
 DOWNLOAD_URL := https://github.com/$(GITHUB_REPO)/releases/download/$(RELEASE_TAG)/$(BINARY_NAME)
 RELAY_DOWNLOAD_URL := https://github.com/$(GITHUB_REPO)/releases/download/$(RELEASE_TAG)/$(RELAY_BINARY_NAME)
 
-.PHONY: all check-deps build build-agentfm build-relay build-all install uninstall clean help setup-deps download-install
+.PHONY: all check-deps build build-agentfm build-relay build-all install uninstall clean help setup-deps download-install \
+        test test-unit test-integration test-race test-coverage
 
 # Default target when someone just types `make`
 all: check-deps build
@@ -178,6 +179,35 @@ clean:
 	@echo "✅ Cleaned."
 
 # ==========================================
+# 🧪 TESTS
+# ==========================================
+# The suite is split into two tiers:
+#   - unit:        fast, package-scoped tests under ./internal/...
+#   - integration: slower, cross-package scenarios under ./test/integration/...
+# Both run under -race by default; see test/README.md for the layout contract.
+
+test: test-unit
+
+test-unit:
+	@echo "🧪 Running unit tests (./internal/...) under -race..."
+	@go test -race -count=1 -timeout 120s ./internal/...
+
+test-integration:
+	@echo "🧪 Running integration tests (./test/integration/...) under -race..."
+	@go test -race -count=1 -timeout 180s ./test/integration/...
+
+test-race:
+	@echo "🧪 Running full suite under -race..."
+	@go test -race -count=1 -timeout 300s ./...
+
+test-coverage:
+	@echo "📊 Computing unit-test coverage..."
+	@go test -race -count=1 -timeout 180s -cover -coverprofile=coverage.out ./internal/...
+	@go tool cover -func=coverage.out | tail -1
+	@echo "    -> open a full function report with: go tool cover -func=coverage.out"
+	@echo "    -> open an HTML report with:         go tool cover -html=coverage.out"
+
+# ==========================================
 # 📖 HELP
 # ==========================================
 help:
@@ -193,3 +223,10 @@ help:
 	@echo "  make check-deps   - Validates Go and Podman are installed"
 	@echo "  make setup-deps   - Prints OS-specific instructions to install missing tools"
 	@echo "  make clean        - Deletes compiled binaries"
+	@echo ""
+	@echo "🧪 Test Targets:"
+	@echo "  make test              - Runs unit tests (./internal/...) under -race"
+	@echo "  make test-unit         - Same as 'make test'"
+	@echo "  make test-integration  - Runs integration tests (./test/integration/...)"
+	@echo "  make test-race         - Runs the full suite under -race"
+	@echo "  make test-coverage     - Produces coverage.out + prints the summary"

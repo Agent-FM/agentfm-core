@@ -738,27 +738,31 @@ AgentFM is designed for a zero-trust threat model. Every remote peer is treated 
 
 ## 🛠️ Development & Contributing
 
-The monorepo has three top-level directories:
+### Repo layout
 
 ```
 agentfm-core/
-├── agentfm-go/          # Core Go daemon (agentfm + relay binaries)
-│   ├── cmd/
-│   ├── internal/
-│   │   ├── boss/        # TUI + API gateway
-│   │   ├── worker/      # Podman sandbox + telemetry
-│   │   ├── network/     # libp2p mesh + artifact streams
-│   │   └── types/       # shared DTOs
+├── agentfm-go/                    # Core Go daemon (agentfm + relay binaries)
+│   ├── cmd/                       # Binary entry points
+│   ├── internal/                  # Production code + in-package unit tests
+│   │   ├── boss/                  # TUI + API gateway
+│   │   ├── worker/                # Podman sandbox + telemetry
+│   │   ├── network/               # libp2p mesh + artifact streams
+│   │   ├── types/                 # Shared DTOs
+│   │   └── utils/                 # Zip helper
+│   ├── test/                      # Dedicated test tree
+│   │   ├── testutil/              # Reusable fixtures (libp2p hosts, zip builders, ...)
+│   │   └── integration/           # Cross-package end-to-end scenarios
 │   └── Makefile
 │
-├── agentfm-python/      # Official Python SDK (thin HTTP client)
+├── agentfm-python/                # Official Python SDK (thin HTTP client)
 │
-└── agent-example/       # Reference agents
+└── agent-example/                 # Reference agents
     ├── sick-leave-generator/
     └── image-generator/
 ```
 
-Full contributor workflow — including setting up a private dev relay, versioning the libp2p protocol strings, and submitting PRs — lives in [`CONTRIBUTING.md`](CONTRIBUTING.md). TL;DR:
+### Local development
 
 ```bash
 git clone https://github.com/Agent-FM/agentfm-core.git
@@ -768,11 +772,73 @@ make build-agentfm
 ./agentfm --help
 ```
 
+Full branching / commit-message / PR workflow lives in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
 > **💬 Pro-Tip for contributors:** When developing against a custom relay, bump the version suffixes in `internal/network/constants.go` (`TaskProtocol`, `FeedbackProtocol`, `ArtifactProtocol`, `TelemetryTopic`) so your dev mesh can't accidentally talk to production peers.
 
-### Project status
+---
 
-AgentFM `v1.0.0` is released and stable. The Go side has been hardened against the CLAUDE.md defensive-programming checklist: explicit stream deadlines, `Reset()` on error, `exec.CommandContext` on every sub-process, bounded HTTP server timeouts, and zero `os.Exit` / `pterm.Fatal` inside goroutines.
+### 🧪 Testing
+
+AgentFM runs a **two-tier Go test suite**, every tier under the race detector.
+
+| Command | Scope | Runtime |
+|---|---|---|
+| `make test` | Unit tests — `./internal/...` | ~4 s |
+| `make test-integration` | End-to-end scenarios — `./test/integration/...` | ~3 s |
+| `make test-race` | Everything under `-race` | ~7 s |
+| `make test-coverage` | Unit tests + `coverage.out` + per-function summary | ~5 s |
+
+See [`agentfm-go/test/README.md`](agentfm-go/test/README.md) for the full layout contract — testutil API, the white-box vs. black-box split, and the "what goes where" matrix.
+
+**Where to put a new test:**
+
+| If you're writing… | Location | Package |
+|---|---|---|
+| Unit test for `internal/foo.Bar` | `internal/foo/bar_test.go` | `package foo` |
+| Black-box test of `internal/foo`'s public API | `internal/foo/bar_api_test.go` | `package foo_test` |
+| Scenario spanning 2+ internal packages | `test/integration/<scenario>_test.go` | `package integration` |
+| Reusable fixture used in 3+ tests | `test/testutil/<topic>.go` | `package testutil` |
+
+**Every test must:**
+
+- ✅ Pass under `go test -race` — no goroutine leaks, no data races, no flakes.
+- ✅ Clean up via `t.Cleanup` — no lingering file handles, goroutines, or libp2p hosts after return.
+- ✅ Use `t.TempDir`, `t.Chdir`, `t.Setenv` (never raw `os.*`) so parallel runs stay isolated.
+- ✅ Bound every network / sub-process call with `context.WithTimeout` — prefer `testutil.WithTimeout(t, d)`.
+- ✅ Use **real** libp2p hosts (`testutil.NewHost` / `NewConnectedMesh`) rather than mocknet. Mocknet's in-memory streams do not support `SetDeadline`, which silently bypasses half of AgentFM's error paths.
+
+---
+
+### ✅ PR checklist
+
+**libp2p discipline** &nbsp;·&nbsp; §1.1
+- [ ] Every stream gets an explicit `SetDeadline` / `SetReadDeadline` / `SetWriteDeadline` on accept.
+- [ ] Error paths call `stream.Reset()`; success paths call `stream.Close()`.
+- [ ] `NewStream` and `DHT.FindPeer` wrapped in bounded `context.WithTimeout`.
+- [ ] Incoming payloads capped with `io.LimitReader` before decoding.
+
+**Concurrency & state** &nbsp;·&nbsp; §1.2 – §1.3
+- [ ] No `go func()` without a guaranteed exit (ctx cancel / done channel / WaitGroup).
+- [ ] No `context.Context` stored on a struct.
+- [ ] No `pterm.Fatal` / `os.Exit` inside a goroutine — log and return, let the parent unwind.
+- [ ] Read-heavy shared state uses `sync.RWMutex`, not `sync.Mutex`.
+
+**Errors & I/O boundaries** &nbsp;·&nbsp; §1.4
+- [ ] No blank-identifier (`_`) drops on I/O, JSON decoding, or peer-ID parsing.
+- [ ] Errors wrapped with `%w` so `errors.Is` / `errors.As` work upstream.
+
+**Sub-processes & filesystem** &nbsp;·&nbsp; §1.5
+- [ ] External binaries (Podman, nvidia-smi, …) launched via `exec.CommandContext` tied to the caller's lifecycle.
+- [ ] Directories created with `0755`, secrets with `0600`. Never `0777`.
+
+**Tests** &nbsp;·&nbsp; see above
+- [ ] New production code has accompanying unit tests.
+- [ ] `make test-race` passes locally.
+- [ ] Coverage has not dropped below the previous level (`make test-coverage`).
+
+---
+
 
 ### License
 
@@ -782,7 +848,7 @@ AgentFM `v1.0.0` is released and stable. The Go side has been hardened against t
 
 <div align="center">
 
-**Built with 🐹 Go, 🚀 libp2p, and a belief that compute should belong to everyone.**
+**Built with Go, libp2p, and a belief that compute should belong to everyone.**
 
 <br />
 
