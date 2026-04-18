@@ -19,7 +19,6 @@ swarm.key
 feedback.log
 *.sqlite
 *.db
-CLAUDE.md
 vendor/
 go.work
 go.work.sum
