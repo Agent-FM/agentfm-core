@@ -23,10 +23,6 @@
 
   <br />
 
-  <img src="assets/image1.png" alt="AgentFM Terminal Interface" width="820" />
-  <br /><br />
-  <img src="assets/image2.png" alt="AgentFM Generation Example" width="820" />
-
 </div>
 
 ---
