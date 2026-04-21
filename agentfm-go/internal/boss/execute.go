@@ -19,7 +19,7 @@ import (
 	"github.com/pterm/pterm"
 )
 
-func (b *Boss) executeFlow(worker types.WorkerProfile) {
+func (b *Boss) executeFlow(ctx context.Context, worker types.WorkerProfile) {
 	fmt.Print("\033[H\033[2J")
 
 	boxContent := pterm.LightMagenta("Name: ") + pterm.White(worker.AgentName) + "\n" +
@@ -44,7 +44,7 @@ func (b *Boss) executeFlow(worker types.WorkerProfile) {
 	fmt.Println()
 	pterm.Info.Printfln("Initiating secure encrypted TCP tunnel to %s...", pterm.Cyan(targetPeerID.String()[:8]))
 
-	s := b.dialOmni(targetPeerID)
+	s := b.dialOmni(ctx, targetPeerID)
 	if s == nil {
 		return
 	}
@@ -100,10 +100,15 @@ func (b *Boss) executeFlow(worker types.WorkerProfile) {
 		WithDefaultText(pterm.LightWhite("Task execution completed. Press [ENTER] to continue to the feedback menu")).
 		Show()
 
-	b.handleFeedbackLoop(targetPeerID)
+	b.handleFeedbackLoop(ctx, targetPeerID)
 }
 
-func (b *Boss) dialOmni(target peer.ID) netcore.Stream {
+// dialOmni tries to open a task stream to the target peer. It first
+// looks in the libp2p peerstore (zero-RTT if we've seen this peer
+// recently), then falls back to a DHT lookup and finally pins the
+// circuit-relay address as a backup route. Every context we derive
+// inherits from the caller's ctx so a Ctrl+C mid-dial actually unwinds.
+func (b *Boss) dialOmni(ctx context.Context, target peer.ID) netcore.Stream {
 	var addrs []multiaddr.Multiaddr
 
 	spinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Punching NAT to reach %s...", target.String()[:8]))
@@ -113,7 +118,7 @@ func (b *Boss) dialOmni(target peer.ID) netcore.Stream {
 		addrs = append(addrs, peerInfo.Addrs...)
 	} else {
 		spinner.UpdateText("Node not in cache. Querying global DHT...")
-		lookupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		lookupCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
 		if info, err := b.node.DHT.FindPeer(lookupCtx, target); err == nil {
 			addrs = append(addrs, info.Addrs...)
@@ -132,7 +137,7 @@ func (b *Boss) dialOmni(target peer.ID) netcore.Stream {
 
 	spinner.UpdateText("Dialing peer directly and via Hetzner Relay simultaneously...")
 
-	dialCtx, cancel := context.WithTimeout(context.Background(), network.StreamDialTimeout)
+	dialCtx, cancel := context.WithTimeout(ctx, network.StreamDialTimeout)
 	defer cancel()
 	s, err := b.node.Host.NewStream(dialCtx, target, network.TaskProtocol)
 	if err != nil {
@@ -145,7 +150,7 @@ func (b *Boss) dialOmni(target peer.ID) netcore.Stream {
 	return s
 }
 
-func (b *Boss) handleFeedbackLoop(target peer.ID) {
+func (b *Boss) handleFeedbackLoop(ctx context.Context, target peer.ID) {
 	fmt.Println()
 	leave, _ := pterm.DefaultInteractiveConfirm.WithDefaultValue(false).Show("📝 Leave feedback for the node operator?")
 	if !leave {
@@ -158,7 +163,7 @@ func (b *Boss) handleFeedbackLoop(target peer.ID) {
 
 	pterm.Info.Println("Opening secure feedback tunnel...")
 
-	dialCtx, cancel := context.WithTimeout(context.Background(), network.StreamDialTimeout)
+	dialCtx, cancel := context.WithTimeout(ctx, network.StreamDialTimeout)
 	defer cancel()
 
 	fs, err := b.node.Host.NewStream(dialCtx, target, network.FeedbackProtocol)

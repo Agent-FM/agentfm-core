@@ -14,9 +14,16 @@ import (
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/libp2p/go-libp2p/core/pnet"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
+	"github.com/pterm/pterm"
 )
+
+// fatalf prints a styled error line and exits. Using the same pterm.Fatal
+// path as cmd/agentfm means operators get a consistent startup UX across
+// both binaries, and avoids the goroutine stack dump that panic produces.
+func fatalf(format string, args ...interface{}) {
+	pterm.Fatal.Printfln(format, args...)
+}
 
 // This function loads a saved identity or generates a new one
 func getStaticIdentity(keyFile string) (crypto.PrivKey, error) {
@@ -39,20 +46,6 @@ func getStaticIdentity(keyFile string) (crypto.PrivKey, error) {
 	return priv, err
 }
 
-func loadSwarmKey(path string) (pnet.PSK, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("could not open swarm key file: %w", err)
-	}
-	defer file.Close()
-
-	psk, err := pnet.DecodeV1PSK(file)
-	if err != nil {
-		return nil, fmt.Errorf("could not decode swarm key: %w", err)
-	}
-	return psk, nil
-}
-
 func main() {
 	port := flag.Int("port", 4001, "Port to listen on")
 	swarmKey := flag.String("swarmkey", "", "Path to private swarm.key file (optional)")
@@ -66,7 +59,7 @@ func main() {
 
 	privKey, err := getStaticIdentity(*identityFile)
 	if err != nil {
-		panic(fmt.Errorf("failed to load identity: %w", err))
+		fatalf("failed to load identity: %v", err)
 	}
 
 	// Configure the libp2p Host options
@@ -81,11 +74,13 @@ func main() {
 		libp2p.EnableNATService(),
 	}
 
-	//  If a swarm key is provided, turn this into a Private Darknet Relay
+	// When an operator passes a swarm key this relay becomes a private
+	// darknet lighthouse. We reuse network.LoadSwarmKey so both binaries
+	// parse the PSK file through exactly the same code path.
 	if *swarmKey != "" {
-		psk, err := loadSwarmKey(*swarmKey)
+		psk, err := network.LoadSwarmKey(*swarmKey)
 		if err != nil {
-			panic(fmt.Errorf("failed to load swarm key: %w", err))
+			fatalf("failed to load swarm key: %v", err)
 		}
 		opts = append(opts, libp2p.PrivateNetwork(psk))
 		fmt.Println("🔒 PRIVATE SWARM MODE ENABLED: This relay will drop all public internet traffic.")
@@ -94,7 +89,7 @@ func main() {
 	// Boot the Host
 	host, err := libp2p.New(opts...)
 	if err != nil {
-		panic(fmt.Errorf("failed to create libp2p host: %w", err))
+		fatalf("failed to create libp2p host: %v", err)
 	}
 
 	ps, err := pubsub.NewGossipSub(
@@ -104,26 +99,29 @@ func main() {
 		pubsub.WithPeerExchange(true),
 	)
 	if err != nil {
-		panic(fmt.Errorf("failed to create gossipsub: %w", err))
+		fatalf("failed to create gossipsub: %v", err)
 	}
 
 	topic, err := ps.Join(network.TelemetryTopic)
 	if err != nil {
-		panic(fmt.Errorf("failed to join telemetry topic: %w", err))
+		fatalf("failed to join telemetry topic: %v", err)
 	}
 
-	// Subscribe to force the Relay to actively route messages!
+	// Subscribe so this relay actively routes messages. If we never call
+	// Next on the subscription its buffer fills and the topic stops
+	// forwarding to other peers.
 	sub, err := topic.Subscribe()
 	if err != nil {
-		panic(fmt.Errorf("failed to subscribe: %w", err))
+		fatalf("failed to subscribe: %v", err)
 	}
 
-	// Run a background loop to constantly "read" the messages so the Relay's memory doesn't fill up
+	// Drain the subscription in the background so the relay keeps
+	// forwarding telemetry instead of letting the topic buffer fill.
+	// The loop exits cleanly when ctx is cancelled during shutdown.
 	go func() {
 		for {
-			_, err := sub.Next(ctx)
-			if err != nil {
-				break
+			if _, err := sub.Next(ctx); err != nil {
+				return
 			}
 		}
 	}()
@@ -131,10 +129,10 @@ func main() {
 	// Start the Kademlia DHT in Server Mode
 	kDHT, err := dht.New(ctx, host, dht.Mode(dht.ModeServer))
 	if err != nil {
-		panic(fmt.Errorf("failed to create DHT: %w", err))
+		fatalf("failed to create DHT: %v", err)
 	}
 	if err = kDHT.Bootstrap(ctx); err != nil {
-		panic(fmt.Errorf("failed to bootstrap DHT: %w", err))
+		fatalf("failed to bootstrap DHT: %v", err)
 	}
 
 	fmt.Println("\n✅ Permanent Relay Node is Online!")
@@ -152,6 +150,6 @@ func main() {
 
 	fmt.Println("\nShutting down relay node...")
 	if err := host.Close(); err != nil {
-		panic(err)
+		pterm.Error.Printfln("Host close error: %v", err)
 	}
 }

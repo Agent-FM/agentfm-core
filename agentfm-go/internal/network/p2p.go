@@ -3,24 +3,18 @@ package network
 import (
 	"context"
 	"fmt"
-	"os"
-	"time"
 
-	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
-	netcore "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
-	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
-	"github.com/libp2p/go-libp2p/p2p/discovery/util"
-	"github.com/libp2p/go-libp2p/p2p/host/autonat"
-	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/client"
 	"github.com/multiformats/go-multiaddr"
 )
 
+// Config is the operator-facing knob set. Mode selects the node role
+// (boss / worker / relay / api), SwarmKeyPath enables private-mesh PSK
+// mode, and BootstrapURL overrides the hard-coded lighthouse for dev
+// swarms. ListenPort is 0 for "pick any free port".
 type Config struct {
 	Mode         string
 	SwarmKeyPath string
@@ -28,6 +22,9 @@ type Config struct {
 	BootstrapURL string
 }
 
+// MeshNode is the assembled libp2p stack returned by Setup. The Boss and
+// Worker packages only interact with the mesh through this handle, which
+// keeps their code out of the libp2p build options entirely.
 type MeshNode struct {
 	Host      host.Host
 	DHT       *dht.IpfsDHT
@@ -35,6 +32,10 @@ type MeshNode struct {
 	RelayAddr string
 }
 
+// Setup builds the full mesh stack: libp2p host, Kademlia DHT, GossipSub,
+// optional lighthouse dial, and the per-role discovery loop. Callers can
+// immediately use the returned MeshNode to attach stream handlers and
+// subscribe to telemetry.
 func Setup(ctx context.Context, cfg Config) (*MeshNode, error) {
 	bootstrapAddr := cfg.BootstrapURL
 	if bootstrapAddr == "" && cfg.SwarmKeyPath == "" {
@@ -68,200 +69,12 @@ func Setup(ctx context.Context, cfg Config) (*MeshNode, error) {
 	}, nil
 }
 
+// parseRelayInfo turns an operator-supplied multiaddr string into a
+// peer.AddrInfo the libp2p host can dial directly.
 func parseRelayInfo(addr string) (*peer.AddrInfo, error) {
 	maddr, err := multiaddr.NewMultiaddr(addr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid relay multiaddr: %w", err)
 	}
 	return peer.AddrInfoFromP2pAddr(maddr)
-}
-
-func loadOrGenerateIdentity(mode string) (crypto.PrivKey, error) {
-	keyPath := fmt.Sprintf(".agentfm_%s_identity.key", mode)
-
-	if keyBytes, err := os.ReadFile(keyPath); err == nil {
-		if priv, err := crypto.UnmarshalPrivateKey(keyBytes); err == nil {
-			return priv, nil
-		}
-	}
-
-	fmt.Println("🔑 Generating new permanent node identity...")
-	priv, _, err := crypto.GenerateKeyPair(crypto.Ed25519, -1)
-	if err != nil {
-		return nil, fmt.Errorf("generate identity key: %w", err)
-	}
-
-	keyBytes, err := crypto.MarshalPrivateKey(priv)
-	if err != nil {
-		return nil, fmt.Errorf("marshal identity key: %w", err)
-	}
-	if err := os.WriteFile(keyPath, keyBytes, 0600); err != nil {
-		// Not fatal: the node can still run with an ephemeral key, but the
-		// operator needs to know the peer ID won't be stable across restarts.
-		fmt.Printf("⚠️  Failed to persist identity at %s: %v (peer ID will change on restart)\n", keyPath, err)
-	}
-
-	return priv, nil
-}
-
-func createHost(cfg Config, bootstrapAddr string) (host.Host, error) {
-	// Listen on both v4 and v6 to match the relay binary's dual-stack
-	// config. A v6-only home network would otherwise be unreachable.
-	listenAddrs := []string{
-		fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", cfg.ListenPort),
-		fmt.Sprintf("/ip6/::/tcp/%d", cfg.ListenPort),
-	}
-
-	privKey, err := loadOrGenerateIdentity(cfg.Mode)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load identity: %w", err)
-	}
-
-	options := []libp2p.Option{
-		libp2p.ListenAddrStrings(listenAddrs...),
-		libp2p.NATPortMap(),
-		libp2p.Identity(privKey), // Attach permanent identity to libp2p
-	}
-
-	if cfg.SwarmKeyPath != "" {
-		psk, err := LoadSwarmKey(cfg.SwarmKeyPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load swarm key: %w", err)
-		}
-		options = append(options, libp2p.PrivateNetwork(psk))
-		fmt.Printf("🔒 Joining Private Swarm (Port: %d)\n", cfg.ListenPort)
-	} else {
-		fmt.Println("🌐 Joining Public P2P Mesh...")
-	}
-
-	if cfg.Mode == "relay" {
-		fmt.Println("📡 Enabling Circuit Relay v2 Service (Anchor Node)")
-		options = append(options, libp2p.EnableRelayService())
-	} else {
-		options = append(options, libp2p.EnableRelay(), libp2p.EnableHolePunching())
-
-		if bootstrapAddr != "" {
-			if relayInfo, err := parseRelayInfo(bootstrapAddr); err == nil {
-				options = append(options, libp2p.EnableAutoRelayWithStaticRelays([]peer.AddrInfo{*relayInfo}))
-			}
-		}
-	}
-
-	h, err := libp2p.New(options...)
-	if err != nil {
-		return nil, err
-	}
-
-	if cfg.Mode != "relay" {
-		if _, err = autonat.New(h); err != nil {
-			fmt.Printf("⚠️  [NAT] Failed to start AutoNAT service: %v\n", err)
-		} else {
-			fmt.Println("🌐 [NAT] AutoNAT service started. Testing public reachability...")
-		}
-	}
-
-	return h, nil
-}
-
-func initRoutingAndPubSub(ctx context.Context, h host.Host, isWorker bool) (*pubsub.PubSub, *dht.IpfsDHT, error) {
-	ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithFloodPublish(true))
-	if err != nil {
-		return nil, nil, err
-	}
-	var dhtOptions []dht.Option
-	if isWorker {
-		dhtOptions = append(dhtOptions, dht.Mode(dht.ModeClient))
-	} else {
-		dhtOptions = append(dhtOptions, dht.Mode(dht.ModeServer))
-	}
-	kademliaDHT, err := dht.New(ctx, h, dhtOptions...)
-	if err != nil {
-		return nil, nil, err
-	}
-	if err = kademliaDHT.Bootstrap(ctx); err != nil {
-		return nil, nil, err
-	}
-	return ps, kademliaDHT, nil
-}
-
-func connectToLighthouse(ctx context.Context, h host.Host, relayInfo *peer.AddrInfo) {
-	fmt.Println("🌍 Dialing Bootstrap Node / Relay...")
-
-	dialCtx, dialCancel := context.WithTimeout(ctx, StreamDialTimeout)
-	defer dialCancel()
-	if err := h.Connect(dialCtx, *relayInfo); err != nil {
-		fmt.Printf("⚠️  Failed to connect to Bootstrap Node: %v\n", err)
-		return
-	}
-	fmt.Println("✅ Successfully connected to Bootstrap Node!")
-
-	reserveCtx, reserveCancel := context.WithTimeout(ctx, StreamDialTimeout)
-	defer reserveCancel()
-	if _, err := client.Reserve(reserveCtx, h, *relayInfo); err != nil {
-		fmt.Printf("⚠️  Failed to secure relay reservation: %v\n", err)
-	} else {
-		fmt.Println("✅ Relay reservation secured! Ready for NAT traversal fallback.")
-	}
-}
-
-func startDiscovery(ctx context.Context, h host.Host, kademliaDHT *dht.IpfsDHT, isWorker bool) {
-	mdnsService := mdns.NewMdnsService(h, MDNSServiceTag, &mdnsNotifee{h: h})
-	mdnsService.Start()
-	routingDiscovery := routing.NewRoutingDiscovery(kademliaDHT)
-
-	if isWorker {
-		util.Advertise(ctx, routingDiscovery, RendezvousString)
-		fmt.Println("🌍 [DHT] Worker advertised to decentralized mesh.")
-	} else {
-		go discoverPeers(ctx, h, routingDiscovery)
-	}
-}
-
-func discoverPeers(ctx context.Context, h host.Host, routingDiscovery *routing.RoutingDiscovery) {
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			// Each DHT sweep is individually bounded so one unresponsive
-			// peer can't stall the tick beyond the next interval.
-			lookupCtx, lookupCancel := context.WithTimeout(ctx, StreamDialTimeout)
-			peerChan, err := routingDiscovery.FindPeers(lookupCtx, RendezvousString)
-			if err != nil {
-				lookupCancel()
-				continue
-			}
-			for p := range peerChan {
-				if p.ID == h.ID() || len(p.Addrs) == 0 {
-					continue
-				}
-				if h.Network().Connectedness(p.ID) == netcore.Connected {
-					continue
-				}
-				dialCtx, dialCancel := context.WithTimeout(ctx, StreamDialTimeout)
-				if err := h.Connect(dialCtx, p); err == nil {
-					fmt.Printf("\n🌍 [DHT Fallback] Successfully connected to peer: %s\n", p.ID.String()[:8])
-				}
-				dialCancel()
-			}
-			lookupCancel()
-		}
-	}
-}
-
-type mdnsNotifee struct{ h host.Host }
-
-func (n *mdnsNotifee) HandlePeerFound(pi peer.AddrInfo) {
-	fmt.Printf("\n⚡ [mDNS] Discovered local node on Wi-Fi: %s\n", pi.ID.String()[:8])
-	// mdns invokes this callback from its own goroutine with no parent
-	// context, so a fresh bounded ctx is the right escape hatch here —
-	// it caps the dial instead of blocking the mdns service indefinitely.
-	ctx, cancel := context.WithTimeout(context.Background(), StreamDialTimeout)
-	defer cancel()
-	if err := n.h.Connect(ctx, pi); err != nil {
-		fmt.Printf("⚠️  [mDNS] Failed to dial %s: %v\n", pi.ID.String()[:8], err)
-	}
 }

@@ -59,13 +59,21 @@ func ZipDirectory(sourceDir, destZip string) error {
 			return nil
 		}
 
-		file, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-
-		_, err = io.Copy(writer, file)
-		return err
+		// Close the source file on every iteration instead of deferring
+		// inside the Walk callback. A plain defer here would accumulate
+		// open file handles for the whole duration of the archive write,
+		// which blows up on directories with thousands of files.
+		return copyFileIntoZip(path, writer)
 	})
+}
+
+func copyFileIntoZip(path string, writer io.Writer) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = io.Copy(writer, file)
+	return err
 }
