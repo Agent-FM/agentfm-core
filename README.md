@@ -23,10 +23,6 @@
 
   <br />
 
-  <img src="assets/image1.png" alt="AgentFM Terminal Interface" width="820" />
-  <br /><br />
-  <img src="assets/image2.png" alt="AgentFM Generation Example" width="820" />
-
 </div>
 
 ## Hello World: Your First Swarm
@@ -790,11 +786,42 @@ See [`agentfm-go/test/README.md`](agentfm-go/test/README.md) for the full layout
 
 **Every test must:**
 
-* Pass under `go test -race`. No goroutine leaks, no data races, no flakes.
-* Clean up via `t.Cleanup`. No lingering file handles, goroutines, or libp2p hosts after return.
-* Use `t.TempDir`, `t.Chdir`, `t.Setenv` (never raw `os.*`) so parallel runs stay isolated.
-* Bound every network or sub-process call with `context.WithTimeout`. Prefer `testutil.WithTimeout(t, d)`.
-* Use **real** libp2p hosts (`testutil.NewHost` / `NewConnectedMesh`) rather than mocknet. Mocknet's in-memory streams do not support `SetDeadline`, which silently bypasses half of AgentFM's error paths.
+- ✅ Pass under `go test -race` — no goroutine leaks, no data races, no flakes.
+- ✅ Clean up via `t.Cleanup` — no lingering file handles, goroutines, or libp2p hosts after return.
+- ✅ Use `t.TempDir`, `t.Chdir`, `t.Setenv` (never raw `os.*`) so parallel runs stay isolated.
+- ✅ Bound every network / sub-process call with `context.WithTimeout` — prefer `testutil.WithTimeout(t, d)`.
+- ✅ Use **real** libp2p hosts (`testutil.NewHost` / `NewConnectedMesh`) rather than mocknet. Mocknet's in-memory streams do not support `SetDeadline`, which silently bypasses half of AgentFM's error paths.
+
+---
+
+### ✅ PR checklist
+
+**libp2p discipline** &nbsp;·&nbsp; §1.1
+- [ ] Every stream gets an explicit `SetDeadline` / `SetReadDeadline` / `SetWriteDeadline` on accept.
+- [ ] Error paths call `stream.Reset()`; success paths call `stream.Close()`.
+- [ ] `NewStream` and `DHT.FindPeer` wrapped in bounded `context.WithTimeout`.
+- [ ] Incoming payloads capped with `io.LimitReader` before decoding.
+
+**Concurrency & state** &nbsp;·&nbsp; §1.2 – §1.3
+- [ ] No `go func()` without a guaranteed exit (ctx cancel / done channel / WaitGroup).
+- [ ] No `context.Context` stored on a struct.
+- [ ] No `pterm.Fatal` / `os.Exit` inside a goroutine — log and return, let the parent unwind.
+- [ ] Read-heavy shared state uses `sync.RWMutex`, not `sync.Mutex`.
+
+**Errors & I/O boundaries** &nbsp;·&nbsp; §1.4
+- [ ] No blank-identifier (`_`) drops on I/O, JSON decoding, or peer-ID parsing.
+- [ ] Errors wrapped with `%w` so `errors.Is` / `errors.As` work upstream.
+
+**Sub-processes & filesystem** &nbsp;·&nbsp; §1.5
+- [ ] External binaries (Podman, nvidia-smi, …) launched via `exec.CommandContext` tied to the caller's lifecycle.
+- [ ] Directories created with `0755`, secrets with `0600`. Never `0777`.
+
+**Tests** &nbsp;·&nbsp; see above
+- [ ] New production code has accompanying unit tests.
+- [ ] `make test-race` passes locally.
+- [ ] Coverage has not dropped below the previous level (`make test-coverage`).
+
+---
 
 <div align="center">
 
