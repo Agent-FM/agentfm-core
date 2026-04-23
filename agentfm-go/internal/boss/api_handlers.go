@@ -46,27 +46,7 @@ func (b *Boss) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		hardwareStr := fmt.Sprintf("%s (CPU: %d Cores)", profile.Model, profile.CPUCores)
-		if profile.HasGPU {
-			hardwareStr = fmt.Sprintf("%s (GPU VRAM: %.1f/%.1f GB)", profile.Model, profile.GPUUsedGB, profile.GPUTotalGB)
-		}
-
-		agents = append(agents, apiWorker{
-			PeerID:       profile.PeerID,
-			Author:       profile.Author,
-			Name:         profile.AgentName,
-			Status:       profile.Status,
-			Hardware:     hardwareStr,
-			Description:  profile.AgentDesc,
-			CPUUsagePct:  profile.CPUUsagePct,
-			RAMFreeGB:    profile.RAMFreeGB,
-			CurrentTasks: profile.CurrentTasks,
-			MaxTasks:     profile.MaxTasks,
-			HasGPU:       profile.HasGPU,
-			GPUUsedGB:    profile.GPUUsedGB,
-			GPUTotalGB:   profile.GPUTotalGB,
-			GPUUsagePct:  profile.GPUUsagePct,
-		})
+		agents = append(agents, profileToAPIWorker(profile))
 	}
 
 	response := map[string]interface{}{
@@ -77,6 +57,29 @@ func (b *Boss) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		pterm.Error.Printfln("Failed to encode /api/workers response: %v", err)
+	}
+}
+
+func profileToAPIWorker(p types.WorkerProfile) apiWorker {
+	hardwareStr := fmt.Sprintf("%s (CPU: %d Cores)", p.Model, p.CPUCores)
+	if p.HasGPU {
+		hardwareStr = fmt.Sprintf("%s (GPU VRAM: %.1f/%.1f GB)", p.Model, p.GPUUsedGB, p.GPUTotalGB)
+	}
+	return apiWorker{
+		PeerID:       p.PeerID,
+		Author:       p.Author,
+		Name:         p.AgentName,
+		Status:       p.Status,
+		Hardware:     hardwareStr,
+		Description:  p.AgentDesc,
+		CPUUsagePct:  p.CPUUsagePct,
+		RAMFreeGB:    p.RAMFreeGB,
+		CurrentTasks: p.CurrentTasks,
+		MaxTasks:     p.MaxTasks,
+		HasGPU:       p.HasGPU,
+		GPUUsedGB:    p.GPUUsedGB,
+		GPUTotalGB:   p.GPUTotalGB,
+		GPUUsagePct:  p.GPUUsagePct,
 	}
 }
 

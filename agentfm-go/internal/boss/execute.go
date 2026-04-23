@@ -109,24 +109,37 @@ func (b *Boss) executeFlow(ctx context.Context, worker types.WorkerProfile) {
 // circuit-relay address as a backup route. Every context we derive
 // inherits from the caller's ctx so a Ctrl+C mid-dial actually unwinds.
 func (b *Boss) dialOmni(ctx context.Context, target peer.ID) netcore.Stream {
+	spinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Punching NAT to reach %s...", target.String()[:8]))
+	s, err := b.dialWorkerStream(ctx, target)
+	if err != nil {
+		spinner.Fail(err.Error())
+		time.Sleep(2 * time.Second)
+		return nil
+	}
+	spinner.Success("P2P Tunnel Established! Secure encrypted stream active.")
+	return s
+}
+
+// dialWorkerStream is the pterm-free core of dialOmni. HTTP-path callers
+// (OpenAI handlers, future server-side dials) use this directly so they
+// don't drag a TUI spinner — and its known concurrent-state race — into
+// goroutine-rich code paths.
+func (b *Boss) dialWorkerStream(ctx context.Context, target peer.ID) (netcore.Stream, error) {
 	var addrs []multiaddr.Multiaddr
 
-	spinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Punching NAT to reach %s...", target.String()[:8]))
-
 	if peerInfo := b.node.Host.Peerstore().PeerInfo(target); len(peerInfo.Addrs) > 0 {
-		spinner.Success("Peer found in local cache. Bypassing DHT.")
 		addrs = append(addrs, peerInfo.Addrs...)
 	} else {
-		spinner.UpdateText("Node not in cache. Querying global DHT...")
+		if b.node.DHT == nil {
+			return nil, fmt.Errorf("peer %s not in cache and DHT unavailable", target.String()[:8])
+		}
 		lookupCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
-		if info, err := b.node.DHT.FindPeer(lookupCtx, target); err == nil {
-			addrs = append(addrs, info.Addrs...)
-		} else {
-			spinner.Fail("DHT connection failed.")
-			time.Sleep(2 * time.Second)
-			return nil
+		info, err := b.node.DHT.FindPeer(lookupCtx, target)
+		if err != nil {
+			return nil, fmt.Errorf("DHT lookup for %s failed: %w", target.String()[:8], err)
 		}
+		addrs = append(addrs, info.Addrs...)
 	}
 
 	if relayMA, err := multiaddr.NewMultiaddr(fmt.Sprintf("%s/p2p-circuit/p2p/%s", b.node.RelayAddr, target.String())); err == nil {
@@ -135,19 +148,13 @@ func (b *Boss) dialOmni(ctx context.Context, target peer.ID) netcore.Stream {
 
 	b.node.Host.Peerstore().SetAddrs(target, addrs, 2*time.Minute)
 
-	spinner.UpdateText("Dialing peer directly and via Hetzner Relay simultaneously...")
-
 	dialCtx, cancel := context.WithTimeout(ctx, network.StreamDialTimeout)
 	defer cancel()
 	s, err := b.node.Host.NewStream(dialCtx, target, network.TaskProtocol)
 	if err != nil {
-		spinner.Fail(fmt.Sprintf("Failed to connect via Direct IP or Relay: %v", err))
-		time.Sleep(3 * time.Second)
-		return nil
+		return nil, fmt.Errorf("dial via direct or relay failed: %w", err)
 	}
-
-	spinner.Success("P2P Tunnel Established! Secure encrypted stream active.")
-	return s
+	return s, nil
 }
 
 func (b *Boss) handleFeedbackLoop(ctx context.Context, target peer.ID) {

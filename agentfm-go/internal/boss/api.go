@@ -87,6 +87,9 @@ func (b *Boss) StartAPIServer(port string) error {
 	mux.HandleFunc("/api/workers", corsMiddleware(b.handleGetWorkers))
 	mux.HandleFunc("/api/execute", corsMiddleware(b.handleExecuteTask))
 	mux.HandleFunc("/api/execute/async", corsMiddleware(b.asyncExecuteHandler(ctx, &asyncWG)))
+	mux.HandleFunc("/v1/models", corsMiddleware(b.handleModels))
+	mux.HandleFunc("/v1/chat/completions", corsMiddleware(b.handleChatCompletions))
+	mux.HandleFunc("/v1/completions", corsMiddleware(b.handleCompletions))
 
 	srv := &http.Server{
 		Addr:    ":" + port,
