@@ -47,7 +47,7 @@ func (b *Boss) Run(ctx context.Context) {
 		if !ok {
 			continue
 		}
-		b.executeFlow(worker)
+		b.executeFlow(ctx, worker)
 	}
 
 	fmt.Println("\nShutting down Boss node...")
@@ -97,6 +97,11 @@ type timeoutReader struct {
 }
 
 func (tr *timeoutReader) Read(p []byte) (n int, err error) {
-	tr.stream.SetReadDeadline(time.Now().Add(tr.timeout))
+	// Refresh the read deadline on every Read. If the stream is already
+	// torn down the arm fails, and surfacing that error is more honest
+	// than letting the caller see a confusing downstream read failure.
+	if err := tr.stream.SetReadDeadline(time.Now().Add(tr.timeout)); err != nil {
+		return 0, err
+	}
 	return tr.stream.Read(p)
 }

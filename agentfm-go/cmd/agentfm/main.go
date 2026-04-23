@@ -12,7 +12,6 @@ import (
 
 	"agentfm/internal/boss"
 	"agentfm/internal/network"
-	"agentfm/internal/version"
 	"agentfm/internal/worker"
 
 	"github.com/pterm/pterm"
@@ -47,45 +46,18 @@ func main() {
 	setupHelpMenu()
 	flag.Parse()
 
-	// Handle Key Generation
+	// Handle Key Generation. pterm.Fatal already exits the process on
+	// failure, so any os.Exit after a Fatal call would be unreachable.
 	if *mode == "genkey" {
-		err := network.GenerateSwarmKey("swarm.key")
-		if err != nil {
-			pterm.Fatal.Printf("❌ Failed to generate key: %v\n", err)
+		if err := network.GenerateSwarmKey("swarm.key"); err != nil {
+			pterm.Fatal.Printfln("❌ Failed to generate key: %v", err)
 		}
 		pterm.Success.Println("Generated private swarm key at ./swarm.key")
 		pterm.Info.Println("Distribute this file to your VPS and trusted nodes to create a private mesh.")
-		os.Exit(0)
+		return
 	}
 
-	if cfg.MaxCPU < 0 || cfg.MaxCPU > 99 {
-		pterm.Fatal.Println("❌ Invalid config: -maxcpu must be between 0 and 99")
-		os.Exit(1)
-	}
-	if cfg.MaxGPU < 0 || cfg.MaxGPU > 99 {
-		pterm.Fatal.Println("❌ Invalid config: -maxgpu must be between 0 and 99")
-		os.Exit(1)
-	}
-	if cfg.MaxConcurrentTasks < 1 || cfg.MaxConcurrentTasks > 1000 {
-		pterm.Fatal.Println("❌ Invalid config: -maxtasks must be between 1 and 1000")
-		os.Exit(1)
-	}
-	if len(cfg.AgentName) > 20 {
-		pterm.Fatal.Printfln("❌ Invalid config: -agent name is too long (%d/20 chars max)", len(cfg.AgentName))
-		os.Exit(1)
-	}
-	if len(cfg.ModelName) > 200 {
-		pterm.Fatal.Printfln("❌ Invalid config: -model name is too long (%d/40 chars max)", len(cfg.ModelName))
-		os.Exit(1)
-	}
-	if len(cfg.AgentDesc) > 3000 {
-		pterm.Fatal.Printfln("❌ Invalid config: -desc is too long (%d/1000 chars max)", len(cfg.AgentDesc))
-		os.Exit(1)
-	}
-	if len(cfg.Author) > 50 {
-		pterm.Fatal.Printfln("❌ Invalid config: -author name is too long (%d/50 chars max)", len(cfg.Author))
-		os.Exit(1)
-	}
+	validateOperatorConfig(cfg)
 
 	if *mode == "" {
 		pterm.Error.Println("Please specify a mode: -mode boss, worker, relay, api, test, or genkey")
@@ -101,155 +73,134 @@ func main() {
 		BootstrapURL: *bootstrap,
 	}
 
-	if *mode == "test" {
-		pterm.DefaultHeader.WithBackgroundStyle(pterm.NewStyle(pterm.BgYellow)).
-			WithTextStyle(pterm.NewStyle(pterm.FgBlack)).
-			Println("🧪 LOCAL SANDBOX TEST MODE")
-
-		pterm.Info.Printfln("Testing Agent: %s", cfg.AgentName)
-		pterm.Warning.Println("Bypassing P2P network. Executing container directly...")
-
-		promptToUse := *testPrompt
-		if promptToUse == "" {
-			fmt.Println()
-			pterm.Info.Print("📝 Enter the prompt you want to send to your agent: ")
-			reader := bufio.NewReader(os.Stdin)
-			input, _ := reader.ReadString('\n')
-			promptToUse = strings.TrimSpace(input)
-
-			if promptToUse == "" {
-				pterm.Fatal.Println("❌ No prompt provided. Exiting test.")
-				os.Exit(1)
-			}
-		}
-
-		testCtx, stopTest := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-		defer stopTest()
-		err := worker.RunLocalTest(testCtx, cfg, promptToUse)
-		if err != nil {
-			pterm.Fatal.Printfln("❌ Local test failed: %v", err)
-		}
-
-		os.Exit(0)
-	}
-
-	if *mode == "relay" {
-		node, err := network.Setup(ctx, netCfg)
-		if err != nil {
-			pterm.Fatal.Println(err)
-		}
-
-		pterm.Success.Println("Relay Node Active. Press Ctrl+C to shut down.")
-		pterm.Info.Println("📌 To connect nodes to this private swarm, start them with:")
-		for _, addr := range node.Host.Addrs() {
-			fmt.Printf("agentfm -mode boss -swarmkey ./swarm.key -bootstrap %s/p2p/%s\n", addr.String(), node.Host.ID().String())
-		}
-
-		ch := make(chan os.Signal, 1)
-		signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-		<-ch
-		fmt.Println("\nShutting down relay...")
-		os.Exit(0)
-	}
-
-	// Handle Worker Mode
-	if *mode == "worker" {
-		node, err := network.Setup(ctx, netCfg)
-		if err != nil {
-			pterm.Fatal.Println(err)
-		}
-		w := worker.New(node, cfg)
-		w.Start(ctx)
-
-		// Handle Boss Mode (Interactive Terminal UI)
-	} else if *mode == "boss" {
-		node, err := network.Setup(ctx, netCfg)
-		if err != nil {
-			pterm.Fatal.Println(err)
-		}
-		b := boss.New(node)
-		b.Run(ctx)
-
-	} else if *mode == "api" {
-		node, err := network.Setup(ctx, netCfg)
-		if err != nil {
-			pterm.Fatal.Println(err)
-		}
-		b := boss.New(node)
-		if err := b.StartAPIServer(*apiPort); err != nil {
-			pterm.Fatal.Printfln("❌ API Gateway exited with error: %v", err)
-		}
-
-	} else {
+	// Dispatch on mode. Each branch owns its own mesh setup and shutdown
+	// so one mode can never leak a host into another.
+	switch *mode {
+	case "test":
+		runTestMode(ctx, cfg, *testPrompt)
+	case "relay":
+		runRelayMode(ctx, netCfg)
+	case "worker":
+		runWorkerMode(ctx, netCfg, cfg)
+	case "boss":
+		runBossMode(ctx, netCfg)
+	case "api":
+		runAPIMode(ctx, netCfg, *apiPort)
+	default:
 		pterm.Error.Println("Invalid mode. Use 'boss', 'worker', 'relay', 'api', 'test', or 'genkey'.")
 		os.Exit(1)
 	}
 }
 
-func setupHelpMenu() {
-	flag.Usage = func() {
-		fmt.Println()
-		pterm.DefaultHeader.WithFullWidth().
-			WithBackgroundStyle(pterm.NewStyle(pterm.BgCyan)).
-			WithTextStyle(pterm.NewStyle(pterm.FgBlack)).
-			Printfln("🚀 AGENTFM CLI v%s", version.AppVersion)
-		pterm.Info.Println("A global, peer-to-peer compute grid for containerized local AI.")
-		fmt.Println()
+// validateOperatorConfig bounds every operator-supplied limit up front.
+// Numeric ranges mirror the help table. String caps match the
+// WorkerProfile fields broadcast over GossipSub so a hostile author can
+// not balloon a radar row on every other Boss in the mesh.
+func validateOperatorConfig(cfg worker.Config) {
+	if cfg.MaxCPU < 0 || cfg.MaxCPU > 99 {
+		pterm.Fatal.Println("❌ Invalid config: -maxcpu must be between 0 and 99")
+	}
+	if cfg.MaxGPU < 0 || cfg.MaxGPU > 99 {
+		pterm.Fatal.Println("❌ Invalid config: -maxgpu must be between 0 and 99")
+	}
+	if cfg.MaxConcurrentTasks < 1 || cfg.MaxConcurrentTasks > 1000 {
+		pterm.Fatal.Println("❌ Invalid config: -maxtasks must be between 1 and 1000")
+	}
+	if len(cfg.AgentName) > 20 {
+		pterm.Fatal.Printfln("❌ Invalid config: -agent name is too long (%d/20 chars max)", len(cfg.AgentName))
+	}
+	if len(cfg.ModelName) > 200 {
+		pterm.Fatal.Printfln("❌ Invalid config: -model name is too long (%d/200 chars max)", len(cfg.ModelName))
+	}
+	if len(cfg.AgentDesc) > 3000 {
+		pterm.Fatal.Printfln("❌ Invalid config: -desc is too long (%d/3000 chars max)", len(cfg.AgentDesc))
+	}
+	if len(cfg.Author) > 50 {
+		pterm.Fatal.Printfln("❌ Invalid config: -author name is too long (%d/50 chars max)", len(cfg.Author))
+	}
+}
 
-		pterm.DefaultSection.Println("Flags & Configuration")
+// runTestMode runs the local sandbox without any libp2p activity. This
+// is the fastest way for an agent author to confirm their container
+// image behaves before pushing it out to the mesh.
+func runTestMode(ctx context.Context, cfg worker.Config, testPrompt string) {
+	pterm.DefaultHeader.WithBackgroundStyle(pterm.NewStyle(pterm.BgYellow)).
+		WithTextStyle(pterm.NewStyle(pterm.FgBlack)).
+		Println("🧪 LOCAL SANDBOX TEST MODE")
 
-		tableData := pterm.TableData{
-			{"FLAG", "TYPE", "DESCRIPTION", "DEFAULT"},
-			{pterm.Cyan("-mode"), pterm.LightMagenta("string"), "Node mode: 'boss', 'worker', 'relay', 'api', 'test', 'genkey'", pterm.Gray("none")},
-			{pterm.Cyan("-prompt"), pterm.LightMagenta("string"), "Text prompt to send to agent (only for -mode test)", pterm.Gray("none")},
-			{pterm.Cyan("-apiport"), pterm.LightMagenta("string"), "Port for the local API gateway", pterm.Gray("8080")},
-			{pterm.Cyan("-swarmkey"), pterm.LightMagenta("string"), "Path to private swarm.key file", pterm.Gray("none")},
-			{pterm.Cyan("-bootstrap"), pterm.LightMagenta("string"), "Custom relay/bootstrap multiaddr", pterm.Gray("public lighthouse")},
-			{pterm.Cyan("-port"), pterm.LightMagenta("int"), "Network listen port", pterm.Gray("0 (Random)")},
-			{pterm.Cyan("-agent"), pterm.LightMagenta("string"), "The AI agent loaded (max 20 chars)", pterm.Gray(`"HR Sick Leave Agent"`)},
-			{pterm.Cyan("-agentdir"), pterm.LightMagenta("string"), "Directory containing the agent code", pterm.Gray(`"../agents/sick-leave"`)},
-			{pterm.Cyan("-image"), pterm.LightMagenta("string"), "The Podman/Docker image tag to execute", pterm.Gray(`""`)},
-			{pterm.Cyan("-desc"), pterm.LightMagenta("string"), "Short agent description (max 1000 chars)", pterm.Gray(`"Corporate Comms."`)},
-			{pterm.Cyan("-model"), pterm.LightMagenta("string"), "Advertised core model capability (max 40 chars)", pterm.Gray(`"llama3.2"`)},
-			{pterm.Cyan("-maxtasks"), pterm.LightMagenta("int"), "Max concurrent tasks this worker accepts (1-1000)", pterm.Gray(`"1"`)},
-			{pterm.Cyan("-maxcpu"), pterm.LightMagenta("float"), "Max CPU usage % before rejecting tasks (0-99)", pterm.Gray(`"80.0"`)},
-			{pterm.Cyan("-maxgpu"), pterm.LightMagenta("float"), "Max GPU VRAM usage % before rejecting tasks (0-99)", pterm.Gray(`"80.0"`)},
-			{pterm.Cyan("-mode"), pterm.LightMagenta("string"), "Node mode: 'boss', 'worker', 'relay', 'api', 'test', 'genkey'", pterm.Gray("none")},
-			{pterm.Cyan("-author"), pterm.LightMagenta("string"), "Name of the agent author/creator (max 50 chars)", pterm.Gray(`"Anonymous"`)},
+	pterm.Info.Printfln("Testing Agent: %s", cfg.AgentName)
+	pterm.Warning.Println("Bypassing P2P network. Executing container directly...")
+
+	promptToUse := testPrompt
+	if promptToUse == "" {
+		fmt.Println()
+		pterm.Info.Print("📝 Enter the prompt you want to send to your agent: ")
+		reader := bufio.NewReader(os.Stdin)
+		input, _ := reader.ReadString('\n')
+		promptToUse = strings.TrimSpace(input)
+
+		if promptToUse == "" {
+			pterm.Fatal.Println("❌ No prompt provided. Exiting test.")
 		}
+	}
 
-		pterm.DefaultTable.WithHasHeader().WithHeaderStyle(pterm.NewStyle(pterm.FgLightGreen, pterm.Bold)).WithData(tableData).Render()
-		fmt.Println()
+	testCtx, stopTest := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stopTest()
+	if err := worker.RunLocalTest(testCtx, cfg, promptToUse); err != nil {
+		pterm.Fatal.Printfln("❌ Local test failed: %v", err)
+	}
+}
 
-		pterm.DefaultSection.Println("Examples & Use Cases")
+// runRelayMode brings up a DHT-server mesh node without any worker or
+// boss responsibilities. Useful for a developer who wants to run their
+// own lighthouse on a spare VPS instead of using the public one.
+func runRelayMode(ctx context.Context, netCfg network.Config) {
+	node, err := network.Setup(ctx, netCfg)
+	if err != nil {
+		pterm.Fatal.Println(err)
+	}
 
-		pterm.Println(pterm.Yellow("1. Test an Agent Locally (Interactive Prompt, Bypasses Network)"))
-		pterm.Println(pterm.White("   ./agentfm -mode test \\"))
-		pterm.Println(pterm.White("     -agentdir \"../agents/crewai/hr-specialist\" -image \"agentfm-hr:latest\" \\"))
-		pterm.Println(pterm.White("     -model \"llama3.2\" -agent \"HR Specialist\" \\"))
-		pterm.Println(pterm.White("     -desc \"Handles sick leave policies and corporate comms.\" -maxtasks 10\n"))
+	pterm.Success.Println("Relay Node Active. Press Ctrl+C to shut down.")
+	pterm.Info.Println("📌 To connect nodes to this private swarm, start them with:")
+	for _, addr := range node.Host.Addrs() {
+		fmt.Printf("agentfm -mode boss -swarmkey ./swarm.key -bootstrap %s/p2p/%s\n", addr.String(), node.Host.ID().String())
+	}
 
-		pterm.Println(pterm.Yellow("2. Generate a Private Swarm Key (For closed enterprise darknets)"))
-		pterm.Println(pterm.White("   ./agentfm -mode genkey\n"))
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+	<-ch
+	fmt.Println("\nShutting down relay...")
+}
 
-		pterm.Println(pterm.Yellow("3. Start a Boss Node (Interactive Terminal UI)"))
-		pterm.Println(pterm.White("   ./agentfm -mode boss\n"))
+func runWorkerMode(ctx context.Context, netCfg network.Config, cfg worker.Config) {
+	node, err := network.Setup(ctx, netCfg)
+	if err != nil {
+		pterm.Fatal.Println(err)
+	}
+	w := worker.New(node, cfg)
+	w.Start(ctx)
+}
 
-		pterm.Println(pterm.Yellow("4. Start a Worker Node (Public Mesh, High Concurrency Text LLM)"))
-		pterm.Println(pterm.White("   ./agentfm -mode worker \\"))
-		pterm.Println(pterm.White("     -agentdir \"../agents/crewai/hr-specialist\" -image \"agentfm-hr:latest\" \\"))
-		pterm.Println(pterm.White("     -model \"llama3.2\" -agent \"HR Specialist\" \\"))
-		pterm.Println(pterm.White("     -desc \"Handles sick leave policies.\" -maxtasks 10 -maxcpu 90 -maxgpu 95\n"))
+// runBossMode opens the interactive TUI for a human operator.
+func runBossMode(ctx context.Context, netCfg network.Config) {
+	node, err := network.Setup(ctx, netCfg)
+	if err != nil {
+		pterm.Fatal.Println(err)
+	}
+	b := boss.New(node)
+	b.Run(ctx)
+}
 
-		pterm.Println(pterm.Yellow("5. Start a Private Darknet Worker (Requires Swarm Key & Relay Bootstrap)"))
-		pterm.Println(pterm.White("   ./agentfm -mode worker \\"))
-		pterm.Println(pterm.White("     -agentdir \"../agents/finance-analyzer\" -image \"agentfm-finance:internal\" \\"))
-		pterm.Println(pterm.White("     -model \"mistral-nemo\" -agent \"Q3 Bot\" \\"))
-		pterm.Println(pterm.White("     -desc \"Analyzes highly confidential CSV spreadsheets.\" \\"))
-		pterm.Println(pterm.White("     -swarmkey \"./secrets/swarm.key\" \\"))
-		pterm.Println(pterm.White("     -bootstrap \"/ip4/198.51.100.55/tcp/4001/p2p/12D3KooW...\" -maxtasks 3\n"))
-
-		pterm.Println(pterm.Yellow("6. Start a Dedicated Relay Node (VPS Lighthouse)"))
-		pterm.Println(pterm.White("   ./agentfm -mode relay -port 4001\n"))
+// runAPIMode starts the HTTP gateway that SDK clients talk to. The
+// gateway's own error is returned all the way back here so the process
+// exit code reflects whether the server came up cleanly.
+func runAPIMode(ctx context.Context, netCfg network.Config, apiPort string) {
+	node, err := network.Setup(ctx, netCfg)
+	if err != nil {
+		pterm.Fatal.Println(err)
+	}
+	b := boss.New(node)
+	if err := b.StartAPIServer(apiPort); err != nil {
+		pterm.Fatal.Printfln("❌ API Gateway exited with error: %v", err)
 	}
 }

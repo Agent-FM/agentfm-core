@@ -41,8 +41,13 @@ func (w *Worker) handleTaskStream(rootCtx context.Context, s netcore.Stream) {
 	}()
 
 	// Short deadline for the incoming task JSON. Extended below once the
-	// payload is accepted and we start streaming stdout back.
-	_ = s.SetDeadline(time.Now().Add(network.TaskPayloadReadTimeout))
+	// payload is accepted and we start streaming stdout back. If arming
+	// the deadline fails the stream is already unhealthy, so we surface
+	// it and let the Reset defer clean up.
+	if err := s.SetDeadline(time.Now().Add(network.TaskPayloadReadTimeout)); err != nil {
+		pterm.Error.Printfln("Failed to arm task stream deadline: %v", err)
+		return
+	}
 
 	fmt.Println()
 	pterm.Info.Println("Incoming P2P task tunnel established...")
@@ -99,8 +104,13 @@ func (w *Worker) handleTaskStream(rootCtx context.Context, s netcore.Stream) {
 		return
 	}
 
-	// Payload accepted. Extend deadline to cover long-running stdout streaming.
-	_ = s.SetDeadline(time.Now().Add(network.TaskExecutionTimeout))
+	// Payload accepted. Extend the deadline to cover long running stdout
+	// streaming. If the extension fails, abort now so we don't run a
+	// Podman container whose output channel is already doomed.
+	if err := s.SetDeadline(time.Now().Add(network.TaskExecutionTimeout)); err != nil {
+		pterm.Error.Printfln("Failed to extend task stream deadline: %v", err)
+		return
+	}
 
 	// Task-scoped ctx: cancels on worker shutdown (rootCtx), on
 	// TaskExecutionTimeout, and on remote conn death (watcher below).
@@ -166,7 +176,10 @@ func (w *Worker) handleFeedbackStream(_ context.Context, s netcore.Stream) {
 		}
 	}()
 
-	_ = s.SetDeadline(time.Now().Add(network.FeedbackStreamTimeout))
+	if err := s.SetDeadline(time.Now().Add(network.FeedbackStreamTimeout)); err != nil {
+		pterm.Error.Printfln("Failed to arm feedback stream deadline: %v", err)
+		return
+	}
 
 	var payload struct {
 		Task      string `json:"task"`

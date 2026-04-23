@@ -1,0 +1,19 @@
+{
+  "runs": [
+    {
+      "date": "2026-04-19T12:25:13.545507+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 64
+    },
+    {
+      "date": "2026-04-21T21:22:01.943102+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 71,
+      "mode": "update-ast-only"
+    }
+  ],
+  "total_input_tokens": 0,
+  "total_output_tokens": 0
+}
