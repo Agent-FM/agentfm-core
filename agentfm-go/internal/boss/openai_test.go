@@ -48,7 +48,7 @@ func TestRenderChatPrompt_TableCases(t *testing.T) {
 		{
 			name:     "empty messages still cues assistant",
 			messages: nil,
-			want:     "Assistant:",
+			want:     "assistant:",
 		},
 		{
 			name: "system + user",
@@ -56,7 +56,7 @@ func TestRenderChatPrompt_TableCases(t *testing.T) {
 				{Role: "system", Content: "be terse"},
 				{Role: "user", Content: "hi"},
 			},
-			want: "System: be terse\n\nUser: hi\n\nAssistant:",
+			want: "system: be terse\n\nuser: hi\n\nassistant:",
 		},
 		{
 			name: "multi-turn round-trip",
@@ -65,14 +65,14 @@ func TestRenderChatPrompt_TableCases(t *testing.T) {
 				{Role: "assistant", Content: "one"},
 				{Role: "user", Content: "2"},
 			},
-			want: "User: 1\n\nAssistant: one\n\nUser: 2\n\nAssistant:",
+			want: "user: 1\n\nassistant: one\n\nuser: 2\n\nassistant:",
 		},
 		{
 			name: "unknown role passthrough",
 			messages: []ChatMessage{
 				{Role: "tool", Content: "result"},
 			},
-			want: "tool: result\n\nAssistant:",
+			want: "tool: result\n\nassistant:",
 		},
 		{
 			name: "empty content stripped",
@@ -80,22 +80,14 @@ func TestRenderChatPrompt_TableCases(t *testing.T) {
 				{Role: "user", Content: ""},
 				{Role: "user", Content: "real"},
 			},
-			want: "User: real\n\nAssistant:",
+			want: "user: real\n\nassistant:",
 		},
 		{
-			name: "empty role defaults to User",
+			name: "empty role defaults to user",
 			messages: []ChatMessage{
 				{Role: "", Content: "hello"},
 			},
-			want: "User: hello\n\nAssistant:",
-		},
-		{
-			name: "case-insensitive role canonicalization",
-			messages: []ChatMessage{
-				{Role: "SYSTEM", Content: "x"},
-				{Role: "User", Content: "y"},
-			},
-			want: "System: x\n\nUser: y\n\nAssistant:",
+			want: "user: hello\n\nassistant:",
 		},
 	}
 	for _, tc := range cases {

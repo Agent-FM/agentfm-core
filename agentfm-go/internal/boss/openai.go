@@ -299,26 +299,17 @@ func renderChatPrompt(messages []ChatMessage) string {
 		if m.Content == "" {
 			continue
 		}
-		b.WriteString(formatRole(m.Role))
+		role := m.Role
+		if role == "" {
+			role = "user"
+		}
+		b.WriteString(role)
 		b.WriteString(": ")
 		b.WriteString(m.Content)
 		b.WriteString("\n\n")
 	}
-	b.WriteString("Assistant:")
+	b.WriteString("assistant:")
 	return b.String()
-}
-
-func formatRole(role string) string {
-	switch strings.ToLower(role) {
-	case "system":
-		return "System"
-	case "user", "":
-		return "User"
-	case "assistant":
-		return "Assistant"
-	default:
-		return role
-	}
 }
 
 const sentinelPrefix = "[AGENTFM:"
