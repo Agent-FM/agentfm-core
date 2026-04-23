@@ -1,1 +1,0 @@
-{"nodes": [{"id": "requirements_python_sdk_deps", "label": "Python SDK gateway deps (fastapi, uvicorn, pydantic, httpx, requests)", "file_type": "document", "source_file": "agentfm-python/requirements.txt", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}], "edges": [], "hyperedges": []}
