@@ -305,16 +305,3 @@ def test_workers_list_wraps_connection_error(gateway_url: str, mock_gateway: res
         GatewayConnectionError
     ):
         client.workers.list()
-
-
-# ---------------------------------------------------------------------------
-# Deprecation shims
-# ---------------------------------------------------------------------------
-
-
-def test_discover_workers_emits_deprecation_warning(
-    gateway_url: str, mock_workers: respx.MockRouter
-):
-    with AgentFMClient(gateway_url=gateway_url) as client, pytest.warns(DeprecationWarning):
-        out = client.discover_workers(models=["llama3.2"])
-    assert {w.name for w in out} == {"research-agent"}

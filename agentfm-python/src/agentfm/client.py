@@ -12,9 +12,6 @@ Surface (canonical):
     client.openai.models.list()
     client.openai.chat.completions.create(model=..., messages=[...])
     client.openai.completions.create(model=..., prompt=...)
-
-Deprecated v0.1 method names live in :mod:`agentfm._compat` and emit
-``DeprecationWarning`` when called.
 """
 
 from __future__ import annotations
@@ -30,7 +27,6 @@ from typing import TYPE_CHECKING, Any, List  # noqa: UP035 - List used to disamb
 
 import httpx
 
-from ._compat import LegacyAPIMixin
 from ._internal.resource import SyncResource
 from ._shared import (
     build_async_task_payload,
@@ -276,12 +272,8 @@ class _TasksNamespace(SyncResource):
         )
 
 
-class AgentFMClient(LegacyAPIMixin):
-    """Synchronous AgentFM client.
-
-    Inherits :class:`agentfm._compat.LegacyAPIMixin` for v0.1 deprecated
-    method names (will be removed in v0.4).
-    """
+class AgentFMClient:
+    """Synchronous AgentFM client."""
 
     def __init__(
         self,
