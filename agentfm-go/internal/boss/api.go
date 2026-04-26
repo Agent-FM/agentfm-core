@@ -76,18 +76,24 @@ func (b *Boss) StartAPIServer(port string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Tracks in-flight async task goroutines spawned by /api/execute/async.
-	// http.Server.Shutdown only drains HTTP handlers; these goroutines
-	// outlive the handler return, so we drain them explicitly below.
-	var asyncWG sync.WaitGroup
+	// Tracks in-flight async task goroutines spawned by /api/execute/async
+	// AND the long-lived listenTelemetry goroutine. http.Server.Shutdown
+	// only drains HTTP handlers; these goroutines outlive the handler
+	// return, so we drain them explicitly below before letting the
+	// process exit.
+	var bgWG sync.WaitGroup
 
 	b.node.Host.SetStreamHandler(network.ArtifactProtocol, network.HandleArtifactStream)
-	go b.listenTelemetry(ctx)
+	bgWG.Add(1)
+	go func() {
+		defer bgWG.Done()
+		b.listenTelemetry(ctx)
+	}()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/workers", corsMiddleware(b.handleGetWorkers))
 	mux.HandleFunc("/api/execute", corsMiddleware(b.handleExecuteTask))
-	mux.HandleFunc("/api/execute/async", corsMiddleware(b.asyncExecuteHandler(ctx, &asyncWG)))
+	mux.HandleFunc("/api/execute/async", corsMiddleware(b.asyncExecuteHandler(ctx, &bgWG)))
 	mux.HandleFunc("/v1/models", corsMiddleware(b.handleModels))
 	mux.HandleFunc("/v1/chat/completions", corsMiddleware(b.handleChatCompletions))
 	mux.HandleFunc("/v1/completions", corsMiddleware(b.handleCompletions))
@@ -151,7 +157,7 @@ func (b *Boss) StartAPIServer(port string) error {
 	defer drainCancel()
 	drained := make(chan struct{})
 	go func() {
-		asyncWG.Wait()
+		bgWG.Wait()
 		close(drained)
 	}()
 	select {

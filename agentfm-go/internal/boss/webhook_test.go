@@ -4,6 +4,8 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -111,6 +113,52 @@ func TestSafeWebhookClient_AllowsPrivateWhenOptedIn(t *testing.T) {
 	}
 	if resp != nil {
 		_ = resp.Body.Close()
+	}
+}
+
+// TestSafeWebhookClient_DoesNotFollowRedirects: a 30x → file:// or 30x →
+// 169.254.169.254 must NOT be followed. CheckRedirect = ErrUseLastResponse
+// stops at the first redirect; the boss treats it as the final response.
+func TestSafeWebhookClient_DoesNotFollowRedirects(t *testing.T) {
+	t.Setenv(webhookAllowPrivateEnv, "1") // need loopback for httptest
+
+	var hits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		if r.URL.Path == "/start" {
+			http.Redirect(w, r, "/redirected", http.StatusFound)
+			return
+		}
+		// If the SDK followed the redirect we'd see /redirected hit.
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	client := safeWebhookClient(2 * time.Second)
+	resp, err := client.Get(srv.URL + "/start")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusFound {
+		t.Errorf("status=%d, want 302 (redirect must NOT be followed)", resp.StatusCode)
+	}
+	if hits != 1 {
+		t.Errorf("server saw %d hits; the SDK followed the redirect (want 1)", hits)
+	}
+}
+
+// TestMaxWebhookResponseBytes_BoundsBodyRead: a hostile webhook server
+// returning a 1 MiB body must not push >MaxWebhookResponseBytes into the
+// boss process. We exercise the io.CopyN cap by checking the constant
+// itself; the integration is too coupled to runAsyncTask's full path to
+// unit test cleanly without a worker stub. The constant + a code-grep is
+// the minimum viable pin.
+func TestMaxWebhookResponseBytes_HasReasonableBound(t *testing.T) {
+	if MaxWebhookResponseBytes <= 0 || MaxWebhookResponseBytes > 1024*1024 {
+		t.Errorf("MaxWebhookResponseBytes=%d outside sensible range (>0 and <=1MiB)",
+			MaxWebhookResponseBytes)
 	}
 }
 

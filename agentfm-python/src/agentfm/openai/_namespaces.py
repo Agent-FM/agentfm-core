@@ -311,6 +311,21 @@ class _AsyncChatCompletions(AsyncResource):
         stream: bool = False,
         **extra: Any,
     ) -> ChatCompletion | AsyncIterator[ChatCompletionChunk]:
+        """Create a chat completion (sync or streaming).
+
+        Streaming usage — ``await`` first, then ``async for``::
+
+            stream = await client.openai.chat.completions.create(
+                model="...", messages=[...], stream=True,
+            )
+            async for chunk in stream:
+                ...
+
+        The double-step is required because ``async def create()`` returns
+        a coroutine; awaiting it yields the AsyncIterator. Writing
+        ``async for chunk in client.openai.chat.completions.create(...):``
+        directly raises ``TypeError: 'coroutine' object is not async iterable``.
+        """
         self._warner.warn_if_not_peer_id(model)
         body = _build_chat_body(model, messages, stream=stream, extra=extra)
         if stream:
@@ -373,6 +388,18 @@ class _AsyncCompletions(AsyncResource):
         stream: bool = False,
         **extra: Any,
     ) -> TextCompletion | AsyncIterator[TextCompletionChunk]:
+        """Create a text completion (sync or streaming).
+
+        Streaming usage — ``await`` first, then ``async for``::
+
+            stream = await client.openai.completions.create(
+                model="...", prompt="...", stream=True,
+            )
+            async for chunk in stream:
+                ...
+
+        See :meth:`_AsyncChatCompletions.create` for the explanation.
+        """
         self._warner.warn_if_not_peer_id(model)
         body = _build_completion_body(model, prompt, stream=stream, extra=extra)
         if stream:

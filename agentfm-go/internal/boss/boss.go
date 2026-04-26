@@ -39,7 +39,16 @@ func (b *Boss) Run(ctx context.Context) {
 	b.node.Host.SetStreamHandler(network.ArtifactProtocol, network.HandleArtifactStream)
 
 	time.Sleep(1 * time.Second)
-	go b.listenTelemetry(ctx)
+
+	// Track listenTelemetry so host.Close() below waits for it to release
+	// its pubsub topic + subscription. Otherwise a TUI exit may race the
+	// goroutine's defer chain.
+	var bgWG sync.WaitGroup
+	bgWG.Add(1)
+	go func() {
+		defer bgWG.Done()
+		b.listenTelemetry(ctx)
+	}()
 
 	for {
 		worker, ok, quit := b.selectWorkerInteractive(ctx)
@@ -53,6 +62,7 @@ func (b *Boss) Run(ctx context.Context) {
 	}
 
 	fmt.Println("\nShutting down Boss node...")
+	bgWG.Wait()
 	if err := b.node.Host.Close(); err != nil {
 		slog.Error("host close", slog.Any(obs.FieldErr, err))
 	}
