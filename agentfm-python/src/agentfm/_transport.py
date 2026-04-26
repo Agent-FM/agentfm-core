@@ -26,7 +26,24 @@ from .exceptions import (
 
 _log = logging.getLogger(__name__)
 
-DEFAULT_TIMEOUT = httpx.Timeout(30.0, read=None)  # No read-timeout for streaming
+# 30s connect / read / write / pool covers every non-streaming endpoint
+# (workers list, OpenAI models, openai.chat.completions when stream=False).
+# A wedged gateway that accepts the connection but never sends a body would
+# otherwise hang the caller forever — the retry layer never fires because
+# only ConnectError / ReadError trigger retry.
+#
+# Streaming endpoints (/api/execute, /v1/chat/completions?stream=true)
+# override read=None at the call site via httpx_client.stream(...) — the
+# `with httpx.Client.stream(..., timeout=...)` context manager accepts a
+# per-request timeout. Pre-fix this default applied everywhere with read=None
+# so even a non-stream call could hang.
+DEFAULT_TIMEOUT = httpx.Timeout(30.0)
+
+# Per-call streaming timeout used by tasks.run / tasks.stream and the OpenAI
+# streaming endpoints. read=None lets a long-running task hold the response
+# open for as long as the worker is producing output.
+STREAMING_TIMEOUT = httpx.Timeout(30.0, read=None)
+
 DEFAULT_LIMITS = httpx.Limits(max_connections=20, max_keepalive_connections=10)
 DEFAULT_USER_AGENT = "agentfm-python"
 
@@ -81,7 +98,9 @@ def _resolve_timeout(t: float | httpx.Timeout | None) -> httpx.Timeout:
         return DEFAULT_TIMEOUT
     if isinstance(t, httpx.Timeout):
         return t
-    return httpx.Timeout(t, read=None)
+    # A bare float is the user saying "30s for everything including reads".
+    # Streaming sites use STREAMING_TIMEOUT explicitly per call.
+    return httpx.Timeout(t)
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +237,7 @@ __all__ = [
     "DEFAULT_LIMITS",
     "DEFAULT_TIMEOUT",
     "DEFAULT_USER_AGENT",
+    "STREAMING_TIMEOUT",
     "make_async_client",
     "make_client",
     "raise_for_response",

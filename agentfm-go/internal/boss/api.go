@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"agentfm/internal/metrics"
 	"agentfm/internal/network"
 
 	"github.com/pterm/pterm"
@@ -90,6 +91,9 @@ func (b *Boss) StartAPIServer(port string) error {
 	mux.HandleFunc("/v1/models", corsMiddleware(b.handleModels))
 	mux.HandleFunc("/v1/chat/completions", corsMiddleware(b.handleChatCompletions))
 	mux.HandleFunc("/v1/completions", corsMiddleware(b.handleCompletions))
+	// /metrics is intentionally not wrapped in corsMiddleware — Prometheus
+	// scrapers don't need CORS, and exposing it would be misleading.
+	mux.Handle("/metrics", metrics.Handler())
 
 	srv := &http.Server{
 		Addr:    ":" + port,

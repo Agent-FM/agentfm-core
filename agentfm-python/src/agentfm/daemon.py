@@ -14,6 +14,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
+import shlex
 import shutil
 import subprocess
 import time
@@ -77,6 +78,13 @@ class LocalMeshGateway:
     # -- explicit lifecycle -------------------------------------------------
 
     def start(self) -> None:
+        # Refuse a re-entrant start: a prior call holds self.process and
+        # silently overwriting it would leak a subprocess + its log handle.
+        if self.process is not None:
+            raise RuntimeError(
+                "LocalMeshGateway.start() called twice; call stop() first"
+            )
+
         resolved = shutil.which(self.binary_path)
         if not resolved:
             raise FileNotFoundError(
@@ -102,30 +110,45 @@ class LocalMeshGateway:
             stdout = self._log_handle
             stderr = self._log_handle
 
-        _log.info("starting %s", " ".join(cmd))
-        self.process = subprocess.Popen(
-            cmd,
-            stdout=stdout,
-            stderr=stderr,
-            env=os.environ.copy(),
-        )
+        _log.info("starting %s", shlex.join(cmd))
+        try:
+            self.process = subprocess.Popen(
+                cmd,
+                stdout=stdout,
+                stderr=stderr,
+                env=os.environ.copy(),
+            )
+        except OSError:
+            # Popen can fail with PermissionError, OSError (ENOENT race), etc.
+            # Without this except the log handle would leak until GC.
+            self._cleanup_log()
+            raise
 
-        deadline = time.monotonic() + self.startup_timeout
-        while time.monotonic() < deadline:
-            if self._is_ready():
-                _log.info("gateway online at %s", self.url)
-                return
-            if self.process.poll() is not None:
-                self._cleanup_log()
-                raise GatewayConnectionError(
-                    f"agentfm exited early with code {self.process.returncode}"
-                )
-            time.sleep(0.25)
-        # timed out
-        self.stop()
-        raise GatewayConnectionError(
-            f"agentfm did not become ready on {self.url} within {self.startup_timeout}s"
-        )
+        try:
+            deadline = time.monotonic() + self.startup_timeout
+            while time.monotonic() < deadline:
+                if self._is_ready():
+                    _log.info("gateway online at %s", self.url)
+                    return
+                if self.process.poll() is not None:
+                    rc = self.process.returncode
+                    self._cleanup_log()
+                    self.process = None
+                    raise GatewayConnectionError(
+                        f"agentfm exited early with code {rc}"
+                    )
+                time.sleep(0.25)
+            # timed out
+            self.stop()
+            raise GatewayConnectionError(
+                f"agentfm did not become ready on {self.url} within {self.startup_timeout}s"
+            )
+        except BaseException:
+            # Anything raised after Popen succeeded — including KeyboardInterrupt
+            # from a slow startup — must not leak the subprocess.
+            if self.process is not None:
+                self.stop()
+            raise
 
     def stop(self) -> None:
         if self.process is None:

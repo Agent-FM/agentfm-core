@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"agentfm/internal/network"
@@ -46,8 +47,16 @@ func (b *Boss) selectWorkerInteractive(parentCtx context.Context) (types.WorkerP
 	uiCtx, cancelUI := context.WithCancel(parentCtx)
 	defer cancelUI()
 
-	selectedIndex := 0
-	var displayList []types.WorkerProfile
+	// uiMu protects the closure-captured `displayList` and `selectedIndex`
+	// against concurrent access from the redraw ticker goroutine and the
+	// keyboard callback. Pre-fix, the keyboard callback's `len(displayList)`
+	// raced with the ticker's `displayList = make(...)` reassignment,
+	// failing -race the moment a TUI test exercised it.
+	var (
+		uiMu          sync.Mutex
+		displayList   []types.WorkerProfile
+		selectedIndex int
+	)
 
 	area, _ := pterm.DefaultArea.WithFullscreen(true).Start()
 	defer area.Stop()
@@ -62,9 +71,9 @@ func (b *Boss) selectWorkerInteractive(parentCtx context.Context) (types.WorkerP
 			}
 		}
 
-		displayList = make([]types.WorkerProfile, 0, len(b.activeWorkers))
+		nextList := make([]types.WorkerProfile, 0, len(b.activeWorkers))
 		for _, w := range b.activeWorkers {
-			displayList = append(displayList, w)
+			nextList = append(nextList, w)
 		}
 
 		activeCount := len(b.activeWorkers)
@@ -72,13 +81,20 @@ func (b *Boss) selectWorkerInteractive(parentCtx context.Context) (types.WorkerP
 
 		b.mu.Unlock()
 
-		sort.Slice(displayList, func(i, j int) bool {
-			return displayList[i].PeerID < displayList[j].PeerID
+		sort.Slice(nextList, func(i, j int) bool {
+			return nextList[i].PeerID < nextList[j].PeerID
 		})
 
+		uiMu.Lock()
+		displayList = nextList
 		if len(displayList) > 0 && selectedIndex >= len(displayList) {
 			selectedIndex = len(displayList) - 1
 		}
+		// Snapshot for the rest of the render so we hold the lock for the
+		// minimum window. The view we render is whatever was true at swap.
+		view := displayList
+		viewSelected := selectedIndex
+		uiMu.Unlock()
 
 		var uiContent string
 
@@ -89,14 +105,14 @@ func (b *Boss) selectWorkerInteractive(parentCtx context.Context) (types.WorkerP
 
 		uiContent += header + "\n\n"
 
-		if len(displayList) == 0 {
+		if len(view) == 0 {
 			uiContent += pterm.Warning.Sprintf("Listening to the Gossip grid... waiting for nodes to pulse.")
 			area.Update(uiContent)
 			return
 		}
 
 		tableData := pterm.TableData{{"", "PEER ID", "AUTHOR", "STATUS", "TASKS", "CORES", "CPU LOAD", "GPU VRAM", "RAM FREE", "LLM MODEL", "AGENT NAME"}}
-		for i, w := range displayList {
+		for i, w := range view {
 			shortID := w.PeerID
 			if len(shortID) > 10 {
 				shortID = shortID[:6] + ".." + shortID[len(shortID)-4:]
@@ -129,7 +145,7 @@ func (b *Boss) selectWorkerInteractive(parentCtx context.Context) (types.WorkerP
 				}
 			}
 
-			if i == selectedIndex {
+			if i == viewSelected {
 				tableData = append(tableData, []string{
 					pterm.LightGreen(" ▶ "), pterm.LightWhite(shortID), pterm.LightCyan(w.Author), statusDisplay, taskDisplay, pterm.LightWhite(strconv.Itoa(w.CPUCores)),
 					cpuBar, gpuDisplay, pterm.LightWhite(fmt.Sprintf("%.1f GB", w.RAMFreeGB)),
@@ -175,26 +191,32 @@ func (b *Boss) selectWorkerInteractive(parentCtx context.Context) (types.WorkerP
 			return true, nil
 		}
 
-		// Use a local copy of length to prevent data races
+		// Snapshot under uiMu so the redraw goroutine cannot reassign
+		// displayList between len() and the indexed read below.
+		uiMu.Lock()
 		listLen := len(displayList)
-
 		if listLen == 0 {
+			uiMu.Unlock()
 			return false, nil
 		}
-
 		switch key.Code {
 		case keys.Up:
 			selectedIndex = (selectedIndex - 1 + listLen) % listLen
+			uiMu.Unlock()
 			draw()
 		case keys.Down:
 			selectedIndex = (selectedIndex + 1) % listLen
+			uiMu.Unlock()
 			draw()
 		case keys.Enter:
-			if selectedIndex < len(displayList) {
+			if selectedIndex < listLen {
 				selected = displayList[selectedIndex]
 				confirmed = true
 			}
+			uiMu.Unlock()
 			return true, nil
+		default:
+			uiMu.Unlock()
 		}
 		return false, nil
 	})

@@ -42,7 +42,7 @@ func New(node *network.MeshNode, cfg Config) *Worker {
 func RunLocalTest(ctx context.Context, cfg Config, prompt string) error {
 	w := &Worker{config: cfg}
 
-	if err := w.buildSandboxImage(); err != nil {
+	if err := w.buildSandboxImage(ctx); err != nil {
 		return err
 	}
 
@@ -62,16 +62,16 @@ func (w *Worker) Start(ctx context.Context) {
 	fmt.Print("\033[H\033[2J")
 	pterm.DefaultHeader.WithFullWidth().WithBackgroundStyle(pterm.NewStyle(pterm.BgCyan)).WithTextStyle(pterm.NewStyle(pterm.FgBlack)).Println("🚀 AGENTFM WORKER NODE ONLINE")
 
-	if err := w.buildSandboxImage(); err != nil {
+	// Bind the root ctx to OS shutdown signals BEFORE the sandbox build so a
+	// hung `podman build` (registry unreachable, broken Containerfile that
+	// wedges a RUN step) is killable with Ctrl+C.
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := w.buildSandboxImage(ctx); err != nil {
 		pterm.Fatal.Printfln("Startup failed: %v", err)
 		os.Exit(1)
 	}
-
-	// Bind the root ctx to OS shutdown signals so every in-flight handler,
-	// including the Podman sub-process it owns, is cancelled when the
-	// operator hits CTRL+C.
-	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	w.printMetadata()
 	go w.startTelemetry(ctx)

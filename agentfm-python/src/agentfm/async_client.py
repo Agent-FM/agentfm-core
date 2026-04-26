@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import uuid
 from collections.abc import AsyncIterator
 from functools import cached_property
 from pathlib import Path
@@ -26,7 +27,12 @@ from ._shared import (
     filter_workers,
     parse_workers_envelope,
 )
-from ._transport import make_async_client, raise_for_response, wrap_connection_error
+from ._transport import (
+    STREAMING_TIMEOUT,
+    make_async_client,
+    raise_for_response,
+    wrap_connection_error,
+)
 from .artifacts import ArtifactManager
 from .exceptions import (
     AgentFMError,
@@ -96,16 +102,18 @@ class _AsyncTasksNamespace(AsyncResource):
         artifact_timeout: float = 120.0,
     ) -> TaskResult:
         chunks: list[str] = []
-        started_at = time.time()
+        task_id = f"task_{uuid.uuid4().hex}"
         started_mono = time.monotonic()
-        async for chunk in self.stream(worker_id=worker_id, prompt=prompt):
+        async for chunk in self.stream(
+            worker_id=worker_id, prompt=prompt, task_id=task_id
+        ):
             if chunk.kind == "text":
                 chunks.append(chunk.text)
         text = "".join(chunks)
 
         am = self._client.artifacts
         artifacts: list[Path] = (
-            await asyncio.to_thread(am.collect_since, started_at, artifact_timeout)
+            await asyncio.to_thread(am.collect_for_task, task_id, artifact_timeout)
             if am is not None
             else []
         )
@@ -118,14 +126,23 @@ class _AsyncTasksNamespace(AsyncResource):
         )
 
     async def stream(
-        self, *, worker_id: PeerID | str, prompt: str
+        self,
+        *,
+        worker_id: PeerID | str,
+        prompt: str,
+        task_id: str | None = None,
     ) -> AsyncIterator[TaskChunk]:
-        payload = build_task_payload(str(worker_id), prompt)
+        payload = build_task_payload(str(worker_id), prompt, task_id=task_id)
         filter_ = SentinelFilter()
         try:
             async with self._client._http.stream(
-                "POST", "/api/execute", json=payload
+                "POST", "/api/execute", json=payload, timeout=STREAMING_TIMEOUT
             ) as response:
+                # Streaming responses don't auto-load the body, so an error
+                # envelope on a non-2xx status would be unreachable from
+                # raise_for_response without an explicit aread.
+                if response.status_code >= 400:
+                    await response.aread()
                 raise_for_response(response, expected_text=True)
                 async for raw in response.aiter_text():
                     for clean in filter_.feed(raw):
@@ -157,48 +174,58 @@ class _AsyncTasksNamespace(AsyncResource):
         max_concurrency: int = 8,
         max_retries: int = 2,
     ) -> list[ScatterResult]:
+        """Run ``len(prompts)`` tasks across the given peers (round-robin).
+
+        Results are returned in **submission order**: ``return[i]`` corresponds
+        to ``prompts[i]``. Failed prompts (after ``max_retries`` exhaustion)
+        appear as :class:`ScatterResult` with ``status="failed"`` and a populated
+        ``error`` field, never as exceptions.
+        """
         if not prompts:
             return []
         if not peer_ids:
             raise ValueError("scatter requires at least one peer id")
         sem = asyncio.Semaphore(max_concurrency)
         peers_str = [str(p) for p in peer_ids]
-        results: list[ScatterResult] = []
+        results_by_idx: dict[int, ScatterResult] = {}
 
-        async def worker(idx: int, prompt: str, attempt: int) -> None:
-            peer = peers_str[idx % len(peers_str)]
-            async with sem:
-                try:
-                    res = await self.run(worker_id=peer, prompt=prompt)
-                    results.append(
-                        ScatterResult(
-                            prompt=prompt,
-                            worker_id=PeerID(peer),
-                            status="success",
-                            text=res.text,
-                            artifacts=res.artifacts,
-                        )
-                    )
-                except AgentFMError as exc:
-                    if attempt < max_retries:
-                        _log.info(
-                            "retrying prompt #%s (attempt %s)", idx, attempt + 1
-                        )
-                        await worker(idx, prompt, attempt + 1)
-                    else:
-                        results.append(
-                            ScatterResult(
-                                prompt=prompt,
-                                worker_id=PeerID(peer),
-                                status="failed",
-                                error=str(exc),
+        async def worker(idx: int, prompt: str) -> None:
+            # Iterative retry: each attempt acquires the semaphore fresh, so
+            # max_concurrency=1 doesn't deadlock and a failing peer is not
+            # reused on retry. The cursor advances by attempt count, giving
+            # automatic failover across the supplied peer pool.
+            last_exc: AgentFMError | None = None
+            last_peer = peers_str[idx % len(peers_str)]
+            for attempt in range(max_retries + 1):
+                peer = peers_str[(idx + attempt) % len(peers_str)]
+                last_peer = peer
+                async with sem:
+                    try:
+                        res = await self.run(worker_id=peer, prompt=prompt)
+                    except AgentFMError as exc:
+                        last_exc = exc
+                        if attempt < max_retries:
+                            _log.info(
+                                "retrying prompt #%s (attempt %s)", idx, attempt + 1
                             )
-                        )
+                        continue
+                results_by_idx[idx] = ScatterResult(
+                    prompt=prompt,
+                    worker_id=PeerID(peer),
+                    status="success",
+                    text=res.text,
+                    artifacts=res.artifacts,
+                )
+                return
+            results_by_idx[idx] = ScatterResult(
+                prompt=prompt,
+                worker_id=PeerID(last_peer),
+                status="failed",
+                error=str(last_exc) if last_exc is not None else "unknown error",
+            )
 
-        await asyncio.gather(
-            *(worker(i, p, 0) for i, p in enumerate(prompts))
-        )
-        return results
+        await asyncio.gather(*(worker(i, p) for i, p in enumerate(prompts)))
+        return [results_by_idx[i] for i in range(len(prompts))]
 
     async def scatter_by_model(
         self,

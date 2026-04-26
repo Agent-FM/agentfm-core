@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 import httpx
 
 from .._internal.resource import AsyncResource, SyncResource
-from .._transport import raise_for_response, wrap_connection_error
+from .._transport import STREAMING_TIMEOUT, raise_for_response, wrap_connection_error
 from .._warnings import AgentFMRoutingWarning
 from ..streaming import parse_sse_lines
 from .models import (
@@ -169,8 +169,10 @@ class _ChatCompletions(SyncResource):
     def _stream(self, body: dict[str, Any]) -> Iterator[ChatCompletionChunk]:
         try:
             with self._client._http.stream(
-                "POST", "/v1/chat/completions", json=body
+                "POST", "/v1/chat/completions", json=body, timeout=STREAMING_TIMEOUT
             ) as r:
+                if r.status_code >= 400:
+                    r.read()
                 raise_for_response(r, expected_text=True)
                 for payload in parse_sse_lines(r.iter_lines()):
                     with contextlib.suppress(ValueError):
@@ -219,7 +221,11 @@ class _Completions(SyncResource):
 
     def _stream(self, body: dict[str, Any]) -> Iterator[TextCompletionChunk]:
         try:
-            with self._client._http.stream("POST", "/v1/completions", json=body) as r:
+            with self._client._http.stream(
+                "POST", "/v1/completions", json=body, timeout=STREAMING_TIMEOUT
+            ) as r:
+                if r.status_code >= 400:
+                    r.read()
                 raise_for_response(r, expected_text=True)
                 for payload in parse_sse_lines(r.iter_lines()):
                     with contextlib.suppress(ValueError):
@@ -295,8 +301,10 @@ class _AsyncChatCompletions(AsyncResource):
     async def _stream(self, body: dict[str, Any]) -> AsyncIterator[ChatCompletionChunk]:
         try:
             async with self._client._http.stream(
-                "POST", "/v1/chat/completions", json=body
+                "POST", "/v1/chat/completions", json=body, timeout=STREAMING_TIMEOUT
             ) as r:
+                if r.status_code >= 400:
+                    await r.aread()
                 raise_for_response(r, expected_text=True)
                 async for payload in _aiter_sse(r):
                     with contextlib.suppress(ValueError):
@@ -346,8 +354,10 @@ class _AsyncCompletions(AsyncResource):
     async def _stream(self, body: dict[str, Any]) -> AsyncIterator[TextCompletionChunk]:
         try:
             async with self._client._http.stream(
-                "POST", "/v1/completions", json=body
+                "POST", "/v1/completions", json=body, timeout=STREAMING_TIMEOUT
             ) as r:
+                if r.status_code >= 400:
+                    await r.aread()
                 raise_for_response(r, expected_text=True)
                 async for payload in _aiter_sse(r):
                     with contextlib.suppress(ValueError):

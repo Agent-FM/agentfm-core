@@ -5,9 +5,13 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
+
+	"agentfm/internal/metrics"
+	"agentfm/internal/obs"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -65,10 +69,12 @@ func SendArtifacts(ctx context.Context, h host.Host, bossID peer.ID, zipFilePath
 
 	bytesWritten, err := io.Copy(stream, file)
 	if err != nil {
+		metrics.StreamErrorsTotal.WithLabelValues(metrics.ProtocolArtifacts, metrics.ReasonReset).Inc()
 		return fmt.Errorf("failed during artifact stream: %w", err)
 	}
 
 	success = true
+	metrics.ArtifactBytesSentTotal.Add(float64(bytesWritten))
 	fmt.Printf("✅ Successfully sent %d bytes of artifacts over the darknet!\n", bytesWritten)
 	return nil
 }
@@ -97,7 +103,8 @@ func HandleArtifactStream(stream network.Stream) {
 	}()
 
 	if err := stream.SetReadDeadline(time.Now().Add(ArtifactStreamTimeout)); err != nil {
-		pterm.Error.Printfln("Failed to set artifact read deadline: %v", err)
+		metrics.StreamErrorsTotal.WithLabelValues(metrics.ProtocolArtifacts, metrics.ReasonDeadline).Inc()
+		slog.Error("set artifact read deadline", slog.Any(obs.FieldErr, err), slog.String(obs.FieldProtocol, "artifacts"))
 		return
 	}
 
@@ -106,21 +113,24 @@ func HandleArtifactStream(stream network.Stream) {
 	var fileSize int64
 	err := binary.Read(stream, binary.LittleEndian, &fileSize)
 	if err != nil {
-		pterm.Error.Printfln("Failed to read file size header: %v", err)
+		metrics.StreamErrorsTotal.WithLabelValues(metrics.ProtocolArtifacts, metrics.ReasonDecode).Inc()
+		slog.Error("read artifact size header", slog.Any(obs.FieldErr, err), slog.String(obs.FieldProtocol, "artifacts"))
 		return
 	}
 
 	var idLen uint8
 	err = binary.Read(stream, binary.LittleEndian, &idLen)
 	if err != nil {
-		pterm.Error.Printfln("Failed to read TaskID length: %v", err)
+		metrics.StreamErrorsTotal.WithLabelValues(metrics.ProtocolArtifacts, metrics.ReasonDecode).Inc()
+		slog.Error("read artifact task-id length", slog.Any(obs.FieldErr, err), slog.String(obs.FieldProtocol, "artifacts"))
 		return
 	}
 
 	idBytes := make([]byte, idLen)
 	_, err = io.ReadFull(stream, idBytes)
 	if err != nil {
-		pterm.Error.Printfln("Failed to read TaskID: %v", err)
+		metrics.StreamErrorsTotal.WithLabelValues(metrics.ProtocolArtifacts, metrics.ReasonDecode).Inc()
+		slog.Error("read artifact task-id", slog.Any(obs.FieldErr, err), slog.String(obs.FieldProtocol, "artifacts"))
 		return
 	}
 
@@ -131,14 +141,14 @@ func HandleArtifactStream(stream network.Stream) {
 	}
 
 	if err := os.MkdirAll("./agentfm_artifacts", 0755); err != nil {
-		pterm.Error.Printfln("Failed to create artifacts dir: %v", err)
+		slog.Error("create artifacts dir", slog.Any(obs.FieldErr, err))
 		return
 	}
 	destPath := filepath.Join(".", "agentfm_artifacts", safeTaskID+".zip")
 
 	outFile, err := os.Create(destPath)
 	if err != nil {
-		pterm.Error.Printfln("Failed to create local file: %v", err)
+		slog.Error("create local artifact file", slog.Any(obs.FieldErr, err), slog.String("dest", destPath))
 		return
 	}
 	defer outFile.Close()
@@ -160,7 +170,8 @@ func HandleArtifactStream(stream network.Stream) {
 	bytesRead, err := io.Copy(pw, stream)
 	if err != nil {
 		pb.Stop()
-		pterm.Error.Printfln("Error downloading artifacts: %v", err)
+		metrics.StreamErrorsTotal.WithLabelValues(metrics.ProtocolArtifacts, metrics.ReasonReset).Inc()
+		slog.Error("download artifacts", slog.Any(obs.FieldErr, err), slog.String(obs.FieldProtocol, "artifacts"))
 		return
 	}
 	pb.Stop()

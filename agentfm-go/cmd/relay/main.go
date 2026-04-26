@@ -8,7 +8,9 @@ import (
 	"os/signal"
 	"syscall"
 
+	"agentfm/internal/metrics"
 	"agentfm/internal/network"
+	"agentfm/internal/obs"
 
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -50,7 +52,12 @@ func main() {
 	port := flag.Int("port", 4001, "Port to listen on")
 	swarmKey := flag.String("swarmkey", "", "Path to private swarm.key file (optional)")
 	identityFile := flag.String("identity", "relay_identity.key", "File to save/load the node identity")
+	promListen := flag.String("prom-listen", "127.0.0.1:9091", "Prometheus /metrics listen address (loopback by default; pass - to disable)")
+	logFormat := flag.String("log-format", obs.FormatAuto, "Log format: json, console, auto")
+	logLevel := flag.String("log-level", "info", "Log level: debug, info, warn, error")
 	flag.Parse()
+
+	obs.Init("relay", *logFormat, *logLevel)
 
 	fmt.Println("🚀 Starting AgentFM Permanent Lighthouse...")
 
@@ -106,6 +113,7 @@ func main() {
 	if err != nil {
 		fatalf("failed to join telemetry topic: %v", err)
 	}
+	defer func() { _ = topic.Close() }()
 
 	// Subscribe so this relay actively routes messages. If we never call
 	// Next on the subscription its buffer fills and the topic stops
@@ -114,6 +122,7 @@ func main() {
 	if err != nil {
 		fatalf("failed to subscribe: %v", err)
 	}
+	defer sub.Cancel()
 
 	// Drain the subscription in the background so the relay keeps
 	// forwarding telemetry instead of letting the topic buffer fill.
@@ -133,6 +142,15 @@ func main() {
 	}
 	if err = kDHT.Bootstrap(ctx); err != nil {
 		fatalf("failed to bootstrap DHT: %v", err)
+	}
+
+	if listen := *promListen; listen != "" && listen != "-" {
+		go func() {
+			if err := metrics.Serve(ctx, listen); err != nil {
+				pterm.Error.Printfln("metrics server: %v", err)
+			}
+		}()
+		fmt.Printf("📊 Metrics server: http://%s/metrics\n", listen)
 	}
 
 	fmt.Println("\n✅ Permanent Relay Node is Online!")

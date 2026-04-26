@@ -6,16 +6,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
 
+	"agentfm/internal/metrics"
 	"agentfm/internal/network"
+	"agentfm/internal/obs"
 	"agentfm/internal/types"
 	"agentfm/internal/version"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/pterm/pterm"
 )
 
 // webhookTimeout caps the POST we make to the client's callback URL. The
@@ -66,7 +68,7 @@ func (b *Boss) asyncExecuteHandler(rootCtx context.Context, wg *sync.WaitGroup) 
 			"status":  "queued",
 			"message": "Task dispatched to P2P mesh.",
 		}); err != nil {
-			pterm.Error.Printfln("Async task: failed to write ack: %v", err)
+			slog.Error("async task ack write", slog.Any(obs.FieldErr, err))
 			return
 		}
 
@@ -90,6 +92,13 @@ func (b *Boss) asyncExecuteHandler(rootCtx context.Context, wg *sync.WaitGroup) 
 // worker stdout into a scratch buffer, waits briefly for the artifact
 // stream to land, then notifies the optional webhook URL.
 func (b *Boss) runAsyncTask(ctx context.Context, peerID peer.ID, taskID string, req AsyncExecuteRequest) {
+	started := time.Now()
+	status := metrics.StatusError
+	defer func() {
+		metrics.TaskDurationSeconds.Observe(time.Since(started).Seconds())
+		metrics.TasksTotal.WithLabelValues(status).Inc()
+	}()
+
 	s := b.dialOmni(ctx, peerID)
 	if s == nil {
 		return
@@ -105,7 +114,7 @@ func (b *Boss) runAsyncTask(ctx context.Context, peerID peer.ID, taskID string, 
 	}()
 
 	if err := s.SetWriteDeadline(time.Now().Add(network.TaskPayloadReadTimeout)); err != nil {
-		pterm.Error.Printfln("Async task: failed to set write deadline: %v", err)
+		slog.Error("async task set write deadline", slog.Any(obs.FieldErr, err), slog.String(obs.FieldTaskID, taskID))
 		return
 	}
 
@@ -116,22 +125,23 @@ func (b *Boss) runAsyncTask(ctx context.Context, peerID peer.ID, taskID string, 
 		TaskID:  taskID,
 	}
 	if err := json.NewEncoder(s).Encode(&payload); err != nil {
-		pterm.Error.Printfln("Async task: failed to send prompt: %v", err)
+		slog.Error("async task send prompt", slog.Any(obs.FieldErr, err), slog.String(obs.FieldTaskID, taskID))
 		return
 	}
 	if err := s.CloseWrite(); err != nil {
-		pterm.Error.Printfln("Async task: failed to half-close: %v", err)
+		slog.Error("async task half-close", slog.Any(obs.FieldErr, err), slog.String(obs.FieldTaskID, taskID))
 		return
 	}
 
 	deadman := &timeoutReader{stream: s, timeout: network.TaskExecutionTimeout}
 	var outputBuffer bytes.Buffer
 	if _, err := io.Copy(&outputBuffer, deadman); err != nil {
-		pterm.Error.Printfln("Async task: stream read failed: %v", err)
+		slog.Error("async task stream read", slog.Any(obs.FieldErr, err), slog.String(obs.FieldTaskID, taskID), slog.String(obs.FieldProtocol, "task"))
 		return
 	}
 
 	streamSuccess = true
+	status = metrics.StatusOK
 
 	// Brief grace period so the out-of-band artifact stream (handled by
 	// HandleArtifactStream on a separate libp2p stream) lands on disk
@@ -147,6 +157,13 @@ func (b *Boss) runAsyncTask(ctx context.Context, peerID peer.ID, taskID string, 
 		return
 	}
 
+	// SSRF / hostile-URL guard. Done at delivery time (rather than at submit)
+	// so the operator's intent is observed against the URL we actually dial.
+	if err := validateWebhookURL(req.WebhookURL); err != nil {
+		slog.Warn("async task webhook rejected", slog.Any(obs.FieldErr, err), slog.String(obs.FieldTaskID, taskID))
+		return
+	}
+
 	webhookPayload := map[string]string{
 		"task_id":   taskID,
 		"worker_id": req.WorkerID,
@@ -154,7 +171,7 @@ func (b *Boss) runAsyncTask(ctx context.Context, peerID peer.ID, taskID string, 
 	}
 	jsonData, err := json.Marshal(webhookPayload)
 	if err != nil {
-		pterm.Error.Printfln("Async task: failed to marshal webhook payload: %v", err)
+		slog.Error("async task marshal webhook payload", slog.Any(obs.FieldErr, err), slog.String(obs.FieldTaskID, taskID))
 		return
 	}
 
@@ -166,15 +183,18 @@ func (b *Boss) runAsyncTask(ctx context.Context, peerID peer.ID, taskID string, 
 
 	httpReq, err := http.NewRequestWithContext(webhookCtx, http.MethodPost, req.WebhookURL, bytes.NewReader(jsonData))
 	if err != nil {
-		pterm.Error.Printfln("Async task: failed to build webhook request: %v", err)
+		slog.Error("async task build webhook request", slog.Any(obs.FieldErr, err), slog.String(obs.FieldTaskID, taskID))
 		return
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	if sig := signWebhookBody(jsonData); sig != "" {
+		httpReq.Header.Set(signatureHeader, sig)
+	}
 
 	client := &http.Client{Timeout: webhookTimeout}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		pterm.Error.Printfln("Async task: webhook delivery failed: %v", err)
+		slog.Error("async task webhook delivery", slog.Any(obs.FieldErr, err), slog.String(obs.FieldTaskID, taskID))
 		return
 	}
 	_ = resp.Body.Close()

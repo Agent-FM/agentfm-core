@@ -79,6 +79,7 @@ func (w *Worker) startTelemetry(ctx context.Context) {
 		pterm.Error.Printfln("Telemetry disabled: failed to join %q topic: %v", network.TelemetryTopic, err)
 		return
 	}
+	defer func() { _ = topic.Close() }()
 
 	safeDesc := w.truncateWords(w.config.AgentDesc, 50)
 	totalCores := runtime.NumCPU()

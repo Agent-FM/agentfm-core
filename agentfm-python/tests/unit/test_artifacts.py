@@ -98,3 +98,74 @@ def test_collect_since_skips_old_zips(tmp_path: Path):
     mgr = ArtifactManager(watch_dir=tmp_path, extract_dir=tmp_path / "out")
     after_old = time.time()
     assert mgr.collect_since(since=after_old, timeout=0.1) == []
+
+
+def test_collect_for_task_finds_specific_basename(tmp_path: Path):
+    extract_dir = tmp_path / "out"
+    mgr = ArtifactManager(watch_dir=tmp_path, extract_dir=extract_dir)
+    _make_zip(tmp_path / "task_abc123.zip", {"hello.txt": b"hi"})
+    files = mgr.collect_for_task("task_abc123", timeout=2.0)
+    assert {p.name for p in files} == {"hello.txt"}
+    assert not (tmp_path / "task_abc123.zip").exists(), "zip should be cleaned up"
+
+
+def test_collect_for_task_ignores_other_zips(tmp_path: Path):
+    """Concurrency-safety: a parallel task's zip must not be returned."""
+    extract_dir = tmp_path / "out"
+    mgr = ArtifactManager(watch_dir=tmp_path, extract_dir=extract_dir)
+    _make_zip(tmp_path / "task_other.zip", {"other.txt": b"not mine"})
+    files = mgr.collect_for_task("task_mine", timeout=0.2)
+    assert files == []
+    # The other task's zip must remain untouched.
+    assert (tmp_path / "task_other.zip").exists(), "must not steal another task's zip"
+
+
+def test_collect_for_task_empty_id_returns_empty(tmp_path: Path):
+    mgr = ArtifactManager(watch_dir=tmp_path, extract_dir=tmp_path / "out")
+    assert mgr.collect_for_task("", timeout=0.1) == []
+
+
+def test_collect_for_task_returns_empty_when_watch_dir_missing(tmp_path: Path):
+    mgr = ArtifactManager(watch_dir=tmp_path / "nope", extract_dir=tmp_path / "out")
+    assert mgr.collect_for_task("task_x", timeout=0.1) == []
+
+
+def test_collect_for_task_returns_empty_on_timeout(tmp_path: Path):
+    mgr = ArtifactManager(watch_dir=tmp_path, extract_dir=tmp_path / "out")
+    assert mgr.collect_for_task("task_never_arrives", timeout=0.1) == []
+
+
+def test_extract_streams_in_chunks_does_not_oom(tmp_path: Path):
+    """Pre-fix, extract() did dst.write(src.read()) loading entire entry to RAM.
+    Verify the chunked path is exercised even on tiny inputs (no behaviour
+    regression).
+    """
+    src = _make_zip(tmp_path / "in.zip", {"big.bin": b"a" * (1024 * 1024)})  # 1 MiB
+    extract_dir = tmp_path / "out"
+    mgr = ArtifactManager(watch_dir=tmp_path, extract_dir=extract_dir)
+    extracted = mgr.extract(src)
+    assert {p.name for p in extracted} == {"big.bin"}
+    assert (extract_dir / "big.bin").stat().st_size == 1024 * 1024
+
+
+def test_extract_rejects_zip_bomb_above_budget(tmp_path: Path):
+    """A single member larger than max_extract_bytes is rejected."""
+    src = _make_zip(tmp_path / "bomb.zip", {"huge.bin": b"x" * (256 * 1024)})  # 256 KiB
+    mgr = ArtifactManager(
+        watch_dir=tmp_path, extract_dir=tmp_path / "out", max_extract_bytes=128 * 1024
+    )
+    with pytest.raises(ArtifactError, match="exceeds max_extract_bytes"):
+        mgr.extract(src)
+
+
+def test_extract_rejects_zip_bomb_cumulative_budget(tmp_path: Path):
+    """Multiple small members that together exceed the budget are rejected."""
+    src = _make_zip(
+        tmp_path / "many.zip",
+        {f"f{i}.bin": b"y" * (50 * 1024) for i in range(5)},  # 250 KiB total
+    )
+    mgr = ArtifactManager(
+        watch_dir=tmp_path, extract_dir=tmp_path / "out", max_extract_bytes=128 * 1024
+    )
+    with pytest.raises(ArtifactError, match="exceeds max_extract_bytes"):
+        mgr.extract(src)

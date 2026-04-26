@@ -11,7 +11,9 @@ import (
 	"syscall"
 
 	"agentfm/internal/boss"
+	"agentfm/internal/metrics"
 	"agentfm/internal/network"
+	"agentfm/internal/obs"
 	"agentfm/internal/worker"
 
 	"github.com/pterm/pterm"
@@ -27,6 +29,18 @@ func main() {
 
 	// API Gateway Port
 	apiPort := flag.String("apiport", "8080", "Port for the local API gateway (only used in api mode)")
+
+	// Observability: Prometheus /metrics listen address. Default is loopback
+	// for safety; pass 0.0.0.0:<port> to expose to off-host scrapers.
+	// Empty string disables the metrics server (worker and relay only;
+	// boss-api always serves /metrics on its own port).
+	promListen := flag.String("prom-listen", "", "Prometheus /metrics listen address (worker default 127.0.0.1:9090, relay default 127.0.0.1:9091, empty disables)")
+
+	// Structured-logging controls. Format auto-detects: console on a TTY,
+	// JSON otherwise. Operators running under systemd / docker / k8s want
+	// JSON for log aggregation; humans on a laptop want console.
+	logFormat := flag.String("log-format", obs.FormatAuto, "Log format: json, console, auto")
+	logLevel := flag.String("log-level", "info", "Log level: debug, info, warn, error")
 
 	// Test Mode Prompt
 	testPrompt := flag.String("prompt", "", "Text prompt to send to the agent (used only in -mode test)")
@@ -73,15 +87,20 @@ func main() {
 		BootstrapURL: *bootstrap,
 	}
 
+	// Set up the structured logger BEFORE any role-specific code runs so
+	// every component-tagged log line has a consistent schema. The component
+	// tag is the same as the mode for traceability.
+	obs.Init(*mode, *logFormat, *logLevel)
+
 	// Dispatch on mode. Each branch owns its own mesh setup and shutdown
 	// so one mode can never leak a host into another.
 	switch *mode {
 	case "test":
 		runTestMode(ctx, cfg, *testPrompt)
 	case "relay":
-		runRelayMode(ctx, netCfg)
+		runRelayMode(ctx, netCfg, defaultPromListen(*promListen, "127.0.0.1:9091"))
 	case "worker":
-		runWorkerMode(ctx, netCfg, cfg)
+		runWorkerMode(ctx, netCfg, cfg, defaultPromListen(*promListen, "127.0.0.1:9090"))
 	case "boss":
 		runBossMode(ctx, netCfg)
 	case "api":
@@ -154,10 +173,22 @@ func runTestMode(ctx context.Context, cfg worker.Config, testPrompt string) {
 // runRelayMode brings up a DHT-server mesh node without any worker or
 // boss responsibilities. Useful for a developer who wants to run their
 // own lighthouse on a spare VPS instead of using the public one.
-func runRelayMode(ctx context.Context, netCfg network.Config) {
+func runRelayMode(ctx context.Context, netCfg network.Config, promListen string) {
 	node, err := network.Setup(ctx, netCfg)
 	if err != nil {
 		pterm.Fatal.Println(err)
+	}
+
+	relayCtx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	if promListen != "" {
+		go func() {
+			if err := metrics.Serve(relayCtx, promListen); err != nil {
+				pterm.Error.Printfln("metrics server: %v", err)
+			}
+		}()
+		pterm.Success.Printfln("Metrics server: http://%s/metrics", promListen)
 	}
 
 	pterm.Success.Println("Relay Node Active. Press Ctrl+C to shut down.")
@@ -166,19 +197,39 @@ func runRelayMode(ctx context.Context, netCfg network.Config) {
 		fmt.Printf("agentfm -mode boss -swarmkey ./swarm.key -bootstrap %s/p2p/%s\n", addr.String(), node.Host.ID().String())
 	}
 
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-	<-ch
+	<-relayCtx.Done()
 	fmt.Println("\nShutting down relay...")
 }
 
-func runWorkerMode(ctx context.Context, netCfg network.Config, cfg worker.Config) {
+func runWorkerMode(ctx context.Context, netCfg network.Config, cfg worker.Config, promListen string) {
 	node, err := network.Setup(ctx, netCfg)
 	if err != nil {
 		pterm.Fatal.Println(err)
 	}
+	if promListen != "" {
+		go func() {
+			if err := metrics.Serve(ctx, promListen); err != nil {
+				pterm.Error.Printfln("metrics server: %v", err)
+			}
+		}()
+		pterm.Success.Printfln("Metrics server: http://%s/metrics", promListen)
+	}
 	w := worker.New(node, cfg)
 	w.Start(ctx)
+}
+
+// defaultPromListen picks the listen address: if the operator passed a
+// non-empty --prom-listen value it wins; otherwise fall back to the
+// per-mode safe-by-default loopback address. To explicitly disable the
+// metrics server, pass --prom-listen=- (a single dash).
+func defaultPromListen(flagValue, modeDefault string) string {
+	if flagValue == "-" {
+		return ""
+	}
+	if flagValue != "" {
+		return flagValue
+	}
+	return modeDefault
 }
 
 // runBossMode opens the interactive TUI for a human operator.
