@@ -1,2 +1,0 @@
-requests>=2.25.0
-pydantic>=2.0.0

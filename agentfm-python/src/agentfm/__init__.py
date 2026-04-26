@@ -1,23 +1,52 @@
-from .client import AgentFMClient
-from .models import WorkerProfile
+"""agentfm — Official Python SDK for the AgentFM peer-to-peer compute mesh."""
+
+from __future__ import annotations
+
+from ._version import __version__
+from ._warnings import AgentFMRoutingWarning
 from .artifacts import ArtifactManager
+from .async_client import AsyncAgentFMClient
+from .client import AgentFMClient
+from .crypto import SwarmKey
 from .daemon import LocalMeshGateway
-from .crypto import SwarmKey  
 from .exceptions import (
     AgentFMError,
     GatewayConnectionError,
+    InvalidRequestError,
+    MeshOverloadedError,
+    ModelNotFoundError,
     WorkerNotFoundError,
-    TaskExecutionError
+    WorkerUnreachableError,
 )
+from .models import (
+    PeerID,
+    ScatterResult,
+    TaskChunk,
+    TaskResult,
+    WorkerProfile,
+)
+from .webhook import WebhookPayload, WebhookReceiver
 
 __all__ = [
     "AgentFMClient",
-    "WorkerProfile",
-    "ArtifactManager",
-    "LocalMeshGateway",
-    "SwarmKey",
     "AgentFMError",
+    "AgentFMRoutingWarning",
+    "ArtifactManager",
+    "AsyncAgentFMClient",
     "GatewayConnectionError",
+    "InvalidRequestError",
+    "LocalMeshGateway",
+    "MeshOverloadedError",
+    "ModelNotFoundError",
+    "PeerID",
+    "ScatterResult",
+    "SwarmKey",
+    "TaskChunk",
+    "TaskResult",
+    "WebhookPayload",
+    "WebhookReceiver",
     "WorkerNotFoundError",
-    "TaskExecutionError"
+    "WorkerProfile",
+    "WorkerUnreachableError",
+    "__version__",
 ]
