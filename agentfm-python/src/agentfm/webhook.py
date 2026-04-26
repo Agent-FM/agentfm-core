@@ -133,6 +133,10 @@ class WebhookReceiver:
                 srv.serve_forever()
             except KeyboardInterrupt:
                 _log.info("webhook receiver shutting down on Ctrl-C")
+            finally:
+                # Clear so a subsequent start() does not silently no-op
+                # (start() returns early when self._server is non-None).
+                self._server = None
 
     # -- internals ----------------------------------------------------------
 

@@ -4,6 +4,7 @@ import pytest
 
 from agentfm.exceptions import (
     AgentFMError,
+    GatewayInternalError,
     GatewayProtocolError,
     InvalidRequestError,
     MeshOverloadedError,
@@ -26,6 +27,7 @@ from agentfm.exceptions import (
         ("unsupported_prompt_type", InvalidRequestError),
         ("invalid_request_error", InvalidRequestError),
         ("method_not_allowed", InvalidRequestError),
+        ("internal_error", GatewayInternalError),
     ],
 )
 def test_envelope_codes_map_to_exception_classes(code: str, expected_cls: type):
@@ -51,6 +53,19 @@ def test_missing_envelope_returns_protocol_error():
 def test_non_dict_envelope_returns_protocol_error():
     exc = from_envelope({}, status=500)  # type: ignore[arg-type]
     assert isinstance(exc, GatewayProtocolError)
+
+
+def test_internal_error_is_not_protocol_error():
+    """Pre-fix, internal_error mapped to GatewayProtocolError, conflating
+    well-formed server-bug envelopes with malformed responses. They route
+    to different exception classes so callers can handle them separately."""
+    exc = from_envelope(
+        {"error": {"code": "internal_error", "message": "boom"}}, status=500
+    )
+    assert isinstance(exc, GatewayInternalError)
+    assert not isinstance(exc, GatewayProtocolError), (
+        "internal_error must NOT be GatewayProtocolError (different semantic)"
+    )
 
 
 def test_repr_is_informative():

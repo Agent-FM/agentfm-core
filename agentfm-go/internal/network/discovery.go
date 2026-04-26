@@ -3,7 +3,10 @@ package network
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
+
+	"agentfm/internal/obs"
 
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -25,7 +28,10 @@ func connectToLighthouse(ctx context.Context, h host.Host, relayInfo *peer.AddrI
 	dialCtx, dialCancel := context.WithTimeout(ctx, StreamDialTimeout)
 	defer dialCancel()
 	if err := h.Connect(dialCtx, *relayInfo); err != nil {
-		fmt.Printf("⚠️  Failed to connect to Bootstrap Node: %v\n", err)
+		slog.Warn("connect to bootstrap node",
+			slog.Any(obs.FieldErr, err),
+			slog.String(obs.FieldPeerID, relayInfo.ID.String()),
+		)
 		return
 	}
 	fmt.Println("✅ Successfully connected to Bootstrap Node!")
@@ -33,7 +39,10 @@ func connectToLighthouse(ctx context.Context, h host.Host, relayInfo *peer.AddrI
 	reserveCtx, reserveCancel := context.WithTimeout(ctx, StreamDialTimeout)
 	defer reserveCancel()
 	if _, err := client.Reserve(reserveCtx, h, *relayInfo); err != nil {
-		fmt.Printf("⚠️  Failed to secure relay reservation: %v\n", err)
+		slog.Warn("secure relay reservation",
+			slog.Any(obs.FieldErr, err),
+			slog.String(obs.FieldPeerID, relayInfo.ID.String()),
+		)
 	} else {
 		fmt.Println("✅ Relay reservation secured! Ready for NAT traversal fallback.")
 	}
@@ -73,6 +82,10 @@ func discoverPeers(ctx context.Context, h host.Host, routingDiscovery *routing.R
 			lookupCtx, lookupCancel := context.WithTimeout(ctx, StreamDialTimeout)
 			peerChan, err := routingDiscovery.FindPeers(lookupCtx, RendezvousString)
 			if err != nil {
+				slog.Warn("dht find peers",
+					slog.Any(obs.FieldErr, err),
+					slog.String("rendezvous", RendezvousString),
+				)
 				lookupCancel()
 				continue
 			}
@@ -106,6 +119,9 @@ func (n *mdnsNotifee) HandlePeerFound(pi peer.AddrInfo) {
 	ctx, cancel := context.WithTimeout(context.Background(), StreamDialTimeout)
 	defer cancel()
 	if err := n.h.Connect(ctx, pi); err != nil {
-		fmt.Printf("⚠️  [mDNS] Failed to dial %s: %v\n", pi.ID.String()[:8], err)
+		slog.Warn("mdns dial",
+			slog.Any(obs.FieldErr, err),
+			slog.String(obs.FieldPeerID, pi.ID.String()),
+		)
 	}
 }

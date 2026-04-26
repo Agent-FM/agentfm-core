@@ -12,6 +12,7 @@ from .daemon import LocalMeshGateway
 from .exceptions import (
     AgentFMError,
     GatewayConnectionError,
+    GatewayInternalError,
     InvalidRequestError,
     MeshOverloadedError,
     ModelNotFoundError,
@@ -34,6 +35,7 @@ __all__ = [
     "ArtifactManager",
     "AsyncAgentFMClient",
     "GatewayConnectionError",
+    "GatewayInternalError",
     "InvalidRequestError",
     "LocalMeshGateway",
     "MeshOverloadedError",

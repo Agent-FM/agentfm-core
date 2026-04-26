@@ -169,3 +169,28 @@ def test_extract_rejects_zip_bomb_cumulative_budget(tmp_path: Path):
     )
     with pytest.raises(ArtifactError, match="exceeds max_extract_bytes"):
         mgr.extract(src)
+
+
+def test_extract_zip_bomb_partial_file_is_unlinked(tmp_path: Path):
+    """The partially-written file from a budget overflow must NOT remain on
+    disk — otherwise a follow-on collect_for_task would surface a corrupted
+    file as legitimate output."""
+    src = _make_zip(
+        tmp_path / "many.zip",
+        {
+            "small_ok.bin": b"a" * (60 * 1024),
+            "huge_overflows.bin": b"b" * (200 * 1024),
+        },
+    )
+    extract_dir = tmp_path / "out"
+    mgr = ArtifactManager(
+        watch_dir=tmp_path, extract_dir=extract_dir, max_extract_bytes=128 * 1024
+    )
+    with pytest.raises(ArtifactError, match="exceeds max_extract_bytes"):
+        mgr.extract(src)
+    # The first complete entry survives as diagnostic evidence.
+    assert (extract_dir / "small_ok.bin").exists(), "complete previous entries should remain"
+    # The partial overflow entry is gone — no corruption left behind.
+    assert not (extract_dir / "huge_overflows.bin").exists(), (
+        "partial entry must be unlinked after budget overflow"
+    )

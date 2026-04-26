@@ -24,7 +24,9 @@ from ._shared import (
     _Unset,
     build_async_task_payload,
     build_task_payload,
+    coerce_peer_ids,
     filter_workers,
+    parse_async_task_ack,
     parse_workers_envelope,
 )
 from ._transport import (
@@ -38,6 +40,7 @@ from .exceptions import (
     AgentFMError,
     GatewayConnectionError,
     WorkerNotFoundError,
+    WorkerStreamError,
 )
 from .models import (
     AsyncTaskAck,
@@ -154,6 +157,11 @@ class _AsyncTasksNamespace(AsyncResource):
                     yield TaskChunk(text="", kind="marker")
         except httpx.ConnectError as exc:
             raise wrap_connection_error(exc, base_url=self._client.gateway_url) from exc
+        except httpx.HTTPError as exc:
+            raise WorkerStreamError(
+                f"worker stream failed: {exc}",
+                code="worker_stream_failed",
+            ) from exc
 
     async def submit_async(
         self,
@@ -164,7 +172,7 @@ class _AsyncTasksNamespace(AsyncResource):
     ) -> AsyncTaskAck:
         payload = build_async_task_payload(str(worker_id), prompt, webhook_url)
         r = await self._request("POST", "/api/execute/async", json=payload)
-        return AsyncTaskAck.model_validate(r.json())
+        return parse_async_task_ack(r.json())
 
     async def scatter(
         self,
@@ -186,7 +194,7 @@ class _AsyncTasksNamespace(AsyncResource):
         if not peer_ids:
             raise ValueError("scatter requires at least one peer id")
         sem = asyncio.Semaphore(max_concurrency)
-        peers_str = [str(p) for p in peer_ids]
+        peers_str = coerce_peer_ids(peer_ids)
         results_by_idx: dict[int, ScatterResult] = {}
 
         async def worker(idx: int, prompt: str) -> None:

@@ -1,15 +1,18 @@
 package boss
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"time"
 )
 
 // webhookSecretEnv is the environment variable the operator sets to enable
@@ -62,18 +65,25 @@ func validateWebhookURL(raw string) error {
 // loopback, link-local, or in an RFC1918 / RFC4193 / IPv6 ULA range, OR if
 // it resolves to such an address. We resolve so attackers can't bypass via
 // internal DNS pointing example.com → 10.0.0.5.
+//
+// Fails closed on DNS error: a host that won't resolve is treated as
+// suspicious. Fail-open SSRF guards are an antipattern (an attacker who
+// controls DNS can make resolution fail, then `http.Client.Do` would do its
+// own resolution against a different resolver and bypass us).
 func isPrivateOrLoopbackHost(host string) bool {
 	// Strip brackets from IPv6 literals.
 	host = strings.Trim(host, "[]")
 	if ip := net.ParseIP(host); ip != nil {
 		return isPrivateOrLoopbackIP(ip)
 	}
-	// Best-effort lookup. If resolution fails, fail open (the dial will
-	// fail later on its own merits). We don't want to block a legitimate
-	// webhook just because DNS is briefly flaky.
 	addrs, err := net.LookupIP(host)
 	if err != nil {
-		return false
+		// Fail closed: DNS error is treated as "private/loopback" so the
+		// caller refuses the URL.
+		return true
+	}
+	if len(addrs) == 0 {
+		return true
 	}
 	for _, ip := range addrs {
 		if isPrivateOrLoopbackIP(ip) {
@@ -89,6 +99,58 @@ func isPrivateOrLoopbackIP(ip net.IP) bool {
 		ip.IsLinkLocalMulticast() ||
 		ip.IsPrivate() ||
 		ip.IsUnspecified()
+}
+
+// safeWebhookClient returns an http.Client whose DialContext re-validates
+// every resolved IP before connect. Closes the SSRF TOCTOU bypass where
+// validateWebhookURL resolves at validation time and http.Client.Do
+// resolves again at dial time — an attacker can return a public IP at
+// validation and a private one at dial. Without this DialContext the
+// validator would be bypass-able by anyone who controls DNS for a hostname.
+func safeWebhookClient(timeout time.Duration) *http.Client {
+	if os.Getenv(webhookAllowPrivateEnv) == "1" {
+		return &http.Client{Timeout: timeout}
+	}
+	dialer := &net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second}
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				host, port, err := net.SplitHostPort(addr)
+				if err != nil {
+					return nil, err
+				}
+				// Resolve and check every candidate before allowing the
+				// dial. http.Client picks the first that connects, so all
+				// candidates are reachable by the dialer — refuse if any
+				// is private / loopback.
+				ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+				if err != nil {
+					return nil, fmt.Errorf("dial %s: resolve %q: %w", network, host, err)
+				}
+				if len(ips) == 0 {
+					return nil, fmt.Errorf("dial %s: no addresses for %q", network, host)
+				}
+				for _, ip := range ips {
+					if isPrivateOrLoopbackIP(ip.IP) {
+						return nil, fmt.Errorf(
+							"dial %s: refusing to connect to private/loopback %s (resolved from %q)",
+							network, ip.IP, host,
+						)
+					}
+				}
+				// Dial the first verified address by IP literal so the
+				// kernel doesn't re-resolve.
+				dialAddr := net.JoinHostPort(ips[0].IP.String(), port)
+				return dialer.DialContext(ctx, network, dialAddr)
+			},
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			MaxIdleConns:          10,
+			IdleConnTimeout:       30 * time.Second,
+		},
+	}
 }
 
 // signWebhookBody returns the hex HMAC-SHA256 of body with the configured

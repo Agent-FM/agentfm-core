@@ -170,6 +170,61 @@ async def test_async_scatter_retry_fails_over_to_different_peer(
     )
 
 
+def test_sync_scatter_survives_mid_stream_disconnect(
+    gateway_url: str, mock_gateway: respx.MockRouter
+):
+    """Pre-fix, an httpx.ReadError mid-stream would propagate raw out of
+    tasks.stream(), the scatter's `except AgentFMError` would miss it, and
+    the entire scatter would raise with results half-populated. Contract
+    says ScatterResult-with-status="failed", never an exception.
+    """
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        if body["prompt"] == "doomed":
+            # Simulate mid-stream connection drop. respx surfaces this as
+            # httpx.RemoteProtocolError to the SDK, which is httpx.HTTPError
+            # but not httpx.ConnectError.
+            raise httpx.RemoteProtocolError("connection closed mid-stream")
+        return httpx.Response(200, content=b"ok\n", headers={"Content-Type": "text/plain"})
+
+    mock_gateway.post("/api/execute").mock(side_effect=respond)
+
+    prompts = ["a", "doomed", "c"]
+    with AgentFMClient(gateway_url=gateway_url, retries=0) as client:
+        results = client.tasks.scatter(prompts, peer_ids=["12D3KooWX"], max_retries=0, max_concurrency=2)
+
+    assert [r.prompt for r in results] == prompts, "must return all 3 results, not raise"
+    assert [r.status for r in results] == ["success", "failed", "success"]
+    assert "worker stream failed" in (results[1].error or "")
+
+
+@pytest.mark.asyncio
+async def test_async_scatter_survives_mid_stream_disconnect(
+    gateway_url: str, mock_gateway: respx.MockRouter
+):
+    """Same regression as the sync test, but exercises asyncio.gather. Pre-fix,
+    one ReadError would cancel every sibling coroutine and re-raise to the caller.
+    """
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        if body["prompt"] == "doomed":
+            raise httpx.RemoteProtocolError("connection closed mid-stream")
+        return httpx.Response(200, content=b"ok\n", headers={"Content-Type": "text/plain"})
+
+    mock_gateway.post("/api/execute").mock(side_effect=respond)
+
+    prompts = ["a", "doomed", "c"]
+    async with AsyncAgentFMClient(gateway_url=gateway_url, retries=0) as client:
+        results = await client.tasks.scatter(
+            prompts, peer_ids=["12D3KooWX"], max_concurrency=3, max_retries=0
+        )
+
+    assert [r.prompt for r in results] == prompts
+    assert [r.status for r in results] == ["success", "failed", "success"]
+
+
 @pytest.mark.asyncio
 async def test_async_scatter_failed_prompt_at_correct_index(
     gateway_url: str, mock_gateway: respx.MockRouter

@@ -144,9 +144,9 @@ func TestHandleGetWorkers_HardwareStringBranches(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name      string
-		profile   types.WorkerProfile
-		wantFrag  string
+		name     string
+		profile  types.WorkerProfile
+		wantFrag string
 	}{
 		{
 			name: "cpu-only",

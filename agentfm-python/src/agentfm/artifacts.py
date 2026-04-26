@@ -23,15 +23,12 @@ _log = logging.getLogger(__name__)
 _DEFAULT_WATCH = "agentfm_artifacts"
 _DEFAULT_EXTRACT = "agentfm_artifacts"
 
-# Cap the total uncompressed bytes a single zip may produce. Defends against
-# a malicious zip-bomb (high compression ratio, e.g. 1KB → 4GB) sent by a
-# misbehaving worker. 1 GiB is generous for legitimate AgentFM artifact use
+# 1 GiB is generous for legitimate AgentFM artifact use
 # (images, models, intermediate outputs); raise via ArtifactManager arg if
 # you genuinely need bigger.
 DEFAULT_MAX_EXTRACT_BYTES = 1 * 1024 * 1024 * 1024  # 1 GiB
 
-# Per-chunk read size for the streaming copy. 64 KiB is a good balance
-# between syscall overhead and RAM footprint.
+# Per-chunk read size for the streaming copy
 _COPY_CHUNK_BYTES = 64 * 1024
 
 
@@ -202,7 +199,9 @@ def _stream_member(
     """Stream-copy a single zip entry to disk in 64 KiB chunks, enforcing budget.
 
     Returns bytes actually written. Raises :class:`ArtifactError` if the
-    cumulative budget is exhausted by this entry.
+    cumulative budget is exhausted by this entry. On budget overflow the
+    partially-written target file is unlinked so callers don't see corrupted
+    artifacts surfaced as legitimate output by a follow-on collect_for_task.
     """
     if remaining_budget <= 0:
         raise ArtifactError(
@@ -210,22 +209,24 @@ def _stream_member(
             "size exceeds max_extract_bytes"
         )
     written = 0
-    with zf.open(info, "r") as src, target.open("wb") as dst:
-        while True:
-            chunk = src.read(_COPY_CHUNK_BYTES)
-            if not chunk:
-                break
-            written += len(chunk)
-            if written > remaining_budget:
-                # Stop and clean up. The partial file remains on disk; the
-                # caller's exception handler is responsible for surfacing the
-                # error. We don't delete because the partial may itself be
-                # useful diagnostic.
-                raise ArtifactError(
-                    f"refusing to extract '{info.filename}': total uncompressed "
-                    f"size exceeds max_extract_bytes after {written} bytes"
-                )
-            dst.write(chunk)
+    overflowed = False
+    try:
+        with zf.open(info, "r") as src, target.open("wb") as dst:
+            while True:
+                chunk = src.read(_COPY_CHUNK_BYTES)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > remaining_budget:
+                    overflowed = True
+                    raise ArtifactError(
+                        f"refusing to extract '{info.filename}': total uncompressed "
+                        f"size exceeds max_extract_bytes after {written} bytes"
+                    )
+                dst.write(chunk)
+    finally:
+        if overflowed:
+            target.unlink(missing_ok=True)
     return written
 
 

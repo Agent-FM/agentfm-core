@@ -27,7 +27,12 @@ func (w *Worker) truncateWords(text string, maxWords int) string {
 }
 
 func getGPUStats() (hasGPU bool, usedGB float64, totalGB float64, usagePct float64) {
-	cmd := exec.Command("nvidia-smi", "--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits")
+	// 1s ceiling per probe so a wedged nvidia-smi (driver hang, GPU reset
+	// in progress) cannot block the 2s telemetry tick. Without this, the
+	// publish loop wedges on every tick and we lose mesh visibility.
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "nvidia-smi", "--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits")
 	out, err := cmd.Output()
 	if err != nil {
 		return false, 0, 0, 0
@@ -71,6 +76,7 @@ func (w *Worker) printMetadata() {
 }
 
 func (w *Worker) startTelemetry(ctx context.Context) {
+	defer w.wg.Done()
 	topic, err := w.node.PubSub.Join(network.TelemetryTopic)
 	if err != nil {
 		// Non-fatal: surface the error and return so parent defers still
@@ -160,7 +166,14 @@ func (w *Worker) startTelemetry(ctx context.Context) {
 				pterm.Error.Printfln("failed to marshal telemetry profile: %v", marshalErr)
 				continue
 			}
-			if pubErr := topic.Publish(ctx, payloadBytes); pubErr != nil {
+			// Bound publish per CLAUDE.md §1.1: PubSub publishes must use a
+			// timed ctx so a stalling mesh-formation step can't wedge the
+			// 2-second telemetry tick. 5s is generous; mesh-publish in steady
+			// state is sub-millisecond.
+			pubCtx, pubCancel := context.WithTimeout(ctx, 5*time.Second)
+			pubErr := topic.Publish(pubCtx, payloadBytes)
+			pubCancel()
+			if pubErr != nil {
 				if msg := pubErr.Error(); msg != lastPublishErr {
 					pterm.Warning.Printfln("telemetry publish failed: %v", pubErr)
 					lastPublishErr = msg

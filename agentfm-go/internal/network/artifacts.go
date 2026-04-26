@@ -117,6 +117,19 @@ func HandleArtifactStream(stream network.Stream) {
 		slog.Error("read artifact size header", slog.Any(obs.FieldErr, err), slog.String(obs.FieldProtocol, "artifacts"))
 		return
 	}
+	// Cap the declared size up front. Without this a malicious worker can
+	// stream until disk fills (the 30-min ArtifactStreamTimeout is not a
+	// payload bound). Combined with the io.LimitReader below this is a
+	// belt-and-braces defense against worker-declared size header lies.
+	if fileSize <= 0 || fileSize > MaxArtifactBytes {
+		metrics.StreamErrorsTotal.WithLabelValues(metrics.ProtocolArtifacts, metrics.ReasonDecode).Inc()
+		slog.Warn("rejecting oversize artifact",
+			slog.Int64("declared_size", fileSize),
+			slog.Int64("max", MaxArtifactBytes),
+			slog.String(obs.FieldProtocol, "artifacts"),
+		)
+		return
+	}
 
 	var idLen uint8
 	err = binary.Read(stream, binary.LittleEndian, &idLen)
@@ -167,7 +180,11 @@ func HandleArtifactStream(stream network.Stream) {
 		pb:     pb,
 	}
 
-	bytesRead, err := io.Copy(pw, stream)
+	// LimitReader bounds the actual bytes copied at the wire-declared size.
+	// If the worker declared 1 MiB then tries to ship 50 GiB, io.Copy
+	// returns at 1 MiB (and bytesRead < fileSize triggers the truncation
+	// branch below). Belt-and-braces with the MaxArtifactBytes cap above.
+	bytesRead, err := io.Copy(pw, io.LimitReader(stream, fileSize))
 	if err != nil {
 		pb.Stop()
 		metrics.StreamErrorsTotal.WithLabelValues(metrics.ProtocolArtifacts, metrics.ReasonReset).Inc()
@@ -175,6 +192,17 @@ func HandleArtifactStream(stream network.Stream) {
 		return
 	}
 	pb.Stop()
+	if bytesRead != fileSize {
+		// Truncation: the worker declared more than it shipped. Don't
+		// surface the partial as a legitimate artifact.
+		metrics.StreamErrorsTotal.WithLabelValues(metrics.ProtocolArtifacts, metrics.ReasonReset).Inc()
+		slog.Warn("artifact truncated",
+			slog.Int64("declared_size", fileSize),
+			slog.Int64("actual", bytesRead),
+			slog.String(obs.FieldProtocol, "artifacts"),
+		)
+		return
+	}
 	success = true
 	pterm.Success.Printfln("🎉 Transfer Complete! Securely saved %d bytes to %s", bytesRead, destPath)
 	fmt.Println()

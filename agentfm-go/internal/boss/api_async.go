@@ -191,7 +191,12 @@ func (b *Boss) runAsyncTask(ctx context.Context, peerID peer.ID, taskID string, 
 		httpReq.Header.Set(signatureHeader, sig)
 	}
 
-	client := &http.Client{Timeout: webhookTimeout}
+	// safeWebhookClient closes the SSRF TOCTOU bypass: validateWebhookURL
+	// resolved DNS at validation, but http.Client.Do would resolve again at
+	// dial. The custom DialContext re-validates every resolved IP and
+	// refuses private addresses, so a hostile DNS that returned public at
+	// validation and private at dial cannot pivot into the metadata service.
+	client := safeWebhookClient(webhookTimeout)
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		slog.Error("async task webhook delivery", slog.Any(obs.FieldErr, err), slog.String(obs.FieldTaskID, taskID))

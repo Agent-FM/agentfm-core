@@ -154,9 +154,9 @@ func TestParseRelayInfo(t *testing.T) {
 	const validPeerID = "12D3KooWGRUacXc4oieAeoKvk3zQvkgRadLmuVf4SVy23bY2gXxT"
 
 	validCases := []struct {
-		name    string
-		addr    string
-		wantIP  string // substring we expect to see in at least one parsed addr
+		name   string
+		addr   string
+		wantIP string // substring we expect to see in at least one parsed addr
 	}{
 		{
 			name:   "ip4 + tcp + p2p",

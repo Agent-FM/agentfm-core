@@ -128,7 +128,12 @@ func (b *Boss) dialOmni(ctx context.Context, target peer.ID) netcore.Stream {
 	s, err := b.dialWorkerStream(ctx, target)
 	if err != nil {
 		spinner.Fail(err.Error())
-		time.Sleep(2 * time.Second)
+		// Brief pause so the operator reads the failure, but bail early
+		// if the user has already hit Ctrl+C or the parent ctx fired.
+		select {
+		case <-time.After(2 * time.Second):
+		case <-ctx.Done():
+		}
 		return nil
 	}
 	spinner.Success("P2P Tunnel Established! Secure encrypted stream active.")

@@ -234,6 +234,14 @@ func defaultPromListen(flagValue, modeDefault string) string {
 
 // runBossMode opens the interactive TUI for a human operator.
 func runBossMode(ctx context.Context, netCfg network.Config) {
+	// Bind SIGINT/SIGTERM to the root ctx so Ctrl+C unwinds cleanly when
+	// the user is mid-task (NOT inside selectWorkerInteractive's
+	// keyboard.Listen, which catches Ctrl+C separately). Without this the
+	// Go runtime's default handler kills the process and skips every
+	// defer: host.Close(), area.Stop(), open libp2p stream Reset.
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	node, err := network.Setup(ctx, netCfg)
 	if err != nil {
 		pterm.Fatal.Println(err)

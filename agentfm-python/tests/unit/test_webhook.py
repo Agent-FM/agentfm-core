@@ -157,6 +157,54 @@ def test_webhook_receiver_accepts_valid_signature(unused_tcp_port: int):
     assert received[0].task_id == "t"
 
 
+def test_serve_forever_resets_server_so_restart_works(unused_tcp_port: int):
+    """Pre-fix, serve_forever's `with` block left self._server populated after
+    KeyboardInterrupt; the next start() saw _server is not None and returned
+    silently, so the receiver looked alive but accepted no requests."""
+    import threading
+
+    received: list[WebhookPayload] = []
+
+    def cb(payload: WebhookPayload) -> None:
+        received.append(payload)
+
+    rx = WebhookReceiver(port=unused_tcp_port, callback=cb)
+
+    # Run serve_forever in a thread, then shut it down to simulate the
+    # KeyboardInterrupt-then-restart scenario.
+    server_thread = threading.Thread(target=rx.serve_forever, daemon=True)
+    server_thread.start()
+
+    # Wait for the server to be alive
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline and rx._server is None:
+        time.sleep(0.02)
+    assert rx._server is not None, "serve_forever didn't bind in time"
+
+    # Shut it down by reaching into the server (KeyboardInterrupt would do this)
+    rx._server.shutdown()
+    server_thread.join(timeout=2.0)
+    assert rx._server is None, (
+        "serve_forever must clear self._server on exit so restart works"
+    )
+
+    # Now start() should actually start, not silently no-op.
+    try:
+        rx.start()
+        assert rx._server is not None, "start() after serve_forever must rebind"
+        body = b'{"task_id":"r2","worker_id":"12D3K","status":"ok"}'
+        _expect_status(
+            f"http://127.0.0.1:{unused_tcp_port}/cb",
+            body=body,
+            headers={"Content-Type": "application/json"},
+            want=200,
+        )
+        time.sleep(0.1)
+        assert received and received[0].task_id == "r2"
+    finally:
+        rx.stop()
+
+
 def test_webhook_receiver_rejects_wrong_signature(unused_tcp_port: int):
     def cb(_p: WebhookPayload) -> None:
         raise AssertionError("wrong-sig request must not fire")

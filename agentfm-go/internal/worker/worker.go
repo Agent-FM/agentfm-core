@@ -32,6 +32,11 @@ type Worker struct {
 	currentCPU   float64
 	currentTasks int
 	mu           sync.Mutex
+	// wg tracks long-lived background goroutines (today: telemetry).
+	// waitForShutdown waits on it before host.Close() so a publish
+	// in flight cannot hit a torn-down libp2p host (race surfaced as
+	// "use of closed connection" panics in pubsub send paths).
+	wg sync.WaitGroup
 }
 
 func New(node *network.MeshNode, cfg Config) *Worker {
@@ -74,6 +79,7 @@ func (w *Worker) Start(ctx context.Context) {
 	}
 
 	w.printMetadata()
+	w.wg.Add(1)
 	go w.startTelemetry(ctx)
 
 	w.node.Host.SetStreamHandler(network.TaskProtocol, func(s netcore.Stream) {
@@ -94,6 +100,10 @@ func (w *Worker) waitForShutdown(ctx context.Context) {
 
 	fmt.Println()
 	pterm.Warning.Println("Received shutdown signal. Disconnecting from the mesh...")
+	// Drain the telemetry goroutine BEFORE closing the host. Otherwise
+	// an in-flight topic.Publish hits a torn-down libp2p host and
+	// pubsub panics with "use of closed connection".
+	w.wg.Wait()
 	if err := w.node.Host.Close(); err != nil {
 		pterm.Error.Printfln("Host close error: %v", err)
 	}

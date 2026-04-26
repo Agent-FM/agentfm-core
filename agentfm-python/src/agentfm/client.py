@@ -51,6 +51,7 @@ from .exceptions import (
     AgentFMError,
     GatewayConnectionError,
     WorkerNotFoundError,
+    WorkerStreamError,
 )
 from .models import (
     AsyncTaskAck,
@@ -183,6 +184,15 @@ class _TasksNamespace(SyncResource):
                     yield TaskChunk(text="", kind="marker")
         except httpx.ConnectError as exc:
             raise wrap_connection_error(exc, base_url=self._client.gateway_url) from exc
+        except httpx.HTTPError as exc:
+            # Anything else httpx surfaces mid-stream (ReadTimeout, ReadError,
+            # RemoteProtocolError, WriteError, PoolTimeout, ...) is a worker
+            # stream failure from the SDK caller's perspective. Wrap so
+            # tasks.scatter's "never raises non-AgentFMError" contract holds.
+            raise WorkerStreamError(
+                f"worker stream failed: {exc}",
+                code="worker_stream_failed",
+            ) from exc
 
     def submit_async(
         self,

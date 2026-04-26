@@ -2,10 +2,11 @@ package boss
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
-	"github.com/pterm/pterm"
+	"agentfm/internal/obs"
 )
 
 func (b *Boss) handleModels(w http.ResponseWriter, r *http.Request) {
@@ -28,6 +29,6 @@ func (b *Boss) handleModels(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(modelsResponse{Object: "list", Data: data}); err != nil {
-		pterm.Error.Printfln("Failed to encode /v1/models response: %v", err)
+		slog.Error("encode /v1/models response", slog.Any(obs.FieldErr, err))
 	}
 }

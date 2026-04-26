@@ -109,10 +109,10 @@ func TestLoadSwarmKey_Errors(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name        string
-		contents    string
-		wantSubstr  string
-		writeFile   bool // if false, don't create the file (tests missing-file path)
+		name       string
+		contents   string
+		wantSubstr string
+		writeFile  bool // if false, don't create the file (tests missing-file path)
 	}{
 		{
 			name:       "missing file",

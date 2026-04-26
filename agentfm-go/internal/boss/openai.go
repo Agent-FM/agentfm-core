@@ -9,18 +9,19 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"agentfm/internal/network"
+	"agentfm/internal/obs"
 	"agentfm/internal/types"
 	"agentfm/internal/version"
 
 	netcore "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/pterm/pterm"
 )
 
 type ChatMessage struct {
@@ -208,7 +209,7 @@ func writeOpenAIError(w http.ResponseWriter, status int, errType, code, msg stri
 	w.WriteHeader(status)
 	body := openAIErrorEnvelope{Error: openAIErrorBody{Message: msg, Type: errType, Code: code}}
 	if err := json.NewEncoder(w).Encode(body); err != nil {
-		pterm.Error.Printfln("Failed to encode OpenAI error envelope: %v", err)
+		slog.Error("encode OpenAI error envelope", slog.Any(obs.FieldErr, err))
 	}
 }
 

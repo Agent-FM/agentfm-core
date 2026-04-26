@@ -63,7 +63,12 @@ class SyncResource:
                 params=params,
                 retries=self._client.retries,
             )
-        except (httpx.ConnectError, httpx.ReadError) as exc:
+        except httpx.HTTPError as exc:
+            # All transport-layer httpx failures (Connect/Read/Write/
+            # RemoteProtocol/Pool/Proxy errors) become GatewayConnectionError
+            # so callers can catch one type. Streaming sites also wrap mid-
+            # stream errors into WorkerStreamError; this only fires before
+            # the response is established.
             raise wrap_connection_error(exc, base_url=self._client.gateway_url) from exc
         raise_for_response(response)
         return response
@@ -73,10 +78,6 @@ class SyncResource:
 
     def _post(self, path: str, *, body: Any, parse: type[T]) -> T:
         return parse.model_validate(self._request("POST", path, json=body).json())
-
-    def _post_text(self, path: str, *, body: Any) -> httpx.Response:
-        """POST and return the raw response (for streaming endpoints)."""
-        return self._request("POST", path, json=body)
 
 
 class AsyncResource:
@@ -102,7 +103,7 @@ class AsyncResource:
                 params=params,
                 retries=self._client.retries,
             )
-        except (httpx.ConnectError, httpx.ReadError) as exc:
+        except httpx.HTTPError as exc:
             raise wrap_connection_error(exc, base_url=self._client.gateway_url) from exc
         raise_for_response(response)
         return response
