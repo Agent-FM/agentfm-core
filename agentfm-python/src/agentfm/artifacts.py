@@ -1,71 +1,132 @@
-import os
-import glob
-import zipfile
+"""Zip-handling for artifacts the Go gateway drops into a watch directory.
+
+Hardened vs the previous implementation:
+
+* Zip-slip safe: rejects any entry whose resolved path escapes the extraction
+  root (the classic CVE-2018-1002200 family).
+* Polls atomically: detects a stable file size before declaring a zip
+  fully written.
+* All operations are pure functions / a small class with no global state.
+"""
+
+from __future__ import annotations
+
+import logging
 import time
+import zipfile
 from pathlib import Path
-from typing import List, Optional
+
+from .exceptions import ArtifactError
+
+_log = logging.getLogger(__name__)
+
+_DEFAULT_WATCH = "agentfm_artifacts"
+_DEFAULT_EXTRACT = "agentfm_artifacts"
+
 
 class ArtifactManager:
-    """Handles the detection and extraction of P2P payloads downloaded by the Go daemon."""
-    
-    def __init__(self, watch_dir: str = ".", extract_dir: str = "./agentfm_artifacts"):
+    """Detects and extracts artifact zip files written by the Go gateway."""
+
+    def __init__(
+        self,
+        watch_dir: str | Path = _DEFAULT_WATCH,
+        extract_dir: str | Path = _DEFAULT_EXTRACT,
+    ) -> None:
         self.watch_dir = Path(watch_dir).resolve()
         self.extract_dir = Path(extract_dir).resolve()
 
-    def get_latest_zip(self) -> Optional[Path]:
-        """Finds the most recently modified .zip file in the watch directory."""
-        search_pattern = str(self.watch_dir / "*.zip")
-        list_of_files = glob.glob(search_pattern)
-        
-        if not list_of_files:
-            return None
-            
-        latest_file = max(list_of_files, key=os.path.getmtime)
-        return Path(latest_file)
+    # -- discovery -----------------------------------------------------------
 
-    def wait_for_new_zip(self, start_time: float, timeout: int = 120) -> Optional[Path]:
+    def latest_zip(self) -> Path | None:
+        """Return the most recently modified ``.zip`` in the watch dir, or None."""
+        if not self.watch_dir.exists():
+            return None
+        candidates = [p for p in self.watch_dir.glob("*.zip") if p.is_file()]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda p: p.stat().st_mtime)
+
+    def wait_for_new_zip(
+        self,
+        since: float,
+        timeout: float = 120.0,
+        stable_for: float = 1.0,
+        poll_interval: float = 0.5,
+    ) -> Path | None:
+        """Block until a fresh zip appears and stops growing.
+
+        ``since`` is a unix timestamp (seconds); only zips with ``mtime >
+        since`` count. Returns ``None`` on timeout.
         """
-        Polls the directory until a fully downloaded .zip file appears.
-        Validates the file is fully written by ensuring its size stabilizes.
-        """
-        print("\n⏳ Waiting for background artifact transfer over P2P mesh...", end="", flush=True)
-        
-        end_time = time.time() + timeout
-        
-        while time.time() < end_time:
-            latest_zip = self.get_latest_zip()
-            
-            if latest_zip and latest_zip.stat().st_mtime > start_time:
-                initial_size = latest_zip.stat().st_size
-                time.sleep(1)
-                
-                if initial_size > 0 and latest_zip.stat().st_size == initial_size:
-                    print(" Done!")
-                    return latest_zip
-                else:
-                    print(".", end="", flush=True)
-                    continue
-            
-            time.sleep(1)
-            
-        print("\n⚠️ Timed out waiting for artifacts.")
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            zip_path = self.latest_zip()
+            if zip_path is not None and zip_path.stat().st_mtime > since:
+                size = zip_path.stat().st_size
+                time.sleep(stable_for)
+                if size > 0 and zip_path.stat().st_size == size:
+                    return zip_path
+            time.sleep(poll_interval)
         return None
 
-    def extract(self, zip_path: Path) -> List[Path]:
-        """Extracts the zip file and returns a list of paths to the newly extracted files."""
+    # -- extraction ----------------------------------------------------------
+
+    def extract(self, zip_path: Path) -> list[Path]:
+        """Extract a zip into ``extract_dir``, rejecting path traversal."""
+        if not zip_path.exists():
+            raise ArtifactError(f"zip not found: {zip_path}")
         self.extract_dir.mkdir(parents=True, exist_ok=True)
-        extracted_files = []
-        
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(self.extract_dir)
-            for file_info in zip_ref.infolist():
-                if not file_info.is_dir():
-                    extracted_path = self.extract_dir / file_info.filename
-                    extracted_files.append(extracted_path)
-                    
-        return extracted_files
-        
-    def cleanup_zip(self, zip_path: Path):
-        """Deletes the original .zip file to keep the host machine clean."""
-        if zip_path.exists():
-            os.remove(zip_path)
+        root = self.extract_dir.resolve()
+        out: list[Path] = []
+        try:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                for info in zf.infolist():
+                    target = (root / info.filename).resolve()
+                    if not _is_within(root, target):
+                        raise ArtifactError(
+                            f"refusing to extract '{info.filename}': escapes {root}"
+                        )
+                    if info.is_dir():
+                        target.mkdir(parents=True, exist_ok=True)
+                        continue
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    with zf.open(info, "r") as src, target.open("wb") as dst:
+                        dst.write(src.read())
+                    out.append(target)
+        except zipfile.BadZipFile as exc:
+            raise ArtifactError(f"corrupt zip: {zip_path}") from exc
+        return out
+
+    def cleanup(self, zip_path: Path) -> None:
+        """Best-effort removal of a zip after successful extraction."""
+        try:
+            zip_path.unlink(missing_ok=True)
+        except OSError:
+            _log.warning("failed to delete %s", zip_path, exc_info=True)
+
+    def collect_since(self, since: float, timeout: float = 120.0) -> list[Path]:
+        """Wait for a fresh zip after ``since``, extract it, and clean up.
+
+        Returns the extracted file paths, or ``[]`` if no zip arrived within
+        ``timeout``. Safe to call when ``watch_dir`` does not yet exist.
+        """
+        if not self.watch_dir.exists():
+            return []
+        zip_path = self.wait_for_new_zip(since=since, timeout=timeout)
+        if zip_path is None:
+            return []
+        files = self.extract(zip_path)
+        self.cleanup(zip_path)
+        return files
+
+
+def _is_within(root: Path, target: Path) -> bool:
+    """True iff ``target`` resolves to a descendant of ``root``."""
+    try:
+        target.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+__all__ = ["ArtifactManager"]

@@ -1,241 +1,351 @@
-import sys
-import time
-import requests
-import concurrent.futures
-from typing import List, Dict, Any
-from pathlib import Path
+"""Synchronous AgentFM client.
 
-from .models import WorkerProfile
+Surface (canonical):
+
+    client.workers.list(...)            # discover
+    client.workers.get(peer_id)         # fetch one
+    client.tasks.run(worker_id=peer_id, prompt=...)            # blocking
+    client.tasks.stream(worker_id=peer_id, prompt=...)         # generator
+    client.tasks.submit_async(worker_id=peer_id, ...)          # 202 + webhook
+    client.tasks.scatter(prompts, peer_ids=[...])              # batch
+    client.tasks.scatter_by_model(prompts, model=...)          # batch by name
+    client.openai.models.list()
+    client.openai.chat.completions.create(model=..., messages=[...])
+    client.openai.completions.create(model=..., prompt=...)
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+from collections.abc import Callable, Iterator
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from functools import cached_property
+from pathlib import Path
+from types import TracebackType
+from typing import TYPE_CHECKING, Any, List  # noqa: UP035 - List used to disambiguate from def list
+
+import httpx
+
+from ._internal.resource import SyncResource
+from ._shared import (
+    _UNSET,
+    DEFAULT_GATEWAY,
+    _Unset,
+    build_async_task_payload,
+    build_task_payload,
+    coerce_peer_ids,
+    filter_workers,
+    parse_async_task_ack,
+    parse_workers_envelope,
+)
+from ._transport import make_client, raise_for_response, wrap_connection_error
 from .artifacts import ArtifactManager
 from .exceptions import (
+    AgentFMError,
     GatewayConnectionError,
     WorkerNotFoundError,
-    TaskExecutionError,
-    AgentFMError
 )
+from .models import (
+    AsyncTaskAck,
+    PeerID,
+    ScatterResult,
+    TaskChunk,
+    TaskResult,
+    WorkerProfile,
+)
+from .streaming import SentinelFilter
 
-class AgentFMClient:
-    def __init__(self, gateway_url: str = "http://127.0.0.1:8080", daemon_dir: str = "."):
-        self.gateway_url = gateway_url.rstrip("/")
-        self.artifacts = ArtifactManager(watch_dir=daemon_dir)
+if TYPE_CHECKING:
+    from .openai import OpenAINamespace
 
-    def discover_workers(
-        self, 
-        models: List[str] = None, 
-        wait_for_workers: int = 0, 
-        poll_timeout: int = 15
+_log = logging.getLogger(__name__)
+
+
+class _WorkersNamespace(SyncResource):
+    """``client.workers.*`` — discovery operations."""
+
+    def list(
+        self,
+        *,
+        model: str | None = None,
+        agent_name: str | None = None,
+        author: str | None = None,
+        available_only: bool = False,
+        wait_for_workers: int = 0,
+        poll_timeout: float = 15.0,
+        poll_interval: float = 1.0,
     ) -> List[WorkerProfile]:
+        """List workers visible on the mesh.
 
-        import time 
-        
-        start_time = time.time()
-        
+        ``model``, ``agent_name``, and ``author`` are post-fetch filters
+        applied locally (string equality, case-insensitive). ``available_only``
+        drops ``BUSY`` workers. If ``wait_for_workers > 0`` polls until at
+        least that many matching workers appear or ``poll_timeout`` elapses.
+        """
+        deadline = time.monotonic() + poll_timeout
+        last: List[WorkerProfile] = []
         while True:
-            try:
-                response = requests.get(f"{self.gateway_url}/api/workers", timeout=5)
-                response.raise_for_status()
-                raw_data = response.json()
-                
-                workers = [WorkerProfile(**worker) for worker in raw_data]
-                
-                if models:
-                    workers = [w for w in workers if w.model in models]
-                    
-                if len(workers) >= wait_for_workers:
-                    return workers
-                    
-            except requests.exceptions.ConnectionError as e:
-                raise GatewayConnectionError(
-                    f"Could not connect to Go daemon at {self.gateway_url}. Is it running?"
-                ) from e
-            except requests.exceptions.RequestException as e:
-                raise AgentFMError(f"Failed to discover workers: {str(e)}") from e
-
-            if time.time() - start_time > poll_timeout:
-                return workers 
-                
-            time.sleep(1)
-
-    def execute_task(self, worker_id: str, prompt: str, silent: bool = False) -> List[Path]:
-        payload = {"worker_id": worker_id, "prompt": prompt}
-        start_time = time.time()
-        
-        try:
-            response = requests.post(
-                f"{self.gateway_url}/api/execute", 
-                json=payload, 
-                stream=True
+            last = filter_workers(
+                self._fetch_once(),
+                model=model,
+                agent_name=agent_name,
+                author=author,
+                available_only=available_only,
             )
-            
-            if response.status_code == 404:
-                raise WorkerNotFoundError(f"Worker '{worker_id}' not found on the P2P mesh.")
-            elif response.status_code != 200:
-                raise TaskExecutionError(f"API returned error: {response.text}")
+            if len(last) >= wait_for_workers or time.monotonic() >= deadline:
+                return last
+            time.sleep(poll_interval)
 
-            if not silent:
-                print(f"📡 Dispatching task to Worker {worker_id[:8]} over P2P mesh...\n")
-                print("🤖 LIVE AGENT STREAM:")
-                print("-" * 50)
-            
-            expecting_files = False
-            stream_buffer = ""
-            
-            for chunk in response.iter_content(chunk_size=None, decode_unicode=True):
-                if chunk:
-                    stream_buffer += chunk
-                    
-                    if "[AGENTFM: FILES_INCOMING]" in stream_buffer:
-                        expecting_files = True
-                        stream_buffer = stream_buffer.replace("\n[AGENTFM: FILES_INCOMING]\n", "")
-                        stream_buffer = stream_buffer.replace("[AGENTFM: FILES_INCOMING]", "")
-                        
-                    if "[AGENTFM: NO_FILES]" in stream_buffer:
-                        expecting_files = False
-                        stream_buffer = stream_buffer.replace("\n[AGENTFM: NO_FILES]\n", "")
-                        stream_buffer = stream_buffer.replace("[AGENTFM: NO_FILES]", "")
+    def get(self, peer_id: PeerID | str) -> WorkerProfile:
+        """Return the profile for a specific peer, raising if not present."""
+        peer_id = str(peer_id)
+        for w in self._fetch_once():
+            if w.peer_id == peer_id:
+                return w
+        raise WorkerNotFoundError(f"peer {peer_id!r} not in current telemetry")
 
-                    if "[" in stream_buffer[-25:]:
-                        continue
-                        
-                    if stream_buffer:
-                        if not silent:
-                            sys.stdout.write(stream_buffer)
-                            sys.stdout.flush()
-                        stream_buffer = ""
-            
-            if stream_buffer and not silent:
-                clean_tail = stream_buffer.replace("[AGENTFM: NO_FILES]", "").replace("[AGENTFM: FILES_INCOMING]", "").strip()
-                if clean_tail:
-                    sys.stdout.write(clean_tail + "\n")
-                    sys.stdout.flush()
+    def _fetch_once(self) -> List[WorkerProfile]:
+        return parse_workers_envelope(self._request("GET", "/api/workers").json())
 
-            if not silent:
-                print("\n" + "-" * 50)
-            
-            if expecting_files:
-                latest_zip = self.artifacts.wait_for_new_zip(start_time, timeout=120)
-                if latest_zip:
-                    if not silent:
-                        print(f"📦 Found payload: {latest_zip.name}. Extracting...")
-                    extracted_files = self.artifacts.extract(latest_zip)
-                    self.artifacts.cleanup_zip(latest_zip)
-                    if not silent:
-                        print(f"✅ Task Complete! Extracted {len(extracted_files)} file(s).")
-                    return extracted_files
-                return []
-            else:
-                if not silent:
-                    print("✅ Task Complete! No file artifacts were generated.")
-                return []
 
-        except Exception as e:
-            if not silent:
-                print(f"\n❌ Execution failed: {str(e)}")
-            raise
+class _TasksNamespace(SyncResource):
+    """``client.tasks.*`` — task dispatch."""
 
-    def batch_execute(self, prompts: List[str], models: List[str] = None) -> List[Dict[str, Any]]:
-        """
-        Natively queues and distributes a list of prompts across the network.
-        Now supports targeted routing to specific LLM models!
-        """
-        pending_prompts = prompts.copy()
-        results = []
-        active_worker_ids = set()
-        
-        target_msg = f" (Targeting models: {models})" if models else ""
-        print(f"🚀 SCATTER-GATHER: Queued {len(pending_prompts)} tasks{target_msg}. Managing fleet...")
-        
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            future_to_prompt = {}
-            
-            while pending_prompts or future_to_prompt:
-                try:
-                    all_workers = self.discover_workers(models=models)
-                    
-                    available_workers = [
-                        w for w in all_workers 
-                        if w.peer_id not in active_worker_ids and w.cpu_usage_pct < 60.0
-                    ]
-                except GatewayConnectionError:
-                    available_workers = []
-                
-                while pending_prompts and available_workers:
-                    worker = available_workers.pop(0)
-                    prompt = pending_prompts.pop(0)
-                    
-                    print(f"⏳ Routing queued task to {worker.agent_name} running [{worker.model}]...")
-                    
-                    active_worker_ids.add(worker.peer_id)
-                    future = executor.submit(self.execute_task, worker.peer_id, prompt, True)
-                    future_to_prompt[future] = (worker.peer_id, prompt)
-                
-                if future_to_prompt:
-                    done, _ = concurrent.futures.wait(
-                        future_to_prompt.keys(), 
-                        timeout=2.0, 
-                        return_when=concurrent.futures.FIRST_COMPLETED
-                    )
-                    
-                    for future in done:
-                        worker_id, prompt = future_to_prompt.pop(future)
-                        active_worker_ids.remove(worker_id)
-                        
-                        try:
-                            extracted_files = future.result()
-                            results.append({
-                                "prompt": prompt,
-                                "worker_id": worker_id,
-                                "status": "success",
-                                "files": extracted_files
-                            })
-                            print(f"✅ Task finished on {worker_id[:8]}! (Files: {len(extracted_files)})")
-                        except Exception as exc:
-                            print(f"⚠️ Task failed on {worker_id[:8]}: {exc}. Re-queuing prompt...")
-                            pending_prompts.append(prompt)
-                
-                if not available_workers and pending_prompts and not future_to_prompt:
-                    print("💤 No matching workers with capacity available. SDK waiting 5 seconds...")
-                    time.sleep(5)
+    def run(
+        self,
+        *,
+        worker_id: PeerID | str,
+        prompt: str,
+        artifact_timeout: float = 120.0,
+    ) -> TaskResult:
+        """Dispatch a task and block until it completes."""
+        # Timing is recorded locally; never on instance state — multiple
+        # concurrent run() calls on the same namespace would race otherwise.
+        started_at = time.time()
+        started_mono = time.monotonic()
+        chunks = [
+            chunk.text
+            for chunk in self.stream(worker_id=worker_id, prompt=prompt)
+            if chunk.kind == "text"
+        ]
+        text = "".join(chunks)
 
-        print(f"\n🎉 SCATTER-GATHER COMPLETE: All tasks executed successfully!")
+        am = self._client.artifacts
+        artifacts: list[Path] = (
+            am.collect_since(started_at, timeout=artifact_timeout) if am is not None else []
+        )
+
+        return TaskResult(
+            worker_id=PeerID(str(worker_id)),
+            text=text,
+            artifacts=artifacts,
+            duration_seconds=time.monotonic() - started_mono,
+        )
+
+    def stream(
+        self, *, worker_id: PeerID | str, prompt: str
+    ) -> Iterator[TaskChunk]:
+        """Stream worker stdout chunk-by-chunk as ``TaskChunk`` objects."""
+        payload = build_task_payload(str(worker_id), prompt)
+        filt = SentinelFilter()
+        try:
+            with self._client._http.stream("POST", "/api/execute", json=payload) as response:
+                raise_for_response(response, expected_text=True)
+                for raw in response.iter_text():
+                    for clean in filt.feed(raw):
+                        yield TaskChunk(text=clean)
+                tail = filt.finalize()
+                if tail:
+                    yield TaskChunk(text=tail)
+                if filt.artifacts_incoming:
+                    yield TaskChunk(text="", kind="marker")
+        except httpx.ConnectError as exc:
+            raise wrap_connection_error(exc, base_url=self._client.gateway_url) from exc
+
+    def submit_async(
+        self,
+        *,
+        worker_id: PeerID | str,
+        prompt: str,
+        webhook_url: str | None = None,
+    ) -> AsyncTaskAck:
+        """Submit a task asynchronously; gateway 202s with a task id."""
+        payload = build_async_task_payload(str(worker_id), prompt, webhook_url)
+        return parse_async_task_ack(
+            self._request("POST", "/api/execute/async", json=payload).json()
+        )
+
+    def scatter(
+        self,
+        prompts: list[str],
+        *,
+        peer_ids: list[PeerID | str],
+        max_concurrency: int = 8,
+        max_retries: int = 2,
+    ) -> list[ScatterResult]:
+        """Run ``len(prompts)`` tasks across the given peers (round-robin)."""
+        if not prompts:
+            return []
+        if not peer_ids:
+            raise ValueError("scatter requires at least one peer id")
+
+        peers = coerce_peer_ids(peer_ids)
+        results: list[ScatterResult] = []
+        attempts: dict[int, int] = dict.fromkeys(range(len(prompts)), 0)
+        queue: list[tuple[int, str]] = list(enumerate(prompts))
+        cursor = 0
+
+        with ThreadPoolExecutor(max_workers=max_concurrency) as ex:
+            in_flight: dict[Future[TaskResult], tuple[int, str, str]] = {}
+            while queue or in_flight:
+                while queue and len(in_flight) < max_concurrency:
+                    idx, prompt = queue.pop(0)
+                    peer = peers[cursor % len(peers)]
+                    cursor += 1
+                    fut = ex.submit(self.run, worker_id=peer, prompt=prompt)
+                    in_flight[fut] = (idx, prompt, peer)
+                done, _ = wait(in_flight.keys(), return_when=FIRST_COMPLETED)
+                for fut in done:
+                    idx, prompt, peer = in_flight.pop(fut)
+                    try:
+                        res = fut.result()
+                        results.append(
+                            ScatterResult(
+                                prompt=prompt,
+                                worker_id=PeerID(peer),
+                                status="success",
+                                text=res.text,
+                                artifacts=res.artifacts,
+                            )
+                        )
+                    except AgentFMError as exc:
+                        attempts[idx] += 1
+                        if attempts[idx] <= max_retries:
+                            _log.info("retrying prompt #%s (attempt %s)", idx, attempts[idx])
+                            queue.append((idx, prompt))
+                        else:
+                            results.append(
+                                ScatterResult(
+                                    prompt=prompt,
+                                    worker_id=PeerID(peer),
+                                    status="failed",
+                                    error=str(exc),
+                                )
+                            )
         return results
 
+    def scatter_by_model(
+        self,
+        prompts: list[str],
+        *,
+        model: str,
+        max_workers: int | None = None,
+        pick: Callable[[List[WorkerProfile]], List[WorkerProfile]] | None = None,
+        **scatter_opts: Any,
+    ) -> list[ScatterResult]:
+        """Convenience: discover workers by ``model``, then ``scatter`` across them."""
+        candidates = self._client.workers.list(model=model, available_only=True)
+        if pick is not None:
+            candidates = pick(candidates)
+        elif max_workers is not None:
+            candidates = candidates[:max_workers]
+        if not candidates:
+            raise WorkerNotFoundError(f"no available workers advertise model={model!r}")
+        return self.scatter(
+            prompts,
+            peer_ids=[w.peer_id for w in candidates],
+            **scatter_opts,
+        )
 
-    def submit_async_task(self, worker_id: str, prompt: str, webhook_url: str) -> str:
+
+class AgentFMClient:
+    """Synchronous AgentFM client."""
+
+    def __init__(
+        self,
+        gateway_url: str = DEFAULT_GATEWAY,
+        *,
+        timeout: float | httpx.Timeout | None = None,
+        retries: int = 2,
+        artifacts_dir: str | Path | None = None,
+    ) -> None:
+        """Build a client.
+
+        ``artifacts_dir`` should point at the directory the **boss** writes
+        artifacts into (typically ``<boss_cwd>/agentfm_artifacts``). When
+        unset, ``tasks.run`` does NOT attempt to harvest artifacts and
+        returns ``artifacts=[]``. Set this only when the SDK process and
+        the boss process share a filesystem.
         """
-        Submits a long-running AI task to the Go daemon and immediately returns a Task ID.
-        The Go daemon runs the job in the background and will POST to the webhook_url 
-        when the files are downloaded and the task is fully complete.
+        self.gateway_url = gateway_url.rstrip("/")
+        self.retries = retries
+        self._http = make_client(self.gateway_url, timeout=timeout)
+        self.artifacts: ArtifactManager | None = (
+            ArtifactManager(watch_dir=artifacts_dir, extract_dir=artifacts_dir)
+            if artifacts_dir is not None
+            else None
+        )
+
+    @cached_property
+    def workers(self) -> _WorkersNamespace:
+        return _WorkersNamespace(self)
+
+    @cached_property
+    def tasks(self) -> _TasksNamespace:
+        return _TasksNamespace(self)
+
+    @cached_property
+    def openai(self) -> OpenAINamespace:
+        from .openai import OpenAINamespace
+
+        return OpenAINamespace(self)
+
+    def with_options(
+        self,
+        *,
+        gateway_url: str | _Unset = _UNSET,
+        timeout: float | httpx.Timeout | None | _Unset = _UNSET,
+        retries: int | _Unset = _UNSET,
+        artifacts_dir: str | Path | None | _Unset = _UNSET,
+    ) -> AgentFMClient:
+        """Return a new client with the given options overridden.
+
+        Each unspecified option is inherited from this client. The returned
+        client owns a fresh ``httpx.Client`` — close it independently.
         """
-        payload = {
-            "worker_id": worker_id,
-            "prompt": prompt,
-            "webhook_url": webhook_url
-        }
-        
+        return type(self)(
+            gateway_url=self.gateway_url if isinstance(gateway_url, _Unset) else gateway_url,
+            timeout=self._http.timeout if isinstance(timeout, _Unset) else timeout,
+            retries=self.retries if isinstance(retries, _Unset) else retries,
+            artifacts_dir=(
+                (self.artifacts.watch_dir if self.artifacts else None)
+                if isinstance(artifacts_dir, _Unset)
+                else artifacts_dir
+            ),
+        )
+
+    def close(self) -> None:
+        self._http.close()
+
+    def __enter__(self) -> AgentFMClient:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        self.close()
+
+    def ping(self) -> bool:
+        """Quick liveness check on the gateway."""
         try:
-            response = requests.post(
-                f"{self.gateway_url}/api/execute/async", 
-                json=payload,
-                timeout=5 
-            )
-            
-            if response.status_code == 404:
-                raise WorkerNotFoundError(f"Worker '{worker_id}' not found on the P2P mesh.")
-            
-            response.raise_for_status()
-            
-            data = response.json()
-            task_id = data.get("task_id")
-            
-            print(f"🚀 Async Task Submitted! ID: {task_id}")
-            print(f"🎧 Go daemon will ping {webhook_url} when finished.")
-            
-            return task_id
+            r = self._http.get("/api/workers")
+        except (httpx.HTTPError, GatewayConnectionError):
+            return False
+        return r.status_code == 200
 
-        except requests.exceptions.ConnectionError as e:
-            raise GatewayConnectionError(
-                f"Could not connect to Go daemon at {self.gateway_url}. Is it running?"
-            ) from e
-        except requests.exceptions.RequestException as e:
-            raise AgentFMError(f"Failed to submit async task: {str(e)}") from e
+
+__all__ = ["DEFAULT_GATEWAY", "AgentFMClient"]

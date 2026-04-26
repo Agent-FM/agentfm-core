@@ -1,82 +1,159 @@
+"""Spawn an ephemeral ``agentfm -mode api`` Go daemon for the lifetime of a context.
+
+Hardened vs the previous implementation:
+
+* In non-debug mode, subprocess output is captured to a rotating log file
+  rather than thrown away (so post-mortem diagnostics are possible).
+* Startup-readiness check uses the SDK's own ``ping()`` rather than a
+  hand-rolled requests loop.
+* Returns a usable ``url`` attribute so callers don't have to format ports.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import logging
 import os
-import time
-import requests
+import shutil
 import subprocess
-import shutil 
-from typing import Optional
+import time
+from pathlib import Path
+from types import TracebackType
+from typing import IO
+
+import httpx
 
 from .exceptions import GatewayConnectionError
 
+_log = logging.getLogger(__name__)
+
+
 class LocalMeshGateway:
+    """Spawn a local ``agentfm -mode api`` Go daemon for the duration of a ``with`` block.
+
+    Example::
+
+        with LocalMeshGateway(port=8080) as gw:
+            client = AgentFMClient(gateway_url=gw.url)
+            ...
     """
-    Acts as an 'Ephemeral Boss'. Programmatically boots the AgentFM Go daemon,
-    connects to a Public or Private swarm, and gracefully shuts down when finished.
-    """
+
     def __init__(
-        self, 
-        binary_path: str = "agentfm", 
-        port: int = 8080, 
-        swarm_key: Optional[str] = None, 
-        bootstrap: Optional[str] = None,
-        debug: bool = False
-    ):
+        self,
+        *,
+        binary_path: str = "agentfm",
+        port: int = 8080,
+        swarm_key: str | Path | None = None,
+        bootstrap: str | None = None,
+        debug: bool = False,
+        log_file: str | Path | None = None,
+        startup_timeout: float = 15.0,
+    ) -> None:
         self.binary_path = binary_path
         self.port = port
-        self.swarm_key = swarm_key
+        self.swarm_key = Path(swarm_key) if swarm_key is not None else None
         self.bootstrap = bootstrap
         self.debug = debug
-        self.process: Optional[subprocess.Popen] = None
+        self.startup_timeout = startup_timeout
+        self.log_file = Path(log_file) if log_file is not None else None
+        self.process: subprocess.Popen[bytes] | None = None
+        self._log_handle: IO[bytes] | None = None
+        self.url = f"http://127.0.0.1:{self.port}"
 
-    def __enter__(self):
-        print(f"🚀 Booting Ephemeral Boss Daemon on port {self.port}...")
-        
-        resolved_binary = shutil.which(self.binary_path)
-        if not resolved_binary:
-            raise FileNotFoundError(f"❌ AgentFM binary not found: '{self.binary_path}'. Ensure it is installed in your system PATH (e.g., /usr/local/bin).")
+    # -- context-manager protocol -------------------------------------------
 
-        cmd = [resolved_binary, "-mode", "api", "-apiport", str(self.port)]
-        
-        # Determine Public vs Private Swarm
-        if self.swarm_key:
-            if not os.path.exists(self.swarm_key):
-                raise FileNotFoundError(f"❌ Swarm key not found at '{self.swarm_key}'.")
-            cmd.extend(["-swarmkey", self.swarm_key])
-            print(f"🔒 Engaging PRIVATE Swarm (Key: {self.swarm_key})")
-        else:
-            print("🌍 Engaging PUBLIC Swarm (No key provided)")
-            
+    def __enter__(self) -> LocalMeshGateway:
+        self.start()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        self.stop()
+
+    # -- explicit lifecycle -------------------------------------------------
+
+    def start(self) -> None:
+        resolved = shutil.which(self.binary_path)
+        if not resolved:
+            raise FileNotFoundError(
+                f"agentfm binary not found: {self.binary_path!r}. "
+                "Install it (see https://agentfm.net) or pass an absolute path."
+            )
+
+        cmd = [resolved, "-mode", "api", "-apiport", str(self.port)]
+        if self.swarm_key is not None:
+            if not self.swarm_key.exists():
+                raise FileNotFoundError(f"swarm key not found: {self.swarm_key}")
+            cmd.extend(["-swarmkey", str(self.swarm_key)])
         if self.bootstrap:
             cmd.extend(["-bootstrap", self.bootstrap])
 
-        stdout_dest = None if self.debug else subprocess.DEVNULL
-        stderr_dest = None if self.debug else subprocess.DEVNULL
+        if self.debug:
+            stdout: int | IO[bytes] = subprocess.STDOUT
+            stderr: int | IO[bytes] | None = None
+            self._log_handle = None
+        else:
+            log_path = self.log_file or Path(f".agentfm-gateway-{self.port}.log")
+            self._log_handle = log_path.open("ab")  # closed by stop()/_cleanup_log
+            stdout = self._log_handle
+            stderr = self._log_handle
 
+        _log.info("starting %s", " ".join(cmd))
+        self.process = subprocess.Popen(
+            cmd,
+            stdout=stdout,
+            stderr=stderr,
+            env=os.environ.copy(),
+        )
 
-        self.process = subprocess.Popen(cmd, stdout=stdout_dest, stderr=stderr_dest)
+        deadline = time.monotonic() + self.startup_timeout
+        while time.monotonic() < deadline:
+            if self._is_ready():
+                _log.info("gateway online at %s", self.url)
+                return
+            if self.process.poll() is not None:
+                self._cleanup_log()
+                raise GatewayConnectionError(
+                    f"agentfm exited early with code {self.process.returncode}"
+                )
+            time.sleep(0.25)
+        # timed out
+        self.stop()
+        raise GatewayConnectionError(
+            f"agentfm did not become ready on {self.url} within {self.startup_timeout}s"
+        )
 
-        api_url = f"http://127.0.0.1:{self.port}/api/workers"
-        print("⏳ Waiting for Go daemon to connect to the mesh...")
-        
-        for _ in range(30):
+    def stop(self) -> None:
+        if self.process is None:
+            return
+        proc = self.process
+        try:
+            proc.terminate()
             try:
-                response = requests.get(api_url, timeout=1)
-                if response.status_code == 200:
-                    print("✅ Daemon online and P2P mesh secured!\n")
-                    return self
-            except requests.exceptions.RequestException:
-                pass
-            time.sleep(0.5)
-            
-        self.__exit__(None, None, None)
-        raise GatewayConnectionError(f"Go daemon failed to start on port {self.port} within 15 seconds.")
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Guarantees the Go process is killed when the 'with' block ends."""
-        if self.process:
-            print(f"\n🛑 Shutting down Ephemeral Boss Daemon (Port {self.port})...")
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=3)
+                proc.wait(timeout=3.0)
             except subprocess.TimeoutExpired:
-                self.process.kill()
-            print("✅ Daemon cleanly terminated. Resources freed.")
+                proc.kill()
+                proc.wait(timeout=3.0)
+        finally:
+            self.process = None
+            self._cleanup_log()
+
+    def _is_ready(self) -> bool:
+        try:
+            r = httpx.get(f"{self.url}/api/workers", timeout=1.0)
+            return r.status_code == 200
+        except httpx.HTTPError:
+            return False
+
+    def _cleanup_log(self) -> None:
+        if self._log_handle is not None:
+            with contextlib.suppress(OSError):
+                self._log_handle.close()
+            self._log_handle = None
+
+
+__all__ = ["LocalMeshGateway"]
