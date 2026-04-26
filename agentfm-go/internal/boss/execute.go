@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"agentfm/internal/metrics"
 	"agentfm/internal/network"
 	"agentfm/internal/types"
 	"agentfm/internal/version"
@@ -35,6 +36,16 @@ func (b *Boss) executeFlow(ctx context.Context, worker types.WorkerProfile) {
 	if strings.ToLower(prompt) == "back" || prompt == "" {
 		return
 	}
+
+	// Per-task observability. The deferred closure runs once at function
+	// return; status mutates as the handler progresses and whatever value
+	// it holds at exit is what gets reported.
+	started := time.Now()
+	status := metrics.StatusError
+	defer func() {
+		metrics.TaskDurationSeconds.Observe(time.Since(started).Seconds())
+		metrics.TasksTotal.WithLabelValues(status).Inc()
+	}()
 
 	targetPeerID, err := peer.Decode(worker.PeerID)
 	if err != nil {
@@ -63,10 +74,12 @@ func (b *Boss) executeFlow(ctx context.Context, worker types.WorkerProfile) {
 		return
 	}
 
+	taskID := fmt.Sprintf("task_%d", time.Now().UnixNano())
 	payload := types.TaskPayload{
 		Version: version.AppVersion,
 		Task:    "agent_task",
 		Data:    prompt,
+		TaskID:  taskID,
 	}
 	if err := json.NewEncoder(s).Encode(&payload); err != nil {
 		pterm.Error.Printfln("Failed to send prompt: %v", err)
@@ -82,6 +95,7 @@ func (b *Boss) executeFlow(ctx context.Context, worker types.WorkerProfile) {
 	deadman := &timeoutReader{stream: s, timeout: network.TaskExecutionTimeout}
 	if _, err := io.Copy(os.Stdout, deadman); err != nil {
 		if os.IsTimeout(err) {
+			status = metrics.StatusTimeout
 			pterm.Error.Println("\n⏳ WORKER GHOSTED: Stream timed out.")
 		} else {
 			pterm.Error.Printfln("\n💥 Stream broken: %v", err)
@@ -90,6 +104,7 @@ func (b *Boss) executeFlow(ctx context.Context, worker types.WorkerProfile) {
 	}
 
 	streamSuccess = true
+	status = metrics.StatusOK
 
 	fmt.Println()
 	pterm.DefaultSection.WithLevel(2).Println("END OF STREAM")
@@ -100,7 +115,7 @@ func (b *Boss) executeFlow(ctx context.Context, worker types.WorkerProfile) {
 		WithDefaultText(pterm.LightWhite("Task execution completed. Press [ENTER] to continue to the feedback menu")).
 		Show()
 
-	b.handleFeedbackLoop(ctx, targetPeerID)
+	b.handleFeedbackLoop(ctx, targetPeerID, taskID)
 }
 
 // dialOmni tries to open a task stream to the target peer. It first
@@ -113,7 +128,12 @@ func (b *Boss) dialOmni(ctx context.Context, target peer.ID) netcore.Stream {
 	s, err := b.dialWorkerStream(ctx, target)
 	if err != nil {
 		spinner.Fail(err.Error())
-		time.Sleep(2 * time.Second)
+		// Brief pause so the operator reads the failure, but bail early
+		// if the user has already hit Ctrl+C or the parent ctx fired.
+		select {
+		case <-time.After(2 * time.Second):
+		case <-ctx.Done():
+		}
 		return nil
 	}
 	spinner.Success("P2P Tunnel Established! Secure encrypted stream active.")
@@ -157,7 +177,7 @@ func (b *Boss) dialWorkerStream(ctx context.Context, target peer.ID) (netcore.St
 	return s, nil
 }
 
-func (b *Boss) handleFeedbackLoop(ctx context.Context, target peer.ID) {
+func (b *Boss) handleFeedbackLoop(ctx context.Context, target peer.ID, taskID string) {
 	fmt.Println()
 	leave, _ := pterm.DefaultInteractiveConfirm.WithDefaultValue(false).Show("📝 Leave feedback for the node operator?")
 	if !leave {
@@ -193,9 +213,17 @@ func (b *Boss) handleFeedbackLoop(ctx context.Context, target peer.ID) {
 		return
 	}
 
-	payload := map[string]string{"feedback": feedback, "timestamp": time.Now().Format(time.RFC3339)}
+	payload := map[string]string{
+		"task":      taskID,
+		"feedback":  feedback,
+		"timestamp": time.Now().Format(time.RFC3339),
+	}
 	if err := json.NewEncoder(fs).Encode(payload); err != nil {
 		pterm.Error.Printfln("Failed to deliver feedback: %v", err)
+		return
+	}
+	if err := fs.CloseWrite(); err != nil {
+		pterm.Error.Printfln("Failed to half-close feedback tunnel: %v", err)
 		return
 	}
 

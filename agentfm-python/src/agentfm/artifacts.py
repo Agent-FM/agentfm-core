@@ -23,6 +23,14 @@ _log = logging.getLogger(__name__)
 _DEFAULT_WATCH = "agentfm_artifacts"
 _DEFAULT_EXTRACT = "agentfm_artifacts"
 
+# 1 GiB is generous for legitimate AgentFM artifact use
+# (images, models, intermediate outputs); raise via ArtifactManager arg if
+# you genuinely need bigger.
+DEFAULT_MAX_EXTRACT_BYTES = 1 * 1024 * 1024 * 1024  # 1 GiB
+
+# Per-chunk read size for the streaming copy
+_COPY_CHUNK_BYTES = 64 * 1024
+
 
 class ArtifactManager:
     """Detects and extracts artifact zip files written by the Go gateway."""
@@ -31,9 +39,11 @@ class ArtifactManager:
         self,
         watch_dir: str | Path = _DEFAULT_WATCH,
         extract_dir: str | Path = _DEFAULT_EXTRACT,
+        max_extract_bytes: int = DEFAULT_MAX_EXTRACT_BYTES,
     ) -> None:
         self.watch_dir = Path(watch_dir).resolve()
         self.extract_dir = Path(extract_dir).resolve()
+        self.max_extract_bytes = max_extract_bytes
 
     # -- discovery -----------------------------------------------------------
 
@@ -72,12 +82,22 @@ class ArtifactManager:
     # -- extraction ----------------------------------------------------------
 
     def extract(self, zip_path: Path) -> list[Path]:
-        """Extract a zip into ``extract_dir``, rejecting path traversal."""
+        """Extract a zip into ``extract_dir``.
+
+        Defenses applied:
+          * Zip-slip: any entry whose resolved path escapes ``extract_dir``
+            triggers :class:`ArtifactError` and aborts extraction.
+          * Zip-bomb: each entry is streamed in 64 KiB chunks rather than
+            ``read()``-into-RAM. The cumulative uncompressed byte count is
+            capped at ``self.max_extract_bytes``; a zip that would exceed
+            the cap aborts mid-extraction.
+        """
         if not zip_path.exists():
             raise ArtifactError(f"zip not found: {zip_path}")
         self.extract_dir.mkdir(parents=True, exist_ok=True)
         root = self.extract_dir.resolve()
         out: list[Path] = []
+        bytes_written = 0
         try:
             with zipfile.ZipFile(zip_path, "r") as zf:
                 for info in zf.infolist():
@@ -90,8 +110,9 @@ class ArtifactManager:
                         target.mkdir(parents=True, exist_ok=True)
                         continue
                     target.parent.mkdir(parents=True, exist_ok=True)
-                    with zf.open(info, "r") as src, target.open("wb") as dst:
-                        dst.write(src.read())
+                    bytes_written += _stream_member(
+                        zf, info, target, self.max_extract_bytes - bytes_written
+                    )
                     out.append(target)
         except zipfile.BadZipFile as exc:
             raise ArtifactError(f"corrupt zip: {zip_path}") from exc
@@ -109,10 +130,50 @@ class ArtifactManager:
 
         Returns the extracted file paths, or ``[]`` if no zip arrived within
         ``timeout``. Safe to call when ``watch_dir`` does not yet exist.
+
+        UNSAFE under concurrent dispatch: two parallel ``tasks.run`` calls
+        will race for "the latest zip" and clobber each other's artifacts.
+        Prefer :meth:`collect_for_task` when a task ID is available.
         """
         if not self.watch_dir.exists():
             return []
         zip_path = self.wait_for_new_zip(since=since, timeout=timeout)
+        if zip_path is None:
+            return []
+        files = self.extract(zip_path)
+        self.cleanup(zip_path)
+        return files
+
+    def wait_for_task_zip(
+        self,
+        task_id: str,
+        timeout: float = 120.0,
+        stable_for: float = 1.0,
+        poll_interval: float = 0.5,
+    ) -> Path | None:
+        """Block until ``<task_id>.zip`` appears in ``watch_dir`` and stops growing."""
+        target = self.watch_dir / f"{task_id}.zip"
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if target.exists() and target.is_file():
+                size = target.stat().st_size
+                time.sleep(stable_for)
+                if size > 0 and target.stat().st_size == size:
+                    return target
+            time.sleep(poll_interval)
+        return None
+
+    def collect_for_task(self, task_id: str, timeout: float = 120.0) -> list[Path]:
+        """Wait for the worker's ``<task_id>.zip``, extract it, and clean up.
+
+        Concurrency-safe: each call polls for a specific filename, so parallel
+        ``tasks.run`` invocations cannot steal each other's artifacts. Returns
+        ``[]`` if no matching zip arrives within ``timeout`` or if
+        ``watch_dir`` does not exist.
+        """
+        if not self.watch_dir.exists() or not task_id:
+            return []
+        zip_path = self.wait_for_task_zip(task_id, timeout=timeout)
         if zip_path is None:
             return []
         files = self.extract(zip_path)
@@ -129,4 +190,44 @@ def _is_within(root: Path, target: Path) -> bool:
     return True
 
 
-__all__ = ["ArtifactManager"]
+def _stream_member(
+    zf: zipfile.ZipFile,
+    info: zipfile.ZipInfo,
+    target: Path,
+    remaining_budget: int,
+) -> int:
+    """Stream-copy a single zip entry to disk in 64 KiB chunks, enforcing budget.
+
+    Returns bytes actually written. Raises :class:`ArtifactError` if the
+    cumulative budget is exhausted by this entry. On budget overflow the
+    partially-written target file is unlinked so callers don't see corrupted
+    artifacts surfaced as legitimate output by a follow-on collect_for_task.
+    """
+    if remaining_budget <= 0:
+        raise ArtifactError(
+            f"refusing to extract '{info.filename}': total uncompressed "
+            "size exceeds max_extract_bytes"
+        )
+    written = 0
+    overflowed = False
+    try:
+        with zf.open(info, "r") as src, target.open("wb") as dst:
+            while True:
+                chunk = src.read(_COPY_CHUNK_BYTES)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > remaining_budget:
+                    overflowed = True
+                    raise ArtifactError(
+                        f"refusing to extract '{info.filename}': total uncompressed "
+                        f"size exceeds max_extract_bytes after {written} bytes"
+                    )
+                dst.write(chunk)
+    finally:
+        if overflowed:
+            target.unlink(missing_ok=True)
+    return written
+
+
+__all__ = ["DEFAULT_MAX_EXTRACT_BYTES", "ArtifactManager"]

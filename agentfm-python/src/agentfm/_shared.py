@@ -37,8 +37,13 @@ _UNSET = _Unset()
 # ---------------------------------------------------------------------------
 
 
-def build_task_payload(worker_id: str, prompt: str) -> dict[str, Any]:
-    return {"worker_id": worker_id, "prompt": prompt}
+def build_task_payload(
+    worker_id: str, prompt: str, task_id: str | None = None
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"worker_id": worker_id, "prompt": prompt}
+    if task_id:
+        payload["task_id"] = task_id
+    return payload
 
 
 def build_async_task_payload(

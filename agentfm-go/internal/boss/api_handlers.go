@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
+	"agentfm/internal/metrics"
 	"agentfm/internal/network"
+	"agentfm/internal/obs"
 	"agentfm/internal/types"
 	"agentfm/internal/version"
 
@@ -27,8 +30,6 @@ func (b *Boss) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	b.mu.Lock()
-	defer b.mu.Unlock()
-
 	agents := make([]apiWorker, 0, len(b.activeWorkers))
 
 	for peerIDStr, profile := range b.activeWorkers {
@@ -48,6 +49,9 @@ func (b *Boss) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
 
 		agents = append(agents, profileToAPIWorker(profile))
 	}
+	online := len(b.activeWorkers)
+	b.mu.Unlock()
+	metrics.WorkersOnline.Set(float64(online))
 
 	response := map[string]interface{}{
 		"success": true,
@@ -56,7 +60,7 @@ func (b *Boss) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		pterm.Error.Printfln("Failed to encode /api/workers response: %v", err)
+		slog.Error("encode /api/workers response", slog.Any(obs.FieldErr, err))
 	}
 }
 
@@ -92,6 +96,17 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Per-task observability: histogram is observed unconditionally; the
+	// counter is incremented exactly once with the terminal status. The
+	// status variable is mutated as the handler progresses; whatever value
+	// it holds at function return is what's reported.
+	started := time.Now()
+	status := metrics.StatusError
+	defer func() {
+		metrics.TaskDurationSeconds.Observe(time.Since(started).Seconds())
+		metrics.TasksTotal.WithLabelValues(status).Inc()
+	}()
+
 	var req ExecuteRequest
 	limitedReader := io.LimitReader(r.Body, 1*1024*1024)
 	if err := json.NewDecoder(limitedReader).Decode(&req); err != nil {
@@ -108,6 +123,7 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 	b.mu.RUnlock()
 
 	if !exists {
+		status = metrics.StatusRejected
 		http.Error(w, "Worker not found or offline", http.StatusNotFound)
 		return
 	}
@@ -173,13 +189,13 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 		// Idle deadline. Each read gets up to TaskExecutionTimeout. A task
 		// that never produces output within that window is treated as ghosted.
 		if err := s.SetReadDeadline(time.Now().Add(network.TaskExecutionTimeout)); err != nil {
-			pterm.Error.Printfln("Failed to refresh read deadline: %v", err)
+			slog.Error("refresh read deadline", slog.Any(obs.FieldErr, err), slog.String(obs.FieldTaskID, req.TaskID))
 			return
 		}
 		n, err := s.Read(buf)
 		if n > 0 {
 			if _, werr := w.Write(buf[:n]); werr != nil {
-				pterm.Error.Printfln("HTTP client disconnected: %v", werr)
+				slog.Warn("HTTP client disconnected", slog.Any(obs.FieldErr, werr), slog.String(obs.FieldTaskID, req.TaskID))
 				return
 			}
 			if flusherSupported {
@@ -188,7 +204,7 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			if err != io.EOF {
-				pterm.Error.Printfln("Stream error: %v", err)
+				slog.Error("worker stream", slog.Any(obs.FieldErr, err), slog.String(obs.FieldTaskID, req.TaskID), slog.String(obs.FieldProtocol, "task"))
 				return
 			}
 			break
@@ -196,5 +212,6 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	streamSuccess = true
+	status = metrics.StatusOK
 	pterm.Success.Println("✅ API Task Complete. Text streamed to client.")
 }

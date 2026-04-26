@@ -705,6 +705,76 @@ agentfm -mode test \
 
 Omit `-prompt` and AgentFM drops you into an interactive input. Artifacts land in a `.agentfm_temp/run_<id>/` folder for inspection.
 
+## Observability
+
+AgentFM ships a Prometheus `/metrics` endpoint and structured JSON logs on every role, so a single Prometheus + Grafana stack can watch the whole grid no matter how many peers it grows to.
+
+### Metrics endpoints
+
+| Role | Default endpoint | Bind | Override |
+|---|---|---|---|
+| **Boss (api mode)** | `:8080/metrics` | same as `-apiport` | n/a — always served on the API port |
+| **Worker** | `:9090/metrics` | `127.0.0.1` (loopback) | `-prom-listen 0.0.0.0:9090` for off-host scrape; `-prom-listen -` to disable |
+| **Relay** | `:9091/metrics` | `127.0.0.1` (loopback) | same `-prom-listen` flag |
+
+Loopback-by-default keeps the metrics endpoint off the public network unless an operator opts in. There is no authentication on `/metrics` yet.
+
+### Metric families
+
+| Name | Type | Labels | Meaning |
+|---|---|---|---|
+| `agentfm_tasks_total` | Counter | `status` ∈ `{ok, error, rejected, timeout}` | Number of task executions seen by this node. |
+| `agentfm_task_duration_seconds` | Histogram | (none) | Wall-clock task duration. Buckets tuned for AI workloads (1s → 30 min). |
+| `agentfm_workers_online` | Gauge | (none) | Workers currently visible in this node's telemetry. |
+| `agentfm_artifact_bytes_sent_total` | Counter | (none) | Cumulative bytes shipped over `/agentfm/artifacts/1.0.0`. |
+| `agentfm_stream_errors_total` | Counter | `protocol` ∈ `{task, artifacts, feedback}`, `reason` ∈ enum | Stream-level failures. `reason` enum: `decode`, `deadline`, `reset`, `peer_eof`, `capacity_rejected`, `version_mismatch`, `unknown`. |
+| `agentfm_dht_queries_total` | Counter | `op` ∈ `{find_peer, provide, get_value}` | Relay-only: DHT operations served. |
+
+The standard `process_*` and `go_*` collectors are also exposed so dashboards can show goroutine counts, GC pressure, FD usage, and resident memory.
+
+### Quick check
+
+```bash
+# Boss
+agentfm -mode api -apiport 8080 &
+curl -s http://127.0.0.1:8080/metrics | grep '^agentfm_'
+
+# Worker (loopback by default)
+agentfm -mode worker -agent test -agentdir ./my-agent &
+curl -s http://127.0.0.1:9090/metrics | grep '^agentfm_'
+
+# Relay
+agentfm-relay -port 4001 -prom-listen 127.0.0.1:9091 &
+curl -s http://127.0.0.1:9091/metrics | grep '^agentfm_'
+```
+
+### Example Prometheus scrape config
+
+```yaml
+scrape_configs:
+  - job_name: agentfm-boss
+    static_configs:
+      - targets: ['boss-host:8080']
+  - job_name: agentfm-worker
+    static_configs:
+      - targets: ['worker-host:9090']
+  - job_name: agentfm-relay
+    static_configs:
+      - targets: ['relay-host:9091']
+```
+
+### Structured logs
+
+Every binary accepts `-log-format` (`json`, `console`, or `auto`) and `-log-level` (`debug`, `info`, `warn`, `error`). `auto` (the default) uses `console` on a TTY and `json` everywhere else, so logs are human-readable in a terminal and aggregator-friendly under systemd / Docker / Kubernetes.
+
+JSON entries always include `time`, `level`, `msg`, and `component` (one of `boss`, `worker`, `relay`, `api`). Operational error events also carry `err`, plus `task_id` / `peer_id` / `protocol` when applicable:
+
+```json
+{"time":"2026-04-26T18:42:11Z","level":"ERROR","msg":"worker stream","component":"api","err":"context deadline exceeded","task_id":"task_abc","protocol":"task"}
+```
+
+The `pterm` interactive TUI (boss radar, headers, progress bars) is preserved as-is — only operational logs migrate to `slog`.
+
 ## Security Model
 
 AgentFM is designed for a zero-trust threat model. Every remote peer is treated as potentially slow, faulty, or malicious.

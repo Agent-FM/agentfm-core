@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import time
+import uuid
 from collections.abc import Callable, Iterator
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from functools import cached_property
@@ -39,12 +40,18 @@ from ._shared import (
     parse_async_task_ack,
     parse_workers_envelope,
 )
-from ._transport import make_client, raise_for_response, wrap_connection_error
+from ._transport import (
+    STREAMING_TIMEOUT,
+    make_client,
+    raise_for_response,
+    wrap_connection_error,
+)
 from .artifacts import ArtifactManager
 from .exceptions import (
     AgentFMError,
     GatewayConnectionError,
     WorkerNotFoundError,
+    WorkerStreamError,
 )
 from .models import (
     AsyncTaskAck,
@@ -122,18 +129,21 @@ class _TasksNamespace(SyncResource):
         """Dispatch a task and block until it completes."""
         # Timing is recorded locally; never on instance state — multiple
         # concurrent run() calls on the same namespace would race otherwise.
-        started_at = time.time()
+        # We mint the task_id here so the gateway and the artifact harvester
+        # agree on the zip basename — concurrent run() calls would otherwise
+        # race for "the latest zip by mtime".
+        task_id = f"task_{uuid.uuid4().hex}"
         started_mono = time.monotonic()
         chunks = [
             chunk.text
-            for chunk in self.stream(worker_id=worker_id, prompt=prompt)
+            for chunk in self.stream(worker_id=worker_id, prompt=prompt, task_id=task_id)
             if chunk.kind == "text"
         ]
         text = "".join(chunks)
 
         am = self._client.artifacts
         artifacts: list[Path] = (
-            am.collect_since(started_at, timeout=artifact_timeout) if am is not None else []
+            am.collect_for_task(task_id, timeout=artifact_timeout) if am is not None else []
         )
 
         return TaskResult(
@@ -144,13 +154,25 @@ class _TasksNamespace(SyncResource):
         )
 
     def stream(
-        self, *, worker_id: PeerID | str, prompt: str
+        self, *, worker_id: PeerID | str, prompt: str, task_id: str | None = None
     ) -> Iterator[TaskChunk]:
-        """Stream worker stdout chunk-by-chunk as ``TaskChunk`` objects."""
-        payload = build_task_payload(str(worker_id), prompt)
+        """Stream worker stdout chunk-by-chunk as ``TaskChunk`` objects.
+
+        ``task_id`` is optional. When provided, the gateway uses it as the
+        artifact zip basename so the caller can attribute artifacts to a
+        specific dispatch (see :meth:`AgentFMClient.tasks.run`).
+        """
+        payload = build_task_payload(str(worker_id), prompt, task_id=task_id)
         filt = SentinelFilter()
         try:
-            with self._client._http.stream("POST", "/api/execute", json=payload) as response:
+            with self._client._http.stream(
+                "POST", "/api/execute", json=payload, timeout=STREAMING_TIMEOUT
+            ) as response:
+                # Streaming responses don't auto-load the body, so an error
+                # envelope on a non-2xx status would be unreachable from
+                # raise_for_response without an explicit read.
+                if response.status_code >= 400:
+                    response.read()
                 raise_for_response(response, expected_text=True)
                 for raw in response.iter_text():
                     for clean in filt.feed(raw):
@@ -162,6 +184,15 @@ class _TasksNamespace(SyncResource):
                     yield TaskChunk(text="", kind="marker")
         except httpx.ConnectError as exc:
             raise wrap_connection_error(exc, base_url=self._client.gateway_url) from exc
+        except httpx.HTTPError as exc:
+            # Anything else httpx surfaces mid-stream (ReadTimeout, ReadError,
+            # RemoteProtocolError, WriteError, PoolTimeout, ...) is a worker
+            # stream failure from the SDK caller's perspective. Wrap so
+            # tasks.scatter's "never raises non-AgentFMError" contract holds.
+            raise WorkerStreamError(
+                f"worker stream failed: {exc}",
+                code="worker_stream_failed",
+            ) from exc
 
     def submit_async(
         self,
@@ -184,14 +215,25 @@ class _TasksNamespace(SyncResource):
         max_concurrency: int = 8,
         max_retries: int = 2,
     ) -> list[ScatterResult]:
-        """Run ``len(prompts)`` tasks across the given peers (round-robin)."""
+        """Run ``len(prompts)`` tasks across the given peers (round-robin).
+
+        Results are returned in **submission order**: ``return[i]`` corresponds
+        to ``prompts[i]``. Failed prompts (after ``max_retries`` exhaustion)
+        appear as :class:`ScatterResult` with ``status="failed"`` and a populated
+        ``error`` field, never as exceptions.
+        """
         if not prompts:
             return []
         if not peer_ids:
             raise ValueError("scatter requires at least one peer id")
 
         peers = coerce_peer_ids(peer_ids)
-        results: list[ScatterResult] = []
+        # Accumulate into a dict keyed by prompt index. The main thread is
+        # the sole writer (workers return results via fut.result(), which the
+        # main thread reads), so this is race-free even on a no-GIL CPython.
+        # Returning in submission order (ScatterResult[i] corresponds to
+        # prompts[i]) is also strictly more useful than completion order.
+        results_by_idx: dict[int, ScatterResult] = {}
         attempts: dict[int, int] = dict.fromkeys(range(len(prompts)), 0)
         queue: list[tuple[int, str]] = list(enumerate(prompts))
         cursor = 0
@@ -210,14 +252,12 @@ class _TasksNamespace(SyncResource):
                     idx, prompt, peer = in_flight.pop(fut)
                     try:
                         res = fut.result()
-                        results.append(
-                            ScatterResult(
-                                prompt=prompt,
-                                worker_id=PeerID(peer),
-                                status="success",
-                                text=res.text,
-                                artifacts=res.artifacts,
-                            )
+                        results_by_idx[idx] = ScatterResult(
+                            prompt=prompt,
+                            worker_id=PeerID(peer),
+                            status="success",
+                            text=res.text,
+                            artifacts=res.artifacts,
                         )
                     except AgentFMError as exc:
                         attempts[idx] += 1
@@ -225,15 +265,13 @@ class _TasksNamespace(SyncResource):
                             _log.info("retrying prompt #%s (attempt %s)", idx, attempts[idx])
                             queue.append((idx, prompt))
                         else:
-                            results.append(
-                                ScatterResult(
-                                    prompt=prompt,
-                                    worker_id=PeerID(peer),
-                                    status="failed",
-                                    error=str(exc),
-                                )
+                            results_by_idx[idx] = ScatterResult(
+                                prompt=prompt,
+                                worker_id=PeerID(peer),
+                                status="failed",
+                                error=str(exc),
                             )
-        return results
+        return [results_by_idx[i] for i in range(len(prompts))]
 
     def scatter_by_model(
         self,

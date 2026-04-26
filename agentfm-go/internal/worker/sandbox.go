@@ -12,7 +12,7 @@ import (
 	"github.com/pterm/pterm"
 )
 
-func (w *Worker) buildSandboxImage() error {
+func (w *Worker) buildSandboxImage(ctx context.Context) error {
 	pterm.Info.Printfln("Checking for Dockerfile in %s...", pterm.Cyan(w.config.AgentDir))
 	if _, err := os.Stat(filepath.Join(w.config.AgentDir, "Dockerfile")); os.IsNotExist(err) {
 		if _, err := os.Stat(filepath.Join(w.config.AgentDir, "Containerfile")); os.IsNotExist(err) {
@@ -22,7 +22,11 @@ func (w *Worker) buildSandboxImage() error {
 
 	pterm.Info.Printfln("Building Podman image '%s' (Forcing no-cache)...", pterm.Yellow(w.config.ImageName))
 
-	cmd := exec.Command("podman", "build", "--no-cache", "-t", w.config.ImageName, ".")
+	// CommandContext binds ctx → SIGKILL so a hung `podman build` (registry
+	// unreachable, broken Containerfile that wedges RUN) is killable by
+	// Ctrl+C. Plain exec.Command would leave the operator with an
+	// unkillable worker until SIGKILL of the parent process.
+	cmd := exec.CommandContext(ctx, "podman", "build", "--no-cache", "-t", w.config.ImageName, ".")
 	cmd.Dir = w.config.AgentDir
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 

@@ -27,7 +27,20 @@ class GatewayConnectionError(AgentFMError):
 
 
 class GatewayProtocolError(AgentFMError):
-    """The gateway returned a response the SDK cannot decode."""
+    """The gateway returned a response the SDK cannot decode.
+
+    Reserved for malformed bodies / non-envelope 5xx responses. A well-formed
+    error envelope reporting a server-side bug is :class:`GatewayInternalError`.
+    """
+
+
+class GatewayInternalError(AgentFMError):
+    """The gateway returned a well-formed envelope reporting an internal bug.
+
+    Distinguished from :class:`GatewayProtocolError` (decode failure) so
+    callers can route real server bugs separately from SDK-side parsing
+    issues. Maps to the gateway's ``internal_error`` code.
+    """
 
 
 class InvalidRequestError(AgentFMError):
@@ -74,7 +87,7 @@ _CODE_MAP: dict[str, type[AgentFMError]] = {
     "unsupported_prompt_type": InvalidRequestError,
     "invalid_request_error": InvalidRequestError,
     "method_not_allowed": InvalidRequestError,
-    "internal_error": GatewayProtocolError,
+    "internal_error": GatewayInternalError,
 }
 
 
@@ -98,6 +111,7 @@ __all__ = [
     "AgentFMError",
     "ArtifactError",
     "GatewayConnectionError",
+    "GatewayInternalError",
     "GatewayProtocolError",
     "InvalidRequestError",
     "MeshOverloadedError",

@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
+	"agentfm/internal/obs"
+
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/pterm/pterm"
 )
 
 func (b *Boss) handleCompletions(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +84,7 @@ func (b *Boss) handleCompletions(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		pterm.Error.Printfln("Failed to encode /v1/completions response: %v", err)
+		slog.Error("encode /v1/completions response", slog.Any(obs.FieldErr, err))
 	}
 }
 

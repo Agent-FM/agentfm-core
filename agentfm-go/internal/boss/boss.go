@@ -4,14 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
+	"agentfm/internal/metrics"
 	"agentfm/internal/network"
+	"agentfm/internal/obs"
 	"agentfm/internal/types"
 
 	netcore "github.com/libp2p/go-libp2p/core/network"
-	"github.com/pterm/pterm"
 )
 
 type Boss struct {
@@ -52,7 +54,7 @@ func (b *Boss) Run(ctx context.Context) {
 
 	fmt.Println("\nShutting down Boss node...")
 	if err := b.node.Host.Close(); err != nil {
-		pterm.Error.Printfln("Host close error: %v", err)
+		slog.Error("host close", slog.Any(obs.FieldErr, err))
 	}
 }
 
@@ -62,12 +64,13 @@ func (b *Boss) listenTelemetry(ctx context.Context) {
 		// Non-fatal: surface the error and return so the caller's
 		// defers still run. Boss keeps working for manually-specified
 		// peers but the radar will be empty.
-		pterm.Error.Printfln("Telemetry listener disabled: failed to join %q: %v", network.TelemetryTopic, err)
+		slog.Error("telemetry listener disabled: pubsub join", slog.Any(obs.FieldErr, err), slog.String("topic", network.TelemetryTopic))
 		return
 	}
+	defer func() { _ = topic.Close() }()
 	sub, err := topic.Subscribe()
 	if err != nil {
-		pterm.Error.Printfln("Telemetry listener disabled: failed to subscribe: %v", err)
+		slog.Error("telemetry listener disabled: pubsub subscribe", slog.Any(obs.FieldErr, err))
 		return
 	}
 	defer sub.Cancel()
@@ -86,7 +89,9 @@ func (b *Boss) listenTelemetry(ctx context.Context) {
 			b.mu.Lock()
 			b.activeWorkers[profile.PeerID] = profile
 			b.lastSeen[profile.PeerID] = time.Now()
+			n := len(b.activeWorkers)
 			b.mu.Unlock()
+			metrics.WorkersOnline.Set(float64(n))
 		}
 	}
 }

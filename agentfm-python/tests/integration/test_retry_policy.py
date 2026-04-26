@@ -73,6 +73,22 @@ def test_gives_up_after_exhausting_retries_on_persistent_503(
         )
 
 
+def test_request_wraps_remote_protocol_error_as_connection_error(
+    gateway_url: str, mock_gateway: respx.MockRouter
+):
+    """Non-stream paths going through SyncResource._request now wrap the
+    full httpx.HTTPError family (including RemoteProtocolError, WriteError,
+    PoolTimeout) as GatewayConnectionError. Pre-fix only ConnectError and
+    ReadError were caught."""
+    from agentfm.exceptions import GatewayConnectionError
+
+    mock_gateway.get("/api/workers").mock(
+        side_effect=httpx.RemoteProtocolError("connection closed by peer")
+    )
+    with AgentFMClient(gateway_url=gateway_url, retries=0) as client, pytest.raises(GatewayConnectionError):
+        client.workers.list()
+
+
 def test_protocol_error_for_non_envelope_5xx(
     gateway_url: str, mock_gateway: respx.MockRouter
 ):

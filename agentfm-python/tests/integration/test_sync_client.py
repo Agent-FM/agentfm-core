@@ -212,6 +212,45 @@ def test_openai_chat_completion_streaming(
     assert accumulated == "hello world"
 
 
+def test_openai_chat_streaming_wraps_mid_stream_httpx_error(
+    gateway_url: str, mock_gateway: respx.MockRouter
+):
+    """Pre-fix, a mid-SSE httpx.RemoteProtocolError would propagate raw out of
+    chat.completions.create(stream=True). Fix wraps every httpx.HTTPError in
+    WorkerStreamError so user code can catch only AgentFMError subclasses.
+    """
+    from agentfm.exceptions import WorkerStreamError
+
+    mock_gateway.post("/v1/chat/completions").mock(
+        side_effect=httpx.RemoteProtocolError("connection closed mid-stream")
+    )
+    with AgentFMClient(gateway_url=gateway_url, retries=0) as client, pytest.raises(WorkerStreamError):
+        for _ in client.openai.chat.completions.create(
+            model="12D3KooWAlpha9XzHaaaa",
+            messages=[{"role": "user", "content": "hi"}],
+            stream=True,
+        ):
+            pass
+
+
+def test_openai_text_streaming_wraps_mid_stream_httpx_error(
+    gateway_url: str, mock_gateway: respx.MockRouter
+):
+    """Same regression for /v1/completions stream=True."""
+    from agentfm.exceptions import WorkerStreamError
+
+    mock_gateway.post("/v1/completions").mock(
+        side_effect=httpx.RemoteProtocolError("connection closed mid-stream")
+    )
+    with AgentFMClient(gateway_url=gateway_url, retries=0) as client, pytest.raises(WorkerStreamError):
+        for _ in client.openai.completions.create(
+            model="12D3KooWAlpha9XzHaaaa",
+            prompt="hi",
+            stream=True,
+        ):
+            pass
+
+
 def test_openai_routing_warning_fires_for_non_peer_id(
     gateway_url: str, mock_gateway: respx.MockRouter
 ):
