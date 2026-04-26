@@ -29,6 +29,9 @@ import httpx
 
 from ._internal.resource import SyncResource
 from ._shared import (
+    _UNSET,
+    DEFAULT_GATEWAY,
+    _Unset,
     build_async_task_payload,
     build_task_payload,
     coerce_peer_ids,
@@ -57,22 +60,6 @@ if TYPE_CHECKING:
     from .openai import OpenAINamespace
 
 _log = logging.getLogger(__name__)
-
-DEFAULT_GATEWAY = "http://127.0.0.1:8080"
-
-
-class _Unset:
-    """Singleton sentinel for ``with_options`` — distinguishes "not provided" from ``None``."""
-
-    _instance: _Unset | None = None
-
-    def __new__(cls) -> _Unset:
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-
-_UNSET = _Unset()
 
 
 class _WorkersNamespace(SyncResource):
@@ -254,7 +241,7 @@ class _TasksNamespace(SyncResource):
         *,
         model: str,
         max_workers: int | None = None,
-        pick: Callable[[list[WorkerProfile]], list[WorkerProfile]] | None = None,
+        pick: Callable[[List[WorkerProfile]], List[WorkerProfile]] | None = None,
         **scatter_opts: Any,
     ) -> list[ScatterResult]:
         """Convenience: discover workers by ``model``, then ``scatter`` across them."""

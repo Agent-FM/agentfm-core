@@ -231,11 +231,9 @@ def test_openai_routing_warning_fires_for_non_peer_id(
             "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
         },
     )
-    # Reset the warned-set so the test is deterministic
-    from agentfm.openai._namespaces import _warned_about_routing
-
-    _warned_about_routing.discard("test-llama3.2")
     with AgentFMClient(gateway_url=gateway_url) as client, warnings.catch_warnings(record=True) as w:
+        # Per-namespace dedup state — fresh client guarantees a fresh warner.
+        client.openai._warner.reset()
         warnings.simplefilter("always")
         client.openai.chat.completions.create(
             model="test-llama3.2",

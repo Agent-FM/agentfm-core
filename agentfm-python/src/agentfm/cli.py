@@ -19,9 +19,9 @@ import sys
 from typing import Any
 
 from . import __version__
-from .client import DEFAULT_GATEWAY, AgentFMClient
+from ._shared import DEFAULT_GATEWAY
+from .client import AgentFMClient
 from .exceptions import AgentFMError
-from .openai.models import ChatCompletion, ChatCompletionChunk
 
 
 def _emit_json(obj: Any) -> None:
@@ -53,13 +53,11 @@ def _cmd_models(args: argparse.Namespace) -> int:
 def _cmd_chat(args: argparse.Namespace) -> int:
     with AgentFMClient(gateway_url=args.gateway, timeout=args.timeout) as client:
         if args.stream:
-            stream = client.openai.chat.completions.create(
+            for chunk in client.openai.chat.completions.create(
                 model=args.peer,
                 messages=[{"role": "user", "content": args.prompt}],
                 stream=True,
-            )
-            for chunk in stream:
-                assert isinstance(chunk, ChatCompletionChunk)
+            ):
                 if chunk.choices and chunk.choices[0].delta.content:
                     sys.stdout.write(chunk.choices[0].delta.content)
                     sys.stdout.flush()
@@ -69,7 +67,6 @@ def _cmd_chat(args: argparse.Namespace) -> int:
                 model=args.peer,
                 messages=[{"role": "user", "content": args.prompt}],
             )
-            assert isinstance(resp, ChatCompletion)
             print(resp.choices[0].message.content if resp.choices else "")
     return 0
 

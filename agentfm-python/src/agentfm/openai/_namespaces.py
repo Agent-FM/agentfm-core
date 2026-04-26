@@ -15,9 +15,10 @@ from __future__ import annotations
 
 import contextlib
 import json
+import threading
 import warnings
 from collections.abc import AsyncIterator, Iterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import httpx
 
@@ -41,20 +42,41 @@ if TYPE_CHECKING:
 
 
 _PEER_ID_PREFIX = "12D3KooW"
-_warned_about_routing: set[str] = set()
 
 
-def _warn_if_not_peer_id(model: str) -> None:
-    if model.startswith(_PEER_ID_PREFIX) or model in _warned_about_routing:
-        return
-    _warned_about_routing.add(model)
-    warnings.warn(
-        f"model={model!r} routes to *any* worker advertising that name on the mesh; "
-        "the gateway picks for you. To pin to a specific worker (recommended), pass "
-        "a peer_id from client.workers.list(). This warning fires once per model string.",
-        AgentFMRoutingWarning,
-        stacklevel=4,
-    )
+class _RoutingWarner:
+    """Per-namespace dedup of :class:`AgentFMRoutingWarning`.
+
+    Each ``OpenAINamespace`` / ``AsyncOpenAINamespace`` owns one. Sharing a
+    single instance across the chat and text-completion resources within a
+    namespace gives "warn once per model per client" semantics. Thread-safe.
+    """
+
+    __slots__ = ("_lock", "_seen")
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._seen: set[str] = set()
+
+    def warn_if_not_peer_id(self, model: str) -> None:
+        if model.startswith(_PEER_ID_PREFIX):
+            return
+        with self._lock:
+            if model in self._seen:
+                return
+            self._seen.add(model)
+        warnings.warn(
+            f"model={model!r} routes to *any* worker advertising that name on the mesh; "
+            "the gateway picks for you. To pin to a specific worker (recommended), pass "
+            "a peer_id from client.workers.list(). This warning fires once per model string.",
+            AgentFMRoutingWarning,
+            stacklevel=4,
+        )
+
+    def reset(self) -> None:
+        """Clear the dedup state. Used by tests."""
+        with self._lock:
+            self._seen.clear()
 
 
 def _build_chat_body(
@@ -88,9 +110,10 @@ class OpenAINamespace:
 
     def __init__(self, client: AgentFMClient) -> None:
         self._client = client
+        self._warner = _RoutingWarner()
         self.models = _Models(client)
-        self.chat = _Chat(client)
-        self.completions = _Completions(client)
+        self.chat = _Chat(client, self._warner)
+        self.completions = _Completions(client, self._warner)
 
 
 class _Models(SyncResource):
@@ -101,11 +124,34 @@ class _Models(SyncResource):
 class _Chat:
     """Holder for ``client.openai.chat.completions`` attribute chain."""
 
-    def __init__(self, client: AgentFMClient) -> None:
-        self.completions = _ChatCompletions(client)
+    def __init__(self, client: AgentFMClient, warner: _RoutingWarner) -> None:
+        self.completions = _ChatCompletions(client, warner)
 
 
 class _ChatCompletions(SyncResource):
+    def __init__(self, client: AgentFMClient, warner: _RoutingWarner) -> None:
+        super().__init__(client)
+        self._warner = warner
+
+    @overload
+    def create(
+        self,
+        *,
+        model: str,
+        messages: list[ChatMessage] | list[dict[str, Any]],
+        stream: Literal[False] = False,
+        **extra: Any,
+    ) -> ChatCompletion: ...
+    @overload
+    def create(
+        self,
+        *,
+        model: str,
+        messages: list[ChatMessage] | list[dict[str, Any]],
+        stream: Literal[True],
+        **extra: Any,
+    ) -> Iterator[ChatCompletionChunk]: ...
+
     def create(
         self,
         *,
@@ -114,7 +160,7 @@ class _ChatCompletions(SyncResource):
         stream: bool = False,
         **extra: Any,
     ) -> ChatCompletion | Iterator[ChatCompletionChunk]:
-        _warn_if_not_peer_id(model)
+        self._warner.warn_if_not_peer_id(model)
         body = _build_chat_body(model, messages, stream=stream, extra=extra)
         if stream:
             return self._stream(body)
@@ -134,6 +180,29 @@ class _ChatCompletions(SyncResource):
 
 
 class _Completions(SyncResource):
+    def __init__(self, client: AgentFMClient, warner: _RoutingWarner) -> None:
+        super().__init__(client)
+        self._warner = warner
+
+    @overload
+    def create(
+        self,
+        *,
+        model: str,
+        prompt: str,
+        stream: Literal[False] = False,
+        **extra: Any,
+    ) -> TextCompletion: ...
+    @overload
+    def create(
+        self,
+        *,
+        model: str,
+        prompt: str,
+        stream: Literal[True],
+        **extra: Any,
+    ) -> Iterator[TextCompletionChunk]: ...
+
     def create(
         self,
         *,
@@ -142,7 +211,7 @@ class _Completions(SyncResource):
         stream: bool = False,
         **extra: Any,
     ) -> TextCompletion | Iterator[TextCompletionChunk]:
-        _warn_if_not_peer_id(model)
+        self._warner.warn_if_not_peer_id(model)
         body = _build_completion_body(model, prompt, stream=stream, extra=extra)
         if stream:
             return self._stream(body)
@@ -169,9 +238,10 @@ class AsyncOpenAINamespace:
 
     def __init__(self, client: AsyncAgentFMClient) -> None:
         self._client = client
+        self._warner = _RoutingWarner()
         self.models = _AsyncModels(client)
-        self.chat = _AsyncChat(client)
-        self.completions = _AsyncCompletions(client)
+        self.chat = _AsyncChat(client, self._warner)
+        self.completions = _AsyncCompletions(client, self._warner)
 
 
 class _AsyncModels(AsyncResource):
@@ -180,11 +250,34 @@ class _AsyncModels(AsyncResource):
 
 
 class _AsyncChat:
-    def __init__(self, client: AsyncAgentFMClient) -> None:
-        self.completions = _AsyncChatCompletions(client)
+    def __init__(self, client: AsyncAgentFMClient, warner: _RoutingWarner) -> None:
+        self.completions = _AsyncChatCompletions(client, warner)
 
 
 class _AsyncChatCompletions(AsyncResource):
+    def __init__(self, client: AsyncAgentFMClient, warner: _RoutingWarner) -> None:
+        super().__init__(client)
+        self._warner = warner
+
+    @overload
+    async def create(
+        self,
+        *,
+        model: str,
+        messages: list[ChatMessage] | list[dict[str, Any]],
+        stream: Literal[False] = False,
+        **extra: Any,
+    ) -> ChatCompletion: ...
+    @overload
+    async def create(
+        self,
+        *,
+        model: str,
+        messages: list[ChatMessage] | list[dict[str, Any]],
+        stream: Literal[True],
+        **extra: Any,
+    ) -> AsyncIterator[ChatCompletionChunk]: ...
+
     async def create(
         self,
         *,
@@ -193,7 +286,7 @@ class _AsyncChatCompletions(AsyncResource):
         stream: bool = False,
         **extra: Any,
     ) -> ChatCompletion | AsyncIterator[ChatCompletionChunk]:
-        _warn_if_not_peer_id(model)
+        self._warner.warn_if_not_peer_id(model)
         body = _build_chat_body(model, messages, stream=stream, extra=extra)
         if stream:
             return self._stream(body)
@@ -213,6 +306,29 @@ class _AsyncChatCompletions(AsyncResource):
 
 
 class _AsyncCompletions(AsyncResource):
+    def __init__(self, client: AsyncAgentFMClient, warner: _RoutingWarner) -> None:
+        super().__init__(client)
+        self._warner = warner
+
+    @overload
+    async def create(
+        self,
+        *,
+        model: str,
+        prompt: str,
+        stream: Literal[False] = False,
+        **extra: Any,
+    ) -> TextCompletion: ...
+    @overload
+    async def create(
+        self,
+        *,
+        model: str,
+        prompt: str,
+        stream: Literal[True],
+        **extra: Any,
+    ) -> AsyncIterator[TextCompletionChunk]: ...
+
     async def create(
         self,
         *,
@@ -221,7 +337,7 @@ class _AsyncCompletions(AsyncResource):
         stream: bool = False,
         **extra: Any,
     ) -> TextCompletion | AsyncIterator[TextCompletionChunk]:
-        _warn_if_not_peer_id(model)
+        self._warner.warn_if_not_peer_id(model)
         body = _build_completion_body(model, prompt, stream=stream, extra=extra)
         if stream:
             return self._stream(body)

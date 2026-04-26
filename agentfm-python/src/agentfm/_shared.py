@@ -16,6 +16,22 @@ from .models import (
     WorkersResponse,
 )
 
+DEFAULT_GATEWAY = "http://127.0.0.1:8080"
+
+
+class _Unset:
+    """Singleton sentinel for ``with_options`` — distinguishes "not provided" from ``None``."""
+
+    _instance: _Unset | None = None
+
+    def __new__(cls) -> _Unset:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+
+_UNSET = _Unset()
+
 # ---------------------------------------------------------------------------
 # Payload construction
 # ---------------------------------------------------------------------------
@@ -81,6 +97,7 @@ def coerce_peer_ids(peer_ids: list[PeerID | str]) -> list[str]:
 
 
 __all__ = [
+    "DEFAULT_GATEWAY",
     "build_async_task_payload",
     "build_task_payload",
     "coerce_peer_ids",

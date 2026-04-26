@@ -49,9 +49,15 @@ class WebhookReceiver:
         *,
         port: int,
         callback: WebhookCallback,
-        host: str = "0.0.0.0",
+        host: str = "127.0.0.1",
         path: str = "/cb",
     ) -> None:
+        """Bind to ``host:port`` and POST decoded payloads to ``callback``.
+
+        ``host`` defaults to ``127.0.0.1`` (loopback only). Pass ``"0.0.0.0"``
+        explicitly to accept callbacks from off-host gateways. There is no
+        signature verification yet — only run on networks you trust.
+        """
         self.host = host
         self.port = port
         self.path = path

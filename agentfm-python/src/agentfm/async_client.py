@@ -18,6 +18,9 @@ import httpx
 
 from ._internal.resource import AsyncResource
 from ._shared import (
+    _UNSET,
+    DEFAULT_GATEWAY,
+    _Unset,
     build_async_task_payload,
     build_task_payload,
     filter_workers,
@@ -25,7 +28,6 @@ from ._shared import (
 )
 from ._transport import make_async_client, raise_for_response, wrap_connection_error
 from .artifacts import ArtifactManager
-from .client import _UNSET, _Unset
 from .exceptions import (
     AgentFMError,
     GatewayConnectionError,
@@ -45,8 +47,6 @@ if TYPE_CHECKING:
     from .openai import AsyncOpenAINamespace
 
 _log = logging.getLogger(__name__)
-
-DEFAULT_GATEWAY = "http://127.0.0.1:8080"
 
 
 class _AsyncWorkersNamespace(AsyncResource):
