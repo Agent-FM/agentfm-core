@@ -2,6 +2,8 @@ package boss
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -90,16 +92,35 @@ func (b *Boss) StartAPIServer(port string) error {
 		b.listenTelemetry(ctx)
 	}()
 
+	// Bearer-auth middleware. When AGENTFM_API_KEYS is unset the middleware
+	// is a transparent pass-through (back-compat solo-dev mode); when keys
+	// are configured, /api/* and /v1/* require Authorization: Bearer <tok>.
+	// /metrics and /health stay open for Prometheus + LB probes.
+	auth, err := newAuthConfig()
+	if err != nil {
+		return fmt.Errorf("auth config: %w", err)
+	}
+	auth.limiter.startJanitor(ctx)
+
+	// CORS wraps auth so OPTIONS preflights bypass auth (browsers do not
+	// send credentials on preflight). corsMiddleware short-circuits OPTIONS
+	// before calling its `next`.
+	protected := func(route string, h http.HandlerFunc) http.HandlerFunc {
+		return corsMiddleware(auth.middleware(route, h))
+	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/workers", corsMiddleware(b.handleGetWorkers))
-	mux.HandleFunc("/api/execute", corsMiddleware(b.handleExecuteTask))
-	mux.HandleFunc("/api/execute/async", corsMiddleware(b.asyncExecuteHandler(ctx, &bgWG)))
-	mux.HandleFunc("/v1/models", corsMiddleware(b.handleModels))
-	mux.HandleFunc("/v1/chat/completions", corsMiddleware(b.handleChatCompletions))
-	mux.HandleFunc("/v1/completions", corsMiddleware(b.handleCompletions))
-	// /metrics is intentionally not wrapped in corsMiddleware — Prometheus
-	// scrapers don't need CORS, and exposing it would be misleading.
+	mux.HandleFunc("/api/workers", protected("/api/workers", b.handleGetWorkers))
+	mux.HandleFunc("/api/execute", protected("/api/execute", b.handleExecuteTask))
+	mux.HandleFunc("/api/execute/async", protected("/api/execute/async", b.asyncExecuteHandler(ctx, &bgWG)))
+	mux.HandleFunc("/v1/models", protected("/v1/models", b.handleModels))
+	mux.HandleFunc("/v1/chat/completions", protected("/v1/chat/completions", b.handleChatCompletions))
+	mux.HandleFunc("/v1/completions", protected("/v1/completions", b.handleCompletions))
+	// /metrics and /health are intentionally not wrapped in CORS or auth —
+	// Prometheus scrapers and LB health probes need neither, and exposing
+	// CORS on /metrics would be misleading.
 	mux.Handle("/metrics", metrics.Handler())
+	mux.HandleFunc("/health", b.handleHealth)
 
 	srv := &http.Server{
 		Addr:    ":" + port,
@@ -169,4 +190,27 @@ func (b *Boss) StartAPIServer(port string) error {
 
 	pterm.Success.Println("API Gateway offline.")
 	return listenErr
+}
+
+// handleHealth serves an unauthenticated liveness/readiness probe.
+// Intended for load-balancer health checks and uptime monitors. Returns
+// 200 + a tiny JSON body carrying the count of workers currently visible
+// in telemetry — enough for an LB to also do shallow capacity-aware
+// routing if it wants to.
+func (b *Boss) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	b.mu.RLock()
+	online := len(b.activeWorkers)
+	b.mu.RUnlock()
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]any{
+		"status":         "ok",
+		"online_workers": online,
+	}); err != nil {
+		// Body already started; nothing useful to do.
+		_ = err
+	}
 }
