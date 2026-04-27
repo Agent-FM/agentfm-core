@@ -162,8 +162,14 @@ func (b *Boss) dialWorkerStream(ctx context.Context, target peer.ID) (netcore.St
 		addrs = append(addrs, info.Addrs...)
 	}
 
-	if relayMA, err := multiaddr.NewMultiaddr(fmt.Sprintf("%s/p2p-circuit/p2p/%s", b.node.RelayAddr, target.String())); err == nil {
-		addrs = append(addrs, relayMA)
+	// Only attempt the circuit-relay path when the relay is actually
+	// reachable. A dead relay would otherwise add a guaranteed-fail
+	// dial to every task, costing StreamDialTimeout per request.
+	if b.node.RelayPeerID != "" &&
+		b.node.Host.Network().Connectedness(b.node.RelayPeerID) == netcore.Connected {
+		if relayMA, err := multiaddr.NewMultiaddr(fmt.Sprintf("%s/p2p-circuit/p2p/%s", b.node.RelayAddr, target.String())); err == nil {
+			addrs = append(addrs, relayMA)
+		}
 	}
 
 	b.node.Host.Peerstore().SetAddrs(target, addrs, 2*time.Minute)

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/libp2p/go-libp2p/core/pnet"
@@ -30,7 +31,19 @@ func GenerateSwarmKey(outputPath string) error {
 }
 
 // LoadSwarmKey reads a PSK file and decodes it for libp2p consumption.
+// Warns (does not refuse) when the file is group/world-readable; the spec
+// is 0600 and a swarm.key checked into git or chmod 644'd is a real-world
+// foot-shooting we should call out without bricking the node.
 func LoadSwarmKey(path string) (pnet.PSK, error) {
+	if info, err := os.Stat(path); err == nil {
+		if mode := info.Mode().Perm(); mode&0o077 != 0 {
+			slog.Warn("swarm key file is group/world readable; expected 0600",
+				slog.String("path", path),
+				slog.String("mode", fmt.Sprintf("%#o", mode)),
+			)
+		}
+	}
+
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("could not open swarm key file: %w", err)

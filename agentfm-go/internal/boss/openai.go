@@ -461,7 +461,13 @@ func writeSSEFrame(w http.ResponseWriter, payload any, flush func()) bool {
 }
 
 func writeSSEDone(w http.ResponseWriter, flush func()) {
-	_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	if _, err := w.Write([]byte("data: [DONE]\n\n")); err != nil {
+		// Client gone before we could close out the stream. Drop a debug
+		// crumb but no escalation — the response body is closed and there
+		// is nothing useful to do beyond record the disconnect.
+		slog.Debug("sse done write", slog.Any(obs.FieldErr, err))
+		return
+	}
 	flush()
 }
 
