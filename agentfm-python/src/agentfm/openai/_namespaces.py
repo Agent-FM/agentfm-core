@@ -23,9 +23,8 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 import httpx
 
 from .._internal.resource import AsyncResource, SyncResource
-from .._transport import STREAMING_TIMEOUT, raise_for_response, wrap_connection_error
-from .._warnings import AgentFMRoutingWarning
-from ..exceptions import WorkerStreamError
+from .._transport import STREAMING_TIMEOUT, raise_for_response, raise_translated_stream_error
+from .._warnings import ROUTING_WARNING_STACKLEVEL, AgentFMRoutingWarning
 from ..streaming import parse_sse_lines
 from .models import (
     ChatCompletion,
@@ -71,7 +70,7 @@ class _RoutingWarner:
             "the gateway picks for you. To pin to a specific worker (recommended), pass "
             "a peer_id from client.workers.list(). This warning fires once per model string.",
             AgentFMRoutingWarning,
-            stacklevel=4,
+            stacklevel=ROUTING_WARNING_STACKLEVEL,
         )
 
     def reset(self) -> None:
@@ -178,17 +177,10 @@ class _ChatCompletions(SyncResource):
                 for payload in parse_sse_lines(r.iter_lines()):
                     with contextlib.suppress(ValueError):
                         yield ChatCompletionChunk.model_validate(json.loads(payload))
-        except httpx.ConnectError as exc:
-            raise wrap_connection_error(exc, base_url=self._client.gateway_url) from exc
         except httpx.HTTPError as exc:
-            # Mid-stream httpx failures (RemoteProtocolError, ReadTimeout,
-            # ReadError, WriteError, PoolTimeout, ...) must surface as a
-            # typed AgentFMError so user code expecting only AgentFMError
-            # subclasses doesn't crash on a transport blip mid-SSE.
-            raise WorkerStreamError(
-                f"openai stream failed: {exc}",
-                code="worker_stream_failed",
-            ) from exc
+            raise_translated_stream_error(
+                exc, base_url=self._client.gateway_url, label="openai"
+            )
 
 
 class _Completions(SyncResource):
@@ -240,17 +232,10 @@ class _Completions(SyncResource):
                 for payload in parse_sse_lines(r.iter_lines()):
                     with contextlib.suppress(ValueError):
                         yield TextCompletionChunk.model_validate(json.loads(payload))
-        except httpx.ConnectError as exc:
-            raise wrap_connection_error(exc, base_url=self._client.gateway_url) from exc
         except httpx.HTTPError as exc:
-            # Mid-stream httpx failures (RemoteProtocolError, ReadTimeout,
-            # ReadError, WriteError, PoolTimeout, ...) must surface as a
-            # typed AgentFMError so user code expecting only AgentFMError
-            # subclasses doesn't crash on a transport blip mid-SSE.
-            raise WorkerStreamError(
-                f"openai stream failed: {exc}",
-                code="worker_stream_failed",
-            ) from exc
+            raise_translated_stream_error(
+                exc, base_url=self._client.gateway_url, label="openai"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -343,17 +328,10 @@ class _AsyncChatCompletions(AsyncResource):
                 async for payload in _aiter_sse(r):
                     with contextlib.suppress(ValueError):
                         yield ChatCompletionChunk.model_validate(json.loads(payload))
-        except httpx.ConnectError as exc:
-            raise wrap_connection_error(exc, base_url=self._client.gateway_url) from exc
         except httpx.HTTPError as exc:
-            # Mid-stream httpx failures (RemoteProtocolError, ReadTimeout,
-            # ReadError, WriteError, PoolTimeout, ...) must surface as a
-            # typed AgentFMError so user code expecting only AgentFMError
-            # subclasses doesn't crash on a transport blip mid-SSE.
-            raise WorkerStreamError(
-                f"openai stream failed: {exc}",
-                code="worker_stream_failed",
-            ) from exc
+            raise_translated_stream_error(
+                exc, base_url=self._client.gateway_url, label="openai"
+            )
 
 
 class _AsyncCompletions(AsyncResource):
@@ -417,17 +395,10 @@ class _AsyncCompletions(AsyncResource):
                 async for payload in _aiter_sse(r):
                     with contextlib.suppress(ValueError):
                         yield TextCompletionChunk.model_validate(json.loads(payload))
-        except httpx.ConnectError as exc:
-            raise wrap_connection_error(exc, base_url=self._client.gateway_url) from exc
         except httpx.HTTPError as exc:
-            # Mid-stream httpx failures (RemoteProtocolError, ReadTimeout,
-            # ReadError, WriteError, PoolTimeout, ...) must surface as a
-            # typed AgentFMError so user code expecting only AgentFMError
-            # subclasses doesn't crash on a transport blip mid-SSE.
-            raise WorkerStreamError(
-                f"openai stream failed: {exc}",
-                code="worker_stream_failed",
-            ) from exc
+            raise_translated_stream_error(
+                exc, base_url=self._client.gateway_url, label="openai"
+            )
 
 
 async def _aiter_sse(r: httpx.Response) -> AsyncIterator[str]:

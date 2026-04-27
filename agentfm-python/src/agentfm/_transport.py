@@ -20,7 +20,9 @@ import httpx
 from .exceptions import (
     GatewayConnectionError,
     GatewayProtocolError,
+    InvalidRequestError,
     WorkerNotFoundError,
+    WorkerStreamError,
     from_envelope,
 )
 
@@ -171,6 +173,29 @@ def wrap_connection_error(exc: Exception, *, base_url: str) -> GatewayConnection
     )
 
 
+def raise_translated_stream_error(
+    exc: httpx.HTTPError, *, base_url: str, label: str
+) -> None:
+    """Translate any mid-stream httpx failure into the right typed AgentFMError.
+
+    Centralises what each ``_stream`` method used to do inline (`tasks.stream`,
+    `chat.completions._stream`, `completions._stream`, plus their async
+    equivalents). Adding a new transport-error class only needs to be wired
+    here; the six call sites stay tiny.
+    """
+    if isinstance(exc, httpx.UnsupportedProtocol):
+        raise InvalidRequestError(
+            f"invalid gateway URL scheme: {exc}",
+            code="invalid_gateway_url",
+        ) from exc
+    if isinstance(exc, httpx.ConnectError):
+        raise wrap_connection_error(exc, base_url=base_url) from exc
+    raise WorkerStreamError(
+        f"{label} stream failed: {exc}",
+        code="worker_stream_failed",
+    ) from exc
+
+
 # ---------------------------------------------------------------------------
 # Retry helpers
 # ---------------------------------------------------------------------------
@@ -264,6 +289,7 @@ __all__ = [
     "make_async_client",
     "make_client",
     "raise_for_response",
+    "raise_translated_stream_error",
     "retry_async",
     "retry_sync",
     "wrap_connection_error",

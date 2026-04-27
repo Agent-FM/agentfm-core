@@ -45,14 +45,13 @@ from ._transport import (
     STREAMING_TIMEOUT,
     make_client,
     raise_for_response,
-    wrap_connection_error,
+    raise_translated_stream_error,
 )
 from .artifacts import ArtifactManager
 from .exceptions import (
     AgentFMError,
     GatewayConnectionError,
     WorkerNotFoundError,
-    WorkerStreamError,
 )
 from .models import (
     AsyncTaskAck,
@@ -183,17 +182,15 @@ class _TasksNamespace(SyncResource):
                     yield TaskChunk(text=tail)
                 if filt.artifacts_incoming:
                     yield TaskChunk(text="", kind="marker")
-        except httpx.ConnectError as exc:
-            raise wrap_connection_error(exc, base_url=self._client.gateway_url) from exc
         except httpx.HTTPError as exc:
-            # Anything else httpx surfaces mid-stream (ReadTimeout, ReadError,
-            # RemoteProtocolError, WriteError, PoolTimeout, ...) is a worker
-            # stream failure from the SDK caller's perspective. Wrap so
-            # tasks.scatter's "never raises non-AgentFMError" contract holds.
-            raise WorkerStreamError(
-                f"worker stream failed: {exc}",
-                code="worker_stream_failed",
-            ) from exc
+            # Centralised translation: ConnectError -> GatewayConnectionError,
+            # UnsupportedProtocol -> InvalidRequestError, anything else
+            # mid-stream -> WorkerStreamError. Keeps the six streaming sites
+            # in lockstep so tasks.scatter's "never raises non-AgentFMError"
+            # contract holds.
+            raise_translated_stream_error(
+                exc, base_url=self._client.gateway_url, label="worker"
+            )
 
     def submit_async(
         self,

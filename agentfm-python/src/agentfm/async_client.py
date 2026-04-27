@@ -10,7 +10,7 @@ import logging
 import os
 import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from functools import cached_property
 from pathlib import Path
 from types import TracebackType
@@ -34,14 +34,13 @@ from ._transport import (
     STREAMING_TIMEOUT,
     make_async_client,
     raise_for_response,
-    wrap_connection_error,
+    raise_translated_stream_error,
 )
 from .artifacts import ArtifactManager
 from .exceptions import (
     AgentFMError,
     GatewayConnectionError,
     WorkerNotFoundError,
-    WorkerStreamError,
 )
 from .models import (
     AsyncTaskAck,
@@ -156,13 +155,10 @@ class _AsyncTasksNamespace(AsyncResource):
                     yield TaskChunk(text=tail)
                 if filter_.artifacts_incoming:
                     yield TaskChunk(text="", kind="marker")
-        except httpx.ConnectError as exc:
-            raise wrap_connection_error(exc, base_url=self._client.gateway_url) from exc
         except httpx.HTTPError as exc:
-            raise WorkerStreamError(
-                f"worker stream failed: {exc}",
-                code="worker_stream_failed",
-            ) from exc
+            raise_translated_stream_error(
+                exc, base_url=self._client.gateway_url, label="worker"
+            )
 
     async def submit_async(
         self,
@@ -242,10 +238,18 @@ class _AsyncTasksNamespace(AsyncResource):
         *,
         model: str,
         max_workers: int | None = None,
+        pick: Callable[[List[WorkerProfile]], List[WorkerProfile]] | None = None,
         **scatter_opts: Any,
     ) -> list[ScatterResult]:
+        """Convenience: discover workers by ``model``, then ``scatter`` across them.
+
+        Mirrors :meth:`AgentFMClient.tasks.scatter_by_model`. ``pick`` overrides
+        ``max_workers`` when both are passed.
+        """
         candidates = await self._client.workers.list(model=model, available_only=True)
-        if max_workers is not None:
+        if pick is not None:
+            candidates = pick(candidates)
+        elif max_workers is not None:
             candidates = candidates[:max_workers]
         if not candidates:
             raise WorkerNotFoundError(f"no available workers advertise model={model!r}")
