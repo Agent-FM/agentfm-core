@@ -87,6 +87,19 @@ def test_filter_iter_helper_round_trips():
     assert out == "x\ny\n"
 
 
+def test_finalize_drops_partial_sentinel_prefix():
+    """A final chunk that opens a sentinel but never terminates it must
+    not leak '[AGENTFM:...' into the user's stream. Worker is the only
+    party that emits these markers; partial means truncated transport."""
+    f = SentinelFilter()
+    fed = list(f.feed("[AGENTFM: PARTIAL"))
+    tail = f.finalize()
+    assert fed == [], f"unexpected emission during feed: {fed}"
+    assert tail == "", f"partial sentinel leaked into finalize tail: {tail!r}"
+    assert f.artifacts_incoming is False
+    assert f.artifacts_complete is False
+
+
 @pytest.mark.parametrize(
     "lines,expected",
     [

@@ -331,6 +331,19 @@ class AsyncAgentFMClient:
     async def aclose(self) -> None:
         await self._http.aclose()
 
+    def __del__(self) -> None:
+        # Defensive close: synchronous in __del__ because there is no event
+        # loop guarantee at GC time. We close the transport directly to free
+        # sockets without scheduling on a running loop. Wrapped because
+        # __del__ during interpreter teardown can raise on already-collected
+        # attributes.
+        import contextlib
+        with contextlib.suppress(Exception):
+            transport = getattr(self._http, "_transport", None)
+            close = getattr(transport, "close", None)
+            if close is not None:
+                close()
+
     async def __aenter__(self) -> AsyncAgentFMClient:
         return self
 

@@ -379,6 +379,15 @@ class AgentFMClient:
     def close(self) -> None:
         self._http.close()
 
+    def __del__(self) -> None:
+        # Defensive close so a user who built a client via with_options(...)
+        # outside a `with` block does not leak the underlying httpx.Client
+        # until interpreter exit. Wrapped because __del__ during interpreter
+        # teardown can raise on previously-collected attributes.
+        import contextlib
+        with contextlib.suppress(Exception):
+            self.close()
+
     def __enter__(self) -> AgentFMClient:
         return self
 
