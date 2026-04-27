@@ -77,17 +77,25 @@ def _should_retry_response(response: httpx.Response | None) -> bool:
     return response is not None and response.status_code in RETRY_STATUSES
 
 
+def _default_headers(user_agent: str, api_key: str | None) -> dict[str, str]:
+    headers = {"User-Agent": user_agent}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    return headers
+
+
 def make_client(
     base_url: str,
     *,
     timeout: float | httpx.Timeout | None = None,
     user_agent: str = DEFAULT_USER_AGENT,
+    api_key: str | None = None,
 ) -> httpx.Client:
     return httpx.Client(
         base_url=base_url.rstrip("/"),
         timeout=_resolve_timeout(timeout),
         limits=DEFAULT_LIMITS,
-        headers={"User-Agent": user_agent},
+        headers=_default_headers(user_agent, api_key),
         follow_redirects=False,
     )
 
@@ -97,12 +105,13 @@ def make_async_client(
     *,
     timeout: float | httpx.Timeout | None = None,
     user_agent: str = DEFAULT_USER_AGENT,
+    api_key: str | None = None,
 ) -> httpx.AsyncClient:
     return httpx.AsyncClient(
         base_url=base_url.rstrip("/"),
         timeout=_resolve_timeout(timeout),
         limits=DEFAULT_LIMITS,
-        headers={"User-Agent": user_agent},
+        headers=_default_headers(user_agent, api_key),
         follow_redirects=False,
     )
 

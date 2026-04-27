@@ -17,6 +17,7 @@ Surface (canonical):
 from __future__ import annotations
 
 import logging
+import os
 import time
 import uuid
 from collections.abc import Callable, Iterator
@@ -307,6 +308,7 @@ class AgentFMClient:
         timeout: float | httpx.Timeout | None = None,
         retries: int = 2,
         artifacts_dir: str | Path | None = None,
+        api_key: str | None = None,
     ) -> None:
         """Build a client.
 
@@ -315,10 +317,15 @@ class AgentFMClient:
         unset, ``tasks.run`` does NOT attempt to harvest artifacts and
         returns ``artifacts=[]``. Set this only when the SDK process and
         the boss process share a filesystem.
+
+        ``api_key`` sets the bearer token sent on every request. When ``None``,
+        falls back to the ``AGENTFM_API_KEY`` env var; if that is also unset,
+        no ``Authorization`` header is sent (solo-dev mode).
         """
         self.gateway_url = gateway_url.rstrip("/")
         self.retries = retries
-        self._http = make_client(self.gateway_url, timeout=timeout)
+        self.api_key = api_key if api_key is not None else os.environ.get("AGENTFM_API_KEY") or None
+        self._http = make_client(self.gateway_url, timeout=timeout, api_key=self.api_key)
         self.artifacts: ArtifactManager | None = (
             ArtifactManager(watch_dir=artifacts_dir, extract_dir=artifacts_dir)
             if artifacts_dir is not None
@@ -361,6 +368,7 @@ class AgentFMClient:
                 if isinstance(artifacts_dir, _Unset)
                 else artifacts_dir
             ),
+            api_key=self.api_key,
         )
 
     def close(self) -> None:
