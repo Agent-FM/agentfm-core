@@ -134,6 +134,12 @@ Multiple keys are accepted (comma-separated): `AGENTFM_API_KEYS="key1,key2,key3"
 
 **Per-IP rate limiting.** Failed auth attempts are throttled per remote IP (token bucket, 30/min) with a bounded LRU map. Successful requests are not rate-limited.
 
+> **Behind a reverse proxy.** The rate limiter keys on `RemoteAddr`, which is the proxy's IP when AgentFM sits behind nginx / Caddy / Cloudflare. In that topology the per-IP throttle becomes a shared quota across all clients coming through the proxy. Either keep the gateway as the edge (loopback bind + `AGENTFM_API_KEYS` for off-host clients), or rely on the proxy's own rate limiting upstream of AgentFM.
+
+**Async submission cap.** `/api/execute/async` is bounded by `MaxInflightAsyncTasks` (256). When saturated, returns `503` with `Retry-After: 5` and an OpenAI-shaped envelope (`code: async_capacity_exhausted`).
+
+**Operator monitoring.** Alert on the `agentfm_auth_attempts_total{outcome="invalid_token"}` and `{outcome="rate_limited"}` Prometheus counters rather than scraping logs — the per-failure log line at WARN can be noisy during legitimate token rotation.
+
 ### From the Python SDK
 
 ```python
@@ -458,7 +464,7 @@ Zero-trust threat model. Every remote peer is treated as potentially slow, fault
 | **Peer identity** | Peer IDs are Ed25519 public keys; identities persist via `relay_identity.key` (mode `0600`). |
 | **HTTP gateway auth** | `AGENTFM_API_KEYS` enables bearer-token auth on `/api/*` and `/v1/*`; constant-time comparison; per-IP rate limiting on failed attempts. Loopback bind is the default; non-loopback bind without keys refuses to start unless `AGENTFM_ALLOW_UNAUTH_PUBLIC=1`. See [Authentication](#authentication). |
 | **Private networks** | `-swarmkey` enables PSK; non-key-holders dropped before any protocol byte. |
-| **Execution** | Every task runs in a fresh Podman container with `--rm --network host`. SIGKILLed the instant the stream dies. |
+| **Execution** | Every task runs in a fresh Podman container with `--rm --network host`. SIGKILLed the instant the stream dies. **Caveat:** `--network host` gives the agent container full access to the worker's loopback (Ollama, internal admin endpoints, cloud metadata at `169.254.169.254`). Treat agent images as **trusted code**; review their Dockerfiles before running. The worker prints a startup warning to this effect. |
 | **DoS / Slow-loris** | Every libp2p stream has explicit deadlines. HTTP server has full timeout matrix. Payloads capped with `io.LimitReader`. |
 | **Webhook SSRF** | Webhook URLs validated against private/loopback/link-local; resolves at validation AND re-validates each candidate IP at dial-time (TOCTOU safe). Set `AGENTFM_WEBHOOK_ALLOW_PRIVATE=1` to opt back in. |
 | **Webhook integrity** | Set `AGENTFM_WEBHOOK_SECRET` to enable HMAC-SHA256 signing (`X-AgentFM-Signature` header). Python `WebhookReceiver(secret=...)` verifies in constant time. |
