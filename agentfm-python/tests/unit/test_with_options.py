@@ -83,3 +83,52 @@ def test_with_options_async_client_overrides_retries():
     assert derived is not base
     assert derived.retries == 7
     assert base.retries == 2
+
+
+def test_with_options_overrides_api_key():
+    base = AgentFMClient(gateway_url="http://x:8080", api_key="parent")
+    derived = base.with_options(api_key="child")
+    try:
+        assert derived.api_key == "child"
+        assert base.api_key == "parent"
+        assert derived._http.headers["Authorization"] == "Bearer child"
+        assert base._http.headers["Authorization"] == "Bearer parent"
+    finally:
+        base.close()
+        derived.close()
+
+
+def test_with_options_clears_api_key_with_explicit_none():
+    base = AgentFMClient(gateway_url="http://x:8080", api_key="parent")
+    derived = base.with_options(api_key=None)
+    try:
+        assert derived.api_key is None
+        assert base.api_key == "parent"
+        assert "authorization" not in {k.lower() for k in derived._http.headers}
+    finally:
+        base.close()
+        derived.close()
+
+
+def test_with_options_async_overrides_api_key():
+    base = AsyncAgentFMClient(gateway_url="http://x:8080", api_key="parent")
+    derived = base.with_options(api_key="child")
+    assert derived.api_key == "child"
+    assert base.api_key == "parent"
+
+
+def test_with_options_async_clears_api_key_with_explicit_none():
+    base = AsyncAgentFMClient(gateway_url="http://x:8080", api_key="parent")
+    derived = base.with_options(api_key=None)
+    assert derived.api_key is None
+    assert base.api_key == "parent"
+
+
+def test_constructor_explicit_none_api_key_skips_env_fallback(monkeypatch):
+    monkeypatch.setenv("AGENTFM_API_KEY", "from-env")
+    c = AgentFMClient(gateway_url="http://x:8080", api_key=None)
+    try:
+        assert c.api_key is None
+        assert "authorization" not in {k.lower() for k in c._http.headers}
+    finally:
+        c.close()

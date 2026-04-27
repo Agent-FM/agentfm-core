@@ -266,11 +266,14 @@ class AsyncAgentFMClient:
         timeout: float | httpx.Timeout | None = None,
         retries: int = 2,
         artifacts_dir: str | Path | None = None,
-        api_key: str | None = None,
+        api_key: str | None | _Unset = _UNSET,
     ) -> None:
         self.gateway_url = gateway_url.rstrip("/")
         self.retries = retries
-        self.api_key = api_key if api_key is not None else os.environ.get("AGENTFM_API_KEY") or None
+        if isinstance(api_key, _Unset):
+            self.api_key = os.environ.get("AGENTFM_API_KEY") or None
+        else:
+            self.api_key = api_key or None
         self._http = make_async_client(self.gateway_url, timeout=timeout, api_key=self.api_key)
         self.artifacts: ArtifactManager | None = (
             ArtifactManager(watch_dir=artifacts_dir, extract_dir=artifacts_dir)
@@ -299,11 +302,15 @@ class AsyncAgentFMClient:
         timeout: float | httpx.Timeout | None | _Unset = _UNSET,
         retries: int | _Unset = _UNSET,
         artifacts_dir: str | Path | None | _Unset = _UNSET,
+        api_key: str | None | _Unset = _UNSET,
     ) -> AsyncAgentFMClient:
         """Return a new client with the given options overridden.
 
         Each unspecified option is inherited from this client. The returned
         client owns a fresh ``httpx.AsyncClient`` — close it independently.
+
+        ``api_key`` follows the same sentinel rule: pass an explicit ``None``
+        to drop authentication on the derived client, omit to inherit.
         """
         return type(self)(
             gateway_url=self.gateway_url if isinstance(gateway_url, _Unset) else gateway_url,
@@ -314,7 +321,7 @@ class AsyncAgentFMClient:
                 if isinstance(artifacts_dir, _Unset)
                 else artifacts_dir
             ),
-            api_key=self.api_key,
+            api_key=self.api_key if isinstance(api_key, _Unset) else api_key,
         )
 
     async def aclose(self) -> None:

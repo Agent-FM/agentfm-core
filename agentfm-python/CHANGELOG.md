@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Bearer-token auth for the Boss HTTP gateway (issue #13). Pass
+  `api_key="..."` to `AgentFMClient` / `AsyncAgentFMClient` to send
+  `Authorization: Bearer <key>` on every request. Falls back to
+  `AGENTFM_API_KEY` env var when the argument is omitted; pass an explicit
+  `None` to disable auth (no env fallback). New `AuthenticationError`
+  raised on HTTP 401 envelopes. `with_options(api_key=...)` accepts the
+  same three modes (string override, explicit `None` to clear, omit to
+  inherit).
 - `client.with_options(...)` and `async_client.with_options(...)` shallow-clone
   helpers for one-off requests with overridden timeout / retries / gateway URL.
 - `ArtifactManager.collect_since(since, timeout)` consolidates the
