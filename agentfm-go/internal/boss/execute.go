@@ -74,7 +74,7 @@ func (b *Boss) executeFlow(ctx context.Context, worker types.WorkerProfile) {
 		return
 	}
 
-	taskID := fmt.Sprintf("task_%d", time.Now().UnixNano())
+	taskID := newCompletionID("task_")
 	payload := types.TaskPayload{
 		Version: version.AppVersion,
 		Task:    "agent_task",

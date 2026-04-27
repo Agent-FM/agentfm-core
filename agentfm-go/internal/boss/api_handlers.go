@@ -115,7 +115,7 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.TaskID == "" {
-		req.TaskID = fmt.Sprintf("task_%d", time.Now().UnixNano())
+		req.TaskID = newCompletionID("task_")
 	}
 
 	b.mu.RLock()
