@@ -7,6 +7,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -23,6 +25,37 @@ import (
 // default http.Client has no timeout at all, so a slow or hostile webhook
 // would otherwise stall the async goroutine and block server shutdown.
 const webhookTimeout = 30 * time.Second
+
+// asyncArtifactWait is the upper bound on how long runAsyncTask waits for
+// the artifact zip to appear on disk before firing the webhook. Workers
+// that produce no artifacts (the [AGENTFM: NO_FILES] sentinel) hit this
+// timeout and proceed; workers that DO produce artifacts usually deliver
+// them within hundreds of milliseconds via HandleArtifactStream.
+const asyncArtifactWait = 10 * time.Second
+
+// waitForArtifact polls for agentfm_artifacts/<taskID>.zip with a 100ms
+// cadence until the file appears or maxWait elapses or ctx is cancelled.
+// Returns whether the file was observed (currently informational only;
+// callers fire the webhook either way).
+func waitForArtifact(ctx context.Context, taskID string, maxWait time.Duration) bool {
+	deadline := time.Now().Add(maxWait)
+	zipPath := filepath.Join("agentfm_artifacts", taskID+".zip")
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if _, err := os.Stat(zipPath); err == nil {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-ticker.C:
+		}
+	}
+}
 
 // asyncExecuteHandler returns the /api/execute/async handler wired to the
 // server-lifetime rootCtx and an inflight WaitGroup. The handler spawns a
@@ -60,6 +93,20 @@ func (b *Boss) asyncExecuteHandler(rootCtx context.Context, wg *sync.WaitGroup) 
 
 		taskID := newCompletionID("task_")
 
+		// Acquire an async slot non-blockingly. When MaxInflightAsyncTasks
+		// is exhausted, return 503 with a Retry-After hint instead of
+		// silently spawning unbounded goroutines (DoS vector). The slot
+		// is released by the goroutine on exit.
+		select {
+		case b.asyncSlots <- struct{}{}:
+		default:
+			w.Header().Set("Retry-After", "5")
+			writeOpenAIError(w, http.StatusServiceUnavailable, errTypeServerError,
+				"async_capacity_exhausted",
+				"too many async tasks in flight; retry shortly")
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		if err := json.NewEncoder(w).Encode(map[string]string{
@@ -68,6 +115,7 @@ func (b *Boss) asyncExecuteHandler(rootCtx context.Context, wg *sync.WaitGroup) 
 			"message": "Task dispatched to P2P mesh.",
 		}); err != nil {
 			slog.Error("async task ack write", slog.Any(obs.FieldErr, err))
+			<-b.asyncSlots
 			return
 		}
 
@@ -80,6 +128,7 @@ func (b *Boss) asyncExecuteHandler(rootCtx context.Context, wg *sync.WaitGroup) 
 		go func() {
 			defer wg.Done()
 			defer cancelTask()
+			defer func() { <-b.asyncSlots }()
 
 			b.runAsyncTask(taskCtx, peerID, taskID, req)
 		}()
@@ -142,15 +191,14 @@ func (b *Boss) runAsyncTask(ctx context.Context, peerID peer.ID, taskID string, 
 	streamSuccess = true
 	status = metrics.StatusOK
 
-	// Brief grace period so the out-of-band artifact stream (handled by
-	// HandleArtifactStream on a separate libp2p stream) lands on disk
-	// before we notify the webhook. Aborted early if the server is
-	// shutting down.
-	select {
-	case <-time.After(2 * time.Second):
-	case <-ctx.Done():
-		return
-	}
+	// Wait for the out-of-band artifact stream to land on disk before
+	// notifying the webhook. The artifact zip lives at
+	// agentfm_artifacts/<taskID>.zip; poll for it with a bounded deadline.
+	// If the file appears earlier we fire immediately (responsive UX);
+	// if it doesn't appear within asyncArtifactWait we fire anyway with
+	// only the stdout result (the worker may have legitimately produced
+	// no artifacts via the [AGENTFM: NO_FILES] sentinel).
+	waitForArtifact(ctx, taskID, asyncArtifactWait)
 
 	if req.WebhookURL == "" {
 		return
