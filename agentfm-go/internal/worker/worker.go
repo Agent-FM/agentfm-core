@@ -78,6 +78,13 @@ func (w *Worker) Start(ctx context.Context) {
 		os.Exit(1)
 	}
 
+	pterm.Warning.Println(
+		"Containers run with --network host: the agent has full access to this " +
+			"machine's network namespace, including loopback (127.0.0.1) services like " +
+			"Ollama, internal admin endpoints, and cloud metadata (169.254.169.254). " +
+			"Treat agent images as TRUSTED CODE; review their Dockerfiles before running.",
+	)
+
 	w.printMetadata()
 	w.wg.Add(1)
 	go w.startTelemetry(ctx)
