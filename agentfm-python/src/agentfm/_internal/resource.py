@@ -29,6 +29,7 @@ from .._transport import (
     retry_sync,
     wrap_connection_error,
 )
+from ..exceptions import InvalidRequestError
 
 if TYPE_CHECKING:
 
@@ -63,6 +64,14 @@ class SyncResource:
                 params=params,
                 retries=self._client.retries,
             )
+        except httpx.UnsupportedProtocol as exc:
+            # Programmer / config error (e.g. gateway_url="ftp://x" or a
+            # missing scheme). Surface as InvalidRequestError so it doesn't
+            # masquerade as a transient gateway outage.
+            raise InvalidRequestError(
+                f"invalid gateway URL scheme: {exc}",
+                code="invalid_gateway_url",
+            ) from exc
         except httpx.HTTPError as exc:
             # All transport-layer httpx failures (Connect/Read/Write/
             # RemoteProtocol/Pool/Proxy errors) become GatewayConnectionError
@@ -103,6 +112,11 @@ class AsyncResource:
                 params=params,
                 retries=self._client.retries,
             )
+        except httpx.UnsupportedProtocol as exc:
+            raise InvalidRequestError(
+                f"invalid gateway URL scheme: {exc}",
+                code="invalid_gateway_url",
+            ) from exc
         except httpx.HTTPError as exc:
             raise wrap_connection_error(exc, base_url=self._client.gateway_url) from exc
         raise_for_response(response)

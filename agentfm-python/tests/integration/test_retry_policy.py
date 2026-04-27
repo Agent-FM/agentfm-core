@@ -89,6 +89,60 @@ def test_request_wraps_remote_protocol_error_as_connection_error(
         client.workers.list()
 
 
+def test_remote_protocol_error_is_retried(
+    gateway_url: str, mock_gateway: respx.MockRouter
+):
+    """Pre-fix, retry_sync's default on=(ConnectError, ReadError) didn't
+    cover RemoteProtocolError, so a transient mid-stream blip surfaced as
+    a single-shot failure even with retries=3. After widening the default,
+    the call should be re-issued."""
+    route = mock_gateway.get("/api/workers")
+    route.side_effect = [
+        httpx.RemoteProtocolError("connection closed by peer"),
+        httpx.Response(200, json={"success": True, "agents": []}),
+    ]
+    with AgentFMClient(gateway_url=gateway_url, retries=3) as client:
+        workers = client.workers.list()
+    assert workers == []
+    assert route.call_count == 2, (
+        f"expected retry to fire (call_count=2); got {route.call_count}"
+    )
+
+
+def test_pool_timeout_is_retried(
+    gateway_url: str, mock_gateway: respx.MockRouter
+):
+    """Same regression for httpx.PoolTimeout — also part of the widened
+    retryable family."""
+    route = mock_gateway.get("/api/workers")
+    route.side_effect = [
+        httpx.PoolTimeout("connection pool exhausted"),
+        httpx.Response(200, json={"success": True, "agents": []}),
+    ]
+    with AgentFMClient(gateway_url=gateway_url, retries=3) as client:
+        workers = client.workers.list()
+    assert workers == []
+    assert route.call_count == 2
+
+
+def test_unsupported_protocol_surfaces_as_invalid_request():
+    """A misconfigured gateway URL must surface as InvalidRequestError, not
+    as GatewayConnectionError — otherwise user config bugs masquerade as
+    transient outages and trigger pointless retries.
+
+    This test deliberately does NOT use respx so the real httpx transport
+    is exercised — respx would intercept before httpx could raise
+    UnsupportedProtocol.
+    """
+    from agentfm.exceptions import InvalidRequestError
+
+    # ftp:// is unsupported by httpx — passing it as gateway_url triggers
+    # UnsupportedProtocol on the first request.
+    with AgentFMClient(gateway_url="ftp://nope/", retries=3) as client, pytest.raises(InvalidRequestError) as ei:
+        client.workers.list()
+    assert ei.value.code == "invalid_gateway_url"
+
+
 def test_protocol_error_for_non_envelope_5xx(
     gateway_url: str, mock_gateway: respx.MockRouter
 ):

@@ -101,19 +101,35 @@ func isPrivateOrLoopbackIP(ip net.IP) bool {
 		ip.IsUnspecified()
 }
 
+// MaxWebhookResponseBytes caps the bytes we'll read from a webhook server's
+// response. The webhook contract is "ack only" — we don't inspect the body —
+// so a hostile server returning a 100 GiB body should not be able to push
+// memory pressure into the boss process. 64 KiB is generous for any
+// legitimate ack payload while staying bounded.
+const MaxWebhookResponseBytes int64 = 64 * 1024
+
 // safeWebhookClient returns an http.Client whose DialContext re-validates
 // every resolved IP before connect. Closes the SSRF TOCTOU bypass where
 // validateWebhookURL resolves at validation time and http.Client.Do
 // resolves again at dial time — an attacker can return a public IP at
 // validation and a private one at dial. Without this DialContext the
 // validator would be bypass-able by anyone who controls DNS for a hostname.
+//
+// Also disables redirect following. A 30x → file:// or 30x → 169.254.169.254
+// would otherwise bypass the URL-scheme allowlist (which only ran on the
+// original URL). The webhook contract is fire-and-forget; redirect chasing
+// adds attack surface without value.
 func safeWebhookClient(timeout time.Duration) *http.Client {
+	noRedirect := func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
 	if os.Getenv(webhookAllowPrivateEnv) == "1" {
-		return &http.Client{Timeout: timeout}
+		return &http.Client{Timeout: timeout, CheckRedirect: noRedirect}
 	}
 	dialer := &net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second}
 	return &http.Client{
-		Timeout: timeout,
+		Timeout:       timeout,
+		CheckRedirect: noRedirect,
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				host, port, err := net.SplitHostPort(addr)

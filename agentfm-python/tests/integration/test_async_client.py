@@ -72,6 +72,31 @@ async def test_async_chat_streaming(gateway_url: str, mock_gateway: respx.MockRo
     assert "alpha" in (contents or [""])
 
 
+async def test_async_openai_text_completion_streaming(
+    gateway_url: str, mock_gateway: respx.MockRouter
+):
+    """Sibling of test_async_chat_streaming for /v1/completions. Pins the
+    'await create() then async for' usage pattern for both protocol families."""
+    sse = (
+        b'data: {"id":"x","object":"text_completion","created":1,"model":"m",'
+        b'"choices":[{"index":0,"text":"alpha","finish_reason":null}]}\n\n'
+        b"data: [DONE]\n\n"
+    )
+    mock_gateway.post("/v1/completions").respond(
+        status_code=200, content=sse, headers={"Content-Type": "text/event-stream"}
+    )
+    async with AsyncAgentFMClient(gateway_url=gateway_url) as client:
+        stream = await client.openai.completions.create(
+            model="12D3KooWAlphaPid", prompt="hi", stream=True,
+        )
+        chunks = []
+        async for chunk in stream:  # type: ignore[union-attr]
+            chunks.append(chunk)
+    assert len(chunks) >= 1
+    texts = [c.choices[0].text for c in chunks if c.choices]
+    assert "alpha" in (texts or [""])
+
+
 async def test_async_openai_chat_streaming_wraps_mid_stream_httpx_error(
     gateway_url: str, mock_gateway: respx.MockRouter
 ):

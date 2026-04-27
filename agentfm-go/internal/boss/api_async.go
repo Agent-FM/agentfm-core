@@ -202,5 +202,11 @@ func (b *Boss) runAsyncTask(ctx context.Context, peerID peer.ID, taskID string, 
 		slog.Error("async task webhook delivery", slog.Any(obs.FieldErr, err), slog.String(obs.FieldTaskID, taskID))
 		return
 	}
+	// Drain a bounded slice of the body before closing. The webhook
+	// contract is "ack only" — we never inspect the body. Without this
+	// bound a hostile server can return a 100 GiB body and Close() does
+	// not cancel the read; webhookCtx times out the connection setup,
+	// not the body read after headers arrived.
+	_, _ = io.CopyN(io.Discard, resp.Body, MaxWebhookResponseBytes)
 	_ = resp.Body.Close()
 }

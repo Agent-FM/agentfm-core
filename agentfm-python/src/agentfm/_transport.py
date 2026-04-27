@@ -51,6 +51,20 @@ DEFAULT_USER_AGENT = "agentfm-python"
 # Matches the OpenAI Python SDK's retry policy.
 RETRY_STATUSES: frozenset[int] = frozenset({408, 429, 500, 502, 503, 504})
 
+# Transient httpx exception classes worth retrying. Includes mid-stream
+# disconnects (RemoteProtocolError — HAProxy idle drop, gateway restart) +
+# write-side blips + pool exhaustion. _request wraps the broader
+# httpx.HTTPError as GatewayConnectionError; this set decides which subset
+# is retried before that wrap fires. Programmer errors like
+# httpx.UnsupportedProtocol are deliberately NOT retried.
+RETRYABLE_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    httpx.ConnectError,
+    httpx.ReadError,
+    httpx.WriteError,
+    httpx.RemoteProtocolError,
+    httpx.PoolTimeout,
+)
+
 R = TypeVar("R")
 
 
@@ -158,7 +172,7 @@ def retry_sync(
     *args: Any,
     retries: int = 3,
     backoff: float = 0.5,
-    on: tuple[type[BaseException], ...] = (httpx.ConnectError, httpx.ReadError),
+    on: tuple[type[BaseException], ...] = RETRYABLE_EXCEPTIONS,
     **kwargs: Any,
 ) -> R:
     """Run ``fn`` with exponential backoff on transient failures.
@@ -203,7 +217,7 @@ async def retry_async(
     *args: Any,
     retries: int = 3,
     backoff: float = 0.5,
-    on: tuple[type[BaseException], ...] = (httpx.ConnectError, httpx.ReadError),
+    on: tuple[type[BaseException], ...] = RETRYABLE_EXCEPTIONS,
     **kwargs: Any,
 ) -> R:
     last_exc: BaseException | None = None
