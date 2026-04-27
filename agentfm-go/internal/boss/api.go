@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -71,7 +72,18 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (b *Boss) StartAPIServer(port string) error {
+func (b *Boss) StartAPIServer(bind, port string) error {
+	// Bearer-auth config FIRST so the startup-refusal guard fires before
+	// we open any listening socket. A failing-fast public deploy never
+	// gets a chance to serve a single unauthenticated request.
+	auth, err := newAuthConfig()
+	if err != nil {
+		return fmt.Errorf("auth config: %w", err)
+	}
+	if err := enforceStartupAuthGuard(bind, auth.tokens); err != nil {
+		return err
+	}
+
 	// Root ctx cancels on SIGINT/SIGTERM so every downstream goroutine
 	// (telemetry listener, async task workers, webhook POSTs) observes
 	// the same shutdown signal.
@@ -96,10 +108,6 @@ func (b *Boss) StartAPIServer(port string) error {
 	// is a transparent pass-through (back-compat solo-dev mode); when keys
 	// are configured, /api/* and /v1/* require Authorization: Bearer <tok>.
 	// /metrics and /health stay open for Prometheus + LB probes.
-	auth, err := newAuthConfig()
-	if err != nil {
-		return fmt.Errorf("auth config: %w", err)
-	}
 	auth.limiter.startJanitor(ctx)
 
 	// CORS wraps auth so OPTIONS preflights bypass auth (browsers do not
@@ -123,7 +131,7 @@ func (b *Boss) StartAPIServer(port string) error {
 	mux.HandleFunc("/health", b.handleHealth)
 
 	srv := &http.Server{
-		Addr:    ":" + port,
+		Addr:    net.JoinHostPort(bind, port),
 		Handler: mux,
 		// Defensive server timeouts so slow-loris clients cannot exhaust
 		// handler goroutines.
@@ -146,7 +154,12 @@ func (b *Boss) StartAPIServer(port string) error {
 	// main.go decide the exit code.
 	serverErrCh := make(chan error, 1)
 	go func() {
-		pterm.Success.Printfln("🚀 AgentFM Local API Gateway listening on http://127.0.0.1:%s", port)
+		pterm.Success.Printfln("🚀 AgentFM API Gateway listening on http://%s", srv.Addr)
+		if auth.tokens.empty() {
+			pterm.Warning.Println("Auth disabled (AGENTFM_API_KEYS unset). Loopback bind keeps the gateway off the network.")
+		} else {
+			pterm.Info.Printfln("Auth enabled (%d API key(s) configured).", len(auth.tokens.tokens))
+		}
 		serverErrCh <- srv.ListenAndServe()
 	}()
 
