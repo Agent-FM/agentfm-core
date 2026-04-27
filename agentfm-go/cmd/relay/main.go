@@ -61,8 +61,8 @@ func main() {
 
 	fmt.Println("🚀 Starting AgentFM Permanent Lighthouse...")
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	privKey, err := getStaticIdentity(*identityFile)
 	if err != nil {
@@ -162,9 +162,7 @@ func main() {
 	fmt.Println("--------------------------------------------------")
 	fmt.Println("Press CTRL+C to stop the server.")
 
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-	<-ch
+	<-ctx.Done()
 
 	fmt.Println("\nShutting down relay node...")
 	if err := host.Close(); err != nil {

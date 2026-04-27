@@ -207,20 +207,23 @@ func runRelayMode(ctx context.Context, netCfg network.Config, promListen string)
 }
 
 func runWorkerMode(ctx context.Context, netCfg network.Config, cfg worker.Config, promListen string) {
-	node, err := network.Setup(ctx, netCfg)
+	workerCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	node, err := network.Setup(workerCtx, netCfg)
 	if err != nil {
 		pterm.Fatal.Println(err)
 	}
 	if promListen != "" {
 		go func() {
-			if err := metrics.Serve(ctx, promListen); err != nil {
+			if err := metrics.Serve(workerCtx, promListen); err != nil {
 				pterm.Error.Printfln("metrics server: %v", err)
 			}
 		}()
 		pterm.Success.Printfln("Metrics server: http://%s/metrics", promListen)
 	}
 	w := worker.New(node, cfg)
-	w.Start(ctx)
+	w.Start(workerCtx)
 }
 
 // defaultPromListen picks the listen address: if the operator passed a
