@@ -166,8 +166,13 @@ func TestHandleArtifactStream_TaskIDSanitization(t *testing.T) {
 			wantFilePrefix: "fallback_",
 		},
 		{
-			name:           "empty id",
-			taskID:         "",
+			name:           "leading dot rejected",
+			taskID:         ".hidden",
+			wantFilePrefix: "fallback_",
+		},
+		{
+			name:           "control bytes rejected",
+			taskID:         "ok\x00bad",
 			wantFilePrefix: "fallback_",
 		},
 		{
@@ -211,6 +216,30 @@ func TestHandleArtifactStream_TaskIDSanitization(t *testing.T) {
 				t.Errorf("file escaped artifact dir: %s not under %s", absFile, absDir)
 			}
 		})
+	}
+}
+
+func TestHandleArtifactStream_RejectsZeroLengthTaskID(t *testing.T) {
+	hosts := testutil.NewConnectedMesh(t, 2)
+	sender, receiver := hosts[0], hosts[1]
+	t.Chdir(t.TempDir())
+	done := registerSignallingHandler(receiver)
+
+	ctx := testutil.WithTimeout(t, 3*time.Second)
+	s, err := sender.NewStream(ctx, receiver.ID(), ArtifactProtocol)
+	if err != nil {
+		t.Fatalf("NewStream: %v", err)
+	}
+	_ = binary.Write(s, binary.LittleEndian, int64(285))
+	_ = binary.Write(s, binary.LittleEndian, uint8(0))
+	_, _ = s.Write(bytes.Repeat([]byte{0xAA}, 285))
+	_ = s.Close()
+
+	testutil.WaitFor(t, done, 3*time.Second, "handler to finish")
+
+	if _, err := os.Stat("agentfm_artifacts"); !os.IsNotExist(err) {
+		entries, _ := os.ReadDir("agentfm_artifacts")
+		t.Errorf("zero-length task-id should produce no file; got %d entries", len(entries))
 	}
 }
 

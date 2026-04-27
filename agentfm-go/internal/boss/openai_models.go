@@ -15,10 +15,8 @@ func (b *Boss) handleModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-
 	now := time.Now().Unix()
+	b.mu.RLock()
 	data := make([]modelEntry, 0, len(b.activeWorkers))
 	for _, p := range b.activeWorkers {
 		if p.PeerID == "" {
@@ -26,6 +24,7 @@ func (b *Boss) handleModels(w http.ResponseWriter, r *http.Request) {
 		}
 		data = append(data, profileToModelEntry(p, now))
 	}
+	b.mu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(modelsResponse{Object: "list", Data: data}); err != nil {
