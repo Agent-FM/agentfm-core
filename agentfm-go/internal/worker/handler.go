@@ -21,6 +21,10 @@ import (
 	"github.com/pterm/pterm"
 )
 
+// isDirEmpty returns true if the directory contains no entries. Conservative
+// default: any error from Open or Readdirnames returns false so the caller
+// runs the artifact-zip path even on a permission-error / missing-dir case.
+// Callers downstream surface a clearer error than this helper could.
 func isDirEmpty(name string) bool {
 	f, err := os.Open(name)
 	if err != nil {

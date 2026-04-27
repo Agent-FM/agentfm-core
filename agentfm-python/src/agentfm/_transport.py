@@ -20,7 +20,9 @@ import httpx
 from .exceptions import (
     GatewayConnectionError,
     GatewayProtocolError,
+    InvalidRequestError,
     WorkerNotFoundError,
+    WorkerStreamError,
     from_envelope,
 )
 
@@ -77,17 +79,25 @@ def _should_retry_response(response: httpx.Response | None) -> bool:
     return response is not None and response.status_code in RETRY_STATUSES
 
 
+def _default_headers(user_agent: str, api_key: str | None) -> dict[str, str]:
+    headers = {"User-Agent": user_agent}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    return headers
+
+
 def make_client(
     base_url: str,
     *,
     timeout: float | httpx.Timeout | None = None,
     user_agent: str = DEFAULT_USER_AGENT,
+    api_key: str | None = None,
 ) -> httpx.Client:
     return httpx.Client(
         base_url=base_url.rstrip("/"),
         timeout=_resolve_timeout(timeout),
         limits=DEFAULT_LIMITS,
-        headers={"User-Agent": user_agent},
+        headers=_default_headers(user_agent, api_key),
         follow_redirects=False,
     )
 
@@ -97,12 +107,13 @@ def make_async_client(
     *,
     timeout: float | httpx.Timeout | None = None,
     user_agent: str = DEFAULT_USER_AGENT,
+    api_key: str | None = None,
 ) -> httpx.AsyncClient:
     return httpx.AsyncClient(
         base_url=base_url.rstrip("/"),
         timeout=_resolve_timeout(timeout),
         limits=DEFAULT_LIMITS,
-        headers={"User-Agent": user_agent},
+        headers=_default_headers(user_agent, api_key),
         follow_redirects=False,
     )
 
@@ -160,6 +171,29 @@ def wrap_connection_error(exc: Exception, *, base_url: str) -> GatewayConnection
     return GatewayConnectionError(
         f"could not reach gateway at {base_url}: {exc}",
     )
+
+
+def raise_translated_stream_error(
+    exc: httpx.HTTPError, *, base_url: str, label: str
+) -> None:
+    """Translate any mid-stream httpx failure into the right typed AgentFMError.
+
+    Centralises what each ``_stream`` method used to do inline (`tasks.stream`,
+    `chat.completions._stream`, `completions._stream`, plus their async
+    equivalents). Adding a new transport-error class only needs to be wired
+    here; the six call sites stay tiny.
+    """
+    if isinstance(exc, httpx.UnsupportedProtocol):
+        raise InvalidRequestError(
+            f"invalid gateway URL scheme: {exc}",
+            code="invalid_gateway_url",
+        ) from exc
+    if isinstance(exc, httpx.ConnectError):
+        raise wrap_connection_error(exc, base_url=base_url) from exc
+    raise WorkerStreamError(
+        f"{label} stream failed: {exc}",
+        code="worker_stream_failed",
+    ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +289,7 @@ __all__ = [
     "make_async_client",
     "make_client",
     "raise_for_response",
+    "raise_translated_stream_error",
     "retry_async",
     "retry_sync",
     "wrap_connection_error",

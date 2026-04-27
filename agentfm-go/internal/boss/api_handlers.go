@@ -14,44 +14,25 @@ import (
 	"agentfm/internal/types"
 	"agentfm/internal/version"
 
-	netcore "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pterm/pterm"
 )
 
-// handleGetWorkers serves the /api/workers listing. It also doubles as a
-// self cleaning pass: any worker whose peer we are no longer connected to
-// is pruned from activeWorkers (and its lastSeen entry) while serving the
-// request, so the radar never drifts.
+// handleGetWorkers serves the /api/workers listing as a pure read.
+// Eviction of disconnected peers happens on a 30s tick inside
+// listenTelemetry (pruneDisconnectedWorkers); GETs are no-side-effect.
 func (b *Boss) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	b.mu.Lock()
+	b.mu.RLock()
 	agents := make([]apiWorker, 0, len(b.activeWorkers))
-
-	for peerIDStr, profile := range b.activeWorkers {
-
-		pID, err := peer.Decode(peerIDStr)
-		if err == nil {
-			if b.node.Host.Network().Connectedness(pID) != netcore.Connected {
-				// Mirror the eviction logic in ui.go by clearing both
-				// maps. Leaving lastSeen populated for a peer we just
-				// removed from activeWorkers leaks a string key forever
-				// and confuses any future tick that reads lastSeen.
-				delete(b.activeWorkers, peerIDStr)
-				delete(b.lastSeen, peerIDStr)
-				continue
-			}
-		}
-
+	for _, profile := range b.activeWorkers {
 		agents = append(agents, profileToAPIWorker(profile))
 	}
-	online := len(b.activeWorkers)
-	b.mu.Unlock()
-	metrics.WorkersOnline.Set(float64(online))
+	b.mu.RUnlock()
 
 	response := map[string]interface{}{
 		"success": true,
@@ -115,7 +96,7 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.TaskID == "" {
-		req.TaskID = fmt.Sprintf("task_%d", time.Now().UnixNano())
+		req.TaskID = newCompletionID("task_")
 	}
 
 	b.mu.RLock()

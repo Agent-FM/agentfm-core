@@ -14,7 +14,14 @@ import (
 	"agentfm/internal/types"
 
 	netcore "github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
+
+// MaxInflightAsyncTasks caps how many async submissions can be in flight
+// simultaneously. Without a cap a flood of /api/execute/async POSTs would
+// commit one libp2p dial + Podman slot + goroutine each, with no ability
+// to back-pressure (the client gets 202 immediately).
+const MaxInflightAsyncTasks = 256
 
 type Boss struct {
 	node          *network.MeshNode
@@ -25,6 +32,10 @@ type Boss struct {
 	// ticker) but written only when a telemetry pulse arrives. Pure-read
 	// call sites use RLock so concurrent API hits don't serialise.
 	mu sync.RWMutex
+	// asyncSlots gates spawn of background goroutines from
+	// /api/execute/async. Buffered to MaxInflightAsyncTasks; non-blocking
+	// send returns 503 to the client when full.
+	asyncSlots chan struct{}
 }
 
 func New(node *network.MeshNode) *Boss {
@@ -32,6 +43,7 @@ func New(node *network.MeshNode) *Boss {
 		node:          node,
 		activeWorkers: make(map[string]types.WorkerProfile),
 		lastSeen:      make(map[string]time.Time),
+		asyncSlots:    make(chan struct{}, MaxInflightAsyncTasks),
 	}
 }
 
@@ -85,25 +97,77 @@ func (b *Boss) listenTelemetry(ctx context.Context) {
 	}
 	defer sub.Cancel()
 
-	for {
-		msg, err := sub.Next(ctx)
-		if err != nil {
-			return
-		}
-		if msg.ReceivedFrom == b.node.Host.ID() {
-			continue
-		}
+	// Periodic pruner: evicts workers whose libp2p connection has dropped.
+	// Centralised here so handleGetWorkers and the TUI tick can be pure
+	// reads (no side effects on a GET request).
+	pruneTicker := time.NewTicker(30 * time.Second)
+	defer pruneTicker.Stop()
 
-		var profile types.WorkerProfile
-		if err := json.Unmarshal(msg.Data, &profile); err == nil && profile.CPUCores > 0 {
-			b.mu.Lock()
-			b.activeWorkers[profile.PeerID] = profile
-			b.lastSeen[profile.PeerID] = time.Now()
-			n := len(b.activeWorkers)
-			b.mu.Unlock()
-			metrics.WorkersOnline.Set(float64(n))
+	msgCh := make(chan *pubsubMsg, 1)
+	go func() {
+		for {
+			msg, err := sub.Next(ctx)
+			if err != nil {
+				close(msgCh)
+				return
+			}
+			msgCh <- &pubsubMsg{ReceivedFrom: msg.ReceivedFrom, Data: msg.Data}
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-pruneTicker.C:
+			b.pruneDisconnectedWorkers()
+		case msg, ok := <-msgCh:
+			if !ok {
+				return
+			}
+			if msg.ReceivedFrom == b.node.Host.ID() {
+				continue
+			}
+			var profile types.WorkerProfile
+			if err := json.Unmarshal(msg.Data, &profile); err == nil && profile.CPUCores > 0 {
+				b.mu.Lock()
+				b.activeWorkers[profile.PeerID] = profile
+				b.lastSeen[profile.PeerID] = time.Now()
+				n := len(b.activeWorkers)
+				b.mu.Unlock()
+				metrics.WorkersOnline.Set(float64(n))
+			}
 		}
 	}
+}
+
+// pubsubMsg is a tiny shim to bridge the pubsub.Subscription.Next API into
+// a select-able channel. Only the two fields the listener actually reads
+// are copied across.
+type pubsubMsg struct {
+	ReceivedFrom peer.ID
+	Data         []byte
+}
+
+// pruneDisconnectedWorkers walks activeWorkers and evicts any peer the
+// libp2p host is no longer connected to. Runs under a write lock; cheap
+// because the map is bounded by mesh size (typically tens of peers).
+func (b *Boss) pruneDisconnectedWorkers() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for peerIDStr := range b.activeWorkers {
+		pID, err := peer.Decode(peerIDStr)
+		if err != nil {
+			delete(b.activeWorkers, peerIDStr)
+			delete(b.lastSeen, peerIDStr)
+			continue
+		}
+		if b.node.Host.Network().Connectedness(pID) != netcore.Connected {
+			delete(b.activeWorkers, peerIDStr)
+			delete(b.lastSeen, peerIDStr)
+		}
+	}
+	metrics.WorkersOnline.Set(float64(len(b.activeWorkers)))
 }
 
 type timeoutReader struct {

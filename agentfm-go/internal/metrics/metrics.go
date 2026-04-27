@@ -60,6 +60,17 @@ const (
 	DHTOpGetValue = "get_value"
 )
 
+// Auth outcome label values for AuthAttemptsTotal.
+// Mirrored on the Python SDK side as exception envelope codes
+// (`unauthorized` / `invalid_api_key` / `rate_limited`).
+const (
+	AuthOutcomeOK        = "ok"
+	AuthOutcomeMissing   = "missing"
+	AuthOutcomeMalformed = "malformed"
+	AuthOutcomeInvalid   = "invalid"
+	AuthOutcomeRateLimit = "rate_limited"
+)
+
 // TasksTotal counts task executions seen by this node, partitioned by
 // terminal status.
 var TasksTotal = prometheus.NewCounterVec(
@@ -120,6 +131,18 @@ var DHTQueriesTotal = prometheus.NewCounterVec(
 	[]string{"op"},
 )
 
+// AuthAttemptsTotal counts bearer-auth attempts on the boss HTTP gateway,
+// partitioned by outcome. Useful for spotting credential-spray attacks
+// (`invalid` rising sharply) or operator misconfig (`missing` dominating
+// after enabling auth).
+var AuthAttemptsTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "agentfm_auth_attempts_total",
+		Help: "Bearer-auth attempts on the boss HTTP gateway, by outcome.",
+	},
+	[]string{"outcome"},
+)
+
 func init() {
 	Registry.MustRegister(
 		TasksTotal,
@@ -128,6 +151,7 @@ func init() {
 		ArtifactBytesSentTotal,
 		StreamErrorsTotal,
 		DHTQueriesTotal,
+		AuthAttemptsTotal,
 		// Standard runtime collectors. Operators expect process_* and go_*
 		// in any Go service's /metrics output; omitting them would surprise
 		// dashboard authors.
@@ -151,6 +175,12 @@ func init() {
 	}
 	for _, op := range []string{DHTOpFindPeer, DHTOpProvide, DHTOpGetValue} {
 		DHTQueriesTotal.WithLabelValues(op)
+	}
+	for _, outcome := range []string{
+		AuthOutcomeOK, AuthOutcomeMissing, AuthOutcomeMalformed,
+		AuthOutcomeInvalid, AuthOutcomeRateLimit,
+	} {
+		AuthAttemptsTotal.WithLabelValues(outcome)
 	}
 }
 

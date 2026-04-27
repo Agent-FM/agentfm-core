@@ -3,7 +3,10 @@ package network
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
+
+	"agentfm/internal/obs"
 
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -31,7 +34,10 @@ func loadOrGenerateIdentity(mode string) (crypto.PrivKey, error) {
 		if err == nil {
 			return priv, nil
 		}
-		fmt.Printf("⚠️  Found corrupt identity at %s (%v), regenerating. Peer ID will change.\n", keyPath, err)
+		slog.Warn("corrupt identity file; regenerating",
+			slog.String("path", keyPath),
+			slog.Any(obs.FieldErr, err),
+		)
 	}
 
 	fmt.Println("🔑 Generating new permanent node identity...")
@@ -47,7 +53,10 @@ func loadOrGenerateIdentity(mode string) (crypto.PrivKey, error) {
 	if err := os.WriteFile(keyPath, keyBytes, 0600); err != nil {
 		// Not fatal. The node can still run with an ephemeral key, but the
 		// operator needs to know the peer ID won't be stable across restarts.
-		fmt.Printf("⚠️  Failed to persist identity at %s: %v (peer ID will change on restart)\n", keyPath, err)
+		slog.Warn("could not persist identity; peer ID will change on restart",
+			slog.String("path", keyPath),
+			slog.Any(obs.FieldErr, err),
+		)
 	}
 
 	return priv, nil

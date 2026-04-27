@@ -38,7 +38,7 @@ class WorkerProfile(BaseModel):
 
     peer_id: PeerID = Field(description="libp2p peer identifier (cryptographically unique)")
     author: str = Field(default="Anonymous", description="Operator-supplied author handle")
-    name: str = Field(default="", alias="name", description="Operator-supplied agent name")
+    name: str = Field(default="", description="Operator-supplied agent name")
     status: str = Field(default="UNKNOWN", description="AVAILABLE, BUSY, etc.")
     hardware: str = Field(default="", description="Rendered hardware string")
     description: str = Field(default="", description="Operator-supplied agent description")

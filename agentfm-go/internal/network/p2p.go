@@ -26,10 +26,11 @@ type Config struct {
 // Worker packages only interact with the mesh through this handle, which
 // keeps their code out of the libp2p build options entirely.
 type MeshNode struct {
-	Host      host.Host
-	DHT       *dht.IpfsDHT
-	PubSub    *pubsub.PubSub
-	RelayAddr string
+	Host        host.Host
+	DHT         *dht.IpfsDHT
+	PubSub      *pubsub.PubSub
+	RelayAddr   string
+	RelayPeerID peer.ID
 }
 
 // Setup builds the full mesh stack: libp2p host, Kademlia DHT, GossipSub,
@@ -53,8 +54,10 @@ func Setup(ctx context.Context, cfg Config) (*MeshNode, error) {
 		return nil, err
 	}
 
+	var relayPeerID peer.ID
 	if cfg.Mode != "relay" && bootstrapAddr != "" {
 		if relayInfo, err := parseRelayInfo(bootstrapAddr); err == nil {
+			relayPeerID = relayInfo.ID
 			connectToLighthouse(ctx, h, relayInfo)
 		}
 	}
@@ -62,10 +65,11 @@ func Setup(ctx context.Context, cfg Config) (*MeshNode, error) {
 	startDiscovery(ctx, h, kademliaDHT, isWorker)
 
 	return &MeshNode{
-		Host:      h,
-		DHT:       kademliaDHT,
-		PubSub:    ps,
-		RelayAddr: bootstrapAddr,
+		Host:        h,
+		DHT:         kademliaDHT,
+		PubSub:      ps,
+		RelayAddr:   bootstrapAddr,
+		RelayPeerID: relayPeerID,
 	}, nil
 }
 

@@ -75,7 +75,9 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://127.0.0.1:8080/v1",
-    api_key="anything",  # not validated in v1; see Security
+    # Bearer token forwarded as Authorization header. Required when the
+    # gateway has AGENTFM_API_KEYS set; ignored on a loopback solo-dev gateway.
+    api_key="your-key-here",
 )
 
 resp = client.chat.completions.create(
@@ -105,10 +107,68 @@ Within a tier with multiple matches, the least-loaded worker wins. All-busy retu
 
 ### Caveats
 
-- **Auth.** `Authorization: Bearer ...` is accepted but not validated; the gateway binds to `127.0.0.1` by default. For public exposure, put a reverse proxy with auth in front.
+- **Auth.** Bearer-token validation is enforced when `AGENTFM_API_KEYS` is set on the gateway; see [Authentication](#authentication). Default `--api-bind` is loopback, so a fresh install is safe out of the box.
 - **Token counts** in `usage` are returned as `0`; AgentFM does not tokenize.
 - **Streaming is line-buffered**, not character-by-character.
 - **Not yet implemented:** `tools` / `tool_choice`, `logprobs`, image / vision parts, `n>1`, `/v1/embeddings`, `/v1/images/generations`, `/v1/audio/*`.
+
+---
+
+## Authentication
+
+The gateway runs in **solo-dev mode** by default: bound to `127.0.0.1`, no API keys, no auth. To expose it off-host, configure both flags:
+
+```bash
+# Generate a token (any opaque string ≥ 16 chars works; prefer 32+ random bytes)
+TOKEN=$(openssl rand -hex 32)
+
+# Start the gateway with bearer auth + off-host bind
+AGENTFM_API_KEYS="$TOKEN" agentfm -mode api -api-bind 0.0.0.0 -apiport 8080
+```
+
+Multiple keys are accepted (comma-separated): `AGENTFM_API_KEYS="key1,key2,key3"` — each is a valid bearer.
+
+**Startup refusal.** Setting `--api-bind 0.0.0.0` (or any non-loopback) without `AGENTFM_API_KEYS` aborts with a non-zero exit code and a clear error message. To intentionally expose an unauthenticated gateway (private network, behind a reverse proxy with its own auth), set `AGENTFM_ALLOW_UNAUTH_PUBLIC=1`.
+
+**Open routes.** `/health` and `/metrics` are intentionally unauthenticated — load-balancer probes and Prometheus scrapers don't carry bearer tokens.
+
+**Per-IP rate limiting.** Failed auth attempts are throttled per remote IP (token bucket, 30/min) with a bounded LRU map. Successful requests are not rate-limited.
+
+> **Behind a reverse proxy.** The rate limiter keys on `RemoteAddr`, which is the proxy's IP when AgentFM sits behind nginx / Caddy / Cloudflare. In that topology the per-IP throttle becomes a shared quota across all clients coming through the proxy. Either keep the gateway as the edge (loopback bind + `AGENTFM_API_KEYS` for off-host clients), or rely on the proxy's own rate limiting upstream of AgentFM.
+
+**Async submission cap.** `/api/execute/async` is bounded by `MaxInflightAsyncTasks` (256). When saturated, returns `503` with `Retry-After: 5` and an OpenAI-shaped envelope (`code: async_capacity_exhausted`).
+
+**Operator monitoring.** Alert on the `agentfm_auth_attempts_total{outcome="invalid_token"}` and `{outcome="rate_limited"}` Prometheus counters rather than scraping logs — the per-failure log line at WARN can be noisy during legitimate token rotation.
+
+### From the Python SDK
+
+```python
+from agentfm import AgentFMClient, AsyncAgentFMClient, AuthenticationError
+
+# Three modes:
+client = AgentFMClient(api_key="your-key")          # explicit
+client = AgentFMClient()                             # falls back to AGENTFM_API_KEY env var
+client = AgentFMClient(api_key=None)                 # explicit no-auth (skips env fallback)
+
+# Override on a derived client:
+short_lived = client.with_options(api_key="other-key")
+no_auth = client.with_options(api_key=None)
+
+# 401 envelopes raise:
+try:
+    client.workers.list()
+except AuthenticationError as e:
+    print(e.code, e.status, e.message)  # "invalid_api_key" 401 "..."
+```
+
+### From the OpenAI SDK
+
+```python
+from openai import OpenAI
+client = OpenAI(base_url="http://gateway:8080/v1", api_key="your-key")
+```
+
+The OpenAI SDK forwards `api_key` as `Authorization: Bearer <key>` — drop-in compatible with AgentFM's auth.
 
 ---
 
@@ -401,9 +461,10 @@ Zero-trust threat model. Every remote peer is treated as potentially slow, fault
 | Layer | Defense |
 |---|---|
 | **Transport** | End-to-end encrypted libp2p streams (Noise / TLS). |
-| **Authentication** | Peer IDs are Ed25519 public keys; identities persist via `relay_identity.key` (mode `0600`). |
+| **Peer identity** | Peer IDs are Ed25519 public keys; identities persist via `relay_identity.key` (mode `0600`). |
+| **HTTP gateway auth** | `AGENTFM_API_KEYS` enables bearer-token auth on `/api/*` and `/v1/*`; constant-time comparison; per-IP rate limiting on failed attempts. Loopback bind is the default; non-loopback bind without keys refuses to start unless `AGENTFM_ALLOW_UNAUTH_PUBLIC=1`. See [Authentication](#authentication). |
 | **Private networks** | `-swarmkey` enables PSK; non-key-holders dropped before any protocol byte. |
-| **Execution** | Every task runs in a fresh Podman container with `--rm --network host`. SIGKILLed the instant the stream dies. |
+| **Execution** | Every task runs in a fresh Podman container with `--rm --network host`. SIGKILLed the instant the stream dies. **Caveat:** `--network host` gives the agent container full access to the worker's loopback (Ollama, internal admin endpoints, cloud metadata at `169.254.169.254`). Treat agent images as **trusted code**; review their Dockerfiles before running. The worker prints a startup warning to this effect. |
 | **DoS / Slow-loris** | Every libp2p stream has explicit deadlines. HTTP server has full timeout matrix. Payloads capped with `io.LimitReader`. |
 | **Webhook SSRF** | Webhook URLs validated against private/loopback/link-local; resolves at validation AND re-validates each candidate IP at dial-time (TOCTOU safe). Set `AGENTFM_WEBHOOK_ALLOW_PRIVATE=1` to opt back in. |
 | **Webhook integrity** | Set `AGENTFM_WEBHOOK_SECRET` to enable HMAC-SHA256 signing (`X-AgentFM-Signature` header). Python `WebhookReceiver(secret=...)` verifies in constant time. |
@@ -430,6 +491,7 @@ Zero-trust threat model. Every remote peer is treated as potentially slow, fault
 | `-maxcpu` | `80.0` | Reject tasks above this CPU % (0-99) |
 | `-maxgpu` | `80.0` | Reject tasks above this GPU VRAM % (0-99) |
 | `-apiport` | `8080` | Port for `-mode api` HTTP gateway |
+| `-api-bind` | `127.0.0.1` | Bind host for `-mode api`. Loopback by default; pass `0.0.0.0` to expose off-host (also requires `AGENTFM_API_KEYS` or `AGENTFM_ALLOW_UNAUTH_PUBLIC=1`) |
 | `-prom-listen` | mode default | Prometheus `/metrics` bind. `-` disables |
 | `-log-format` | `auto` | `json`, `console`, or `auto` (TTY → console, else json) |
 | `-log-level` | `info` | `debug` / `info` / `warn` / `error` |

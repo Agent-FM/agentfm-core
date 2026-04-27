@@ -55,6 +55,10 @@ class WorkerNotFoundError(AgentFMError):
     """The requested worker peer ID is not present in current telemetry."""
 
 
+class AuthenticationError(AgentFMError):
+    """Gateway rejected the request with HTTP 401 (missing or invalid API key)."""
+
+
 class MeshOverloadedError(AgentFMError):
     """All matching workers are at capacity (HTTP 503 mesh_overloaded)."""
 
@@ -88,6 +92,8 @@ _CODE_MAP: dict[str, type[AgentFMError]] = {
     "invalid_request_error": InvalidRequestError,
     "method_not_allowed": InvalidRequestError,
     "internal_error": GatewayInternalError,
+    "unauthorized": AuthenticationError,
+    "invalid_api_key": AuthenticationError,
 }
 
 
@@ -110,6 +116,7 @@ def from_envelope(envelope: dict[str, Any], status: int) -> AgentFMError:
 __all__ = [
     "AgentFMError",
     "ArtifactError",
+    "AuthenticationError",
     "GatewayConnectionError",
     "GatewayInternalError",
     "GatewayProtocolError",

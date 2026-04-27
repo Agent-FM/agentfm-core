@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"agentfm/internal/metrics"
@@ -18,6 +19,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pterm/pterm"
 )
+
+var safeTaskIDPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$`)
 
 func SendArtifacts(ctx context.Context, h host.Host, bossID peer.ID, zipFilePath string, taskID string) error {
 	fmt.Println("📦 Opening secure artifact channel to Boss...")
@@ -138,6 +141,11 @@ func HandleArtifactStream(stream network.Stream) {
 		slog.Error("read artifact task-id length", slog.Any(obs.FieldErr, err), slog.String(obs.FieldProtocol, "artifacts"))
 		return
 	}
+	if idLen == 0 {
+		metrics.StreamErrorsTotal.WithLabelValues(metrics.ProtocolArtifacts, metrics.ReasonDecode).Inc()
+		slog.Warn("rejecting zero-length artifact task-id", slog.String(obs.FieldProtocol, "artifacts"))
+		return
+	}
 
 	idBytes := make([]byte, idLen)
 	_, err = io.ReadFull(stream, idBytes)
@@ -149,7 +157,7 @@ func HandleArtifactStream(stream network.Stream) {
 
 	taskID := string(idBytes)
 	safeTaskID := filepath.Base(filepath.Clean(taskID))
-	if safeTaskID == "." || safeTaskID == "/" || safeTaskID == "" {
+	if !safeTaskIDPattern.MatchString(safeTaskID) {
 		safeTaskID = fmt.Sprintf("fallback_%d", time.Now().UnixNano())
 	}
 

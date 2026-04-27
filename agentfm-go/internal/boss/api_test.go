@@ -110,15 +110,13 @@ func TestHandleGetWorkers_MethodNotAllowed(t *testing.T) {
 	}
 }
 
-// TestHandleGetWorkers_PrunesDisconnected verifies the self-cleaning
-// behaviour of the endpoint: a peer that the host is not currently
-// connected to gets deleted from the activeWorkers map while serving the
-// request. Guards the stale-entry cleanup logic against regression.
-func TestHandleGetWorkers_PrunesDisconnected(t *testing.T) {
+// TestPruneDisconnectedWorkers_EvictsDeadPeer verifies the centralised
+// pruner: a peer the host is not currently connected to gets removed from
+// activeWorkers + lastSeen. Pruning runs on a 30s ticker inside
+// listenTelemetry; this test calls it directly.
+func TestPruneDisconnectedWorkers_EvictsDeadPeer(t *testing.T) {
 	b := newTestBoss(t)
 
-	// Use the peer ID of a host we close immediately, guaranteeing it is
-	// not connected to b.node.Host when the handler runs.
 	throwaway := testutil.NewHost(t)
 	disconnectedID := throwaway.ID().String()
 	_ = throwaway.Close()
@@ -129,12 +127,38 @@ func TestHandleGetWorkers_PrunesDisconnected(t *testing.T) {
 	}
 	b.lastSeen[disconnectedID] = time.Now()
 
+	b.pruneDisconnectedWorkers()
+
+	if _, exists := b.activeWorkers[disconnectedID]; exists {
+		t.Error("disconnected worker was not pruned")
+	}
+	if _, exists := b.lastSeen[disconnectedID]; exists {
+		t.Error("lastSeen entry was not cleared alongside activeWorkers")
+	}
+}
+
+// TestHandleGetWorkers_PureRead verifies the new contract: handleGetWorkers
+// is now a pure read; pruning is delegated to pruneDisconnectedWorkers.
+// A disconnected peer in the map MUST still appear in the GET response
+// until the next pruner tick.
+func TestHandleGetWorkers_PureRead(t *testing.T) {
+	b := newTestBoss(t)
+
+	throwaway := testutil.NewHost(t)
+	disconnectedID := throwaway.ID().String()
+	_ = throwaway.Close()
+
+	b.activeWorkers[disconnectedID] = types.WorkerProfile{
+		PeerID:   disconnectedID,
+		CPUCores: 4,
+	}
+
 	req := httptest.NewRequest(http.MethodGet, "/api/workers", nil)
 	rec := httptest.NewRecorder()
 	b.handleGetWorkers(rec, req)
 
-	if _, exists := b.activeWorkers[disconnectedID]; exists {
-		t.Error("disconnected worker was not pruned")
+	if _, exists := b.activeWorkers[disconnectedID]; !exists {
+		t.Error("handleGetWorkers should not prune; eviction belongs to pruneDisconnectedWorkers")
 	}
 }
 
@@ -328,6 +352,47 @@ func TestAsyncExecuteHandler_WorkerNotFound(t *testing.T) {
 	case <-done:
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("WaitGroup non-zero after 404 path")
+	}
+}
+
+// TestAsyncExecuteHandler_CapacityExhausted: when MaxInflightAsyncTasks is
+// already saturated, the handler returns 503 with a Retry-After hint and
+// the OpenAI-shaped envelope. Guards against the historical DoS vector
+// where a flood of /api/execute/async POSTs spawned unbounded goroutines.
+func TestAsyncExecuteHandler_CapacityExhausted(t *testing.T) {
+	t.Parallel()
+	b := newTestBoss(t)
+	for i := 0; i < cap(b.asyncSlots); i++ {
+		b.asyncSlots <- struct{}{}
+	}
+	var wg sync.WaitGroup
+	h := b.asyncExecuteHandler(context.Background(), &wg)
+
+	b.activeWorkers["12D3KooWGRUacXc4oieAeoKvk3zQvkgRadLmuVf4SVy23bY2gXxT"] = types.WorkerProfile{
+		PeerID:   "12D3KooWGRUacXc4oieAeoKvk3zQvkgRadLmuVf4SVy23bY2gXxT",
+		CPUCores: 4,
+	}
+	body, _ := json.Marshal(map[string]string{
+		"worker_id": "12D3KooWGRUacXc4oieAeoKvk3zQvkgRadLmuVf4SVy23bY2gXxT",
+		"prompt":    "hi",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/execute/async", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	h(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503", rec.Code)
+	}
+	if rec.Header().Get("Retry-After") == "" {
+		t.Error("503 response missing Retry-After header")
+	}
+	var env map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("response body not JSON: %v", err)
+	}
+	errObj, _ := env["error"].(map[string]any)
+	if errObj == nil || errObj["code"] != "async_capacity_exhausted" {
+		t.Errorf("expected envelope code=async_capacity_exhausted, got %v", env)
 	}
 }
 

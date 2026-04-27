@@ -27,7 +27,12 @@ func main() {
 	bootstrap := flag.String("bootstrap", "", "Custom bootstrap multiaddr (required for remote private swarms)")
 	port := flag.Int("port", 0, "Listen port (0 for random. Relays should use 4001)")
 
-	// API Gateway Port
+	// API Gateway bind + port. Default bind is loopback so a fresh install
+	// can never accidentally expose an unauthenticated compute endpoint to
+	// the network. Pass --api-bind=0.0.0.0 to expose off-host (and set
+	// AGENTFM_API_KEYS or AGENTFM_ALLOW_UNAUTH_PUBLIC=1 — the gateway
+	// refuses to start without one of those when bind is non-loopback).
+	apiBind := flag.String("api-bind", "127.0.0.1", "Bind host for the API gateway (api mode). Loopback by default; pass 0.0.0.0 to expose off-host.")
 	apiPort := flag.String("apiport", "8080", "Port for the local API gateway (only used in api mode)")
 
 	// Observability: Prometheus /metrics listen address. Default is loopback
@@ -104,7 +109,7 @@ func main() {
 	case "boss":
 		runBossMode(ctx, netCfg)
 	case "api":
-		runAPIMode(ctx, netCfg, *apiPort)
+		runAPIMode(ctx, netCfg, *apiBind, *apiPort)
 	default:
 		pterm.Error.Println("Invalid mode. Use 'boss', 'worker', 'relay', 'api', 'test', or 'genkey'.")
 		os.Exit(1)
@@ -202,20 +207,23 @@ func runRelayMode(ctx context.Context, netCfg network.Config, promListen string)
 }
 
 func runWorkerMode(ctx context.Context, netCfg network.Config, cfg worker.Config, promListen string) {
-	node, err := network.Setup(ctx, netCfg)
+	workerCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	node, err := network.Setup(workerCtx, netCfg)
 	if err != nil {
 		pterm.Fatal.Println(err)
 	}
 	if promListen != "" {
 		go func() {
-			if err := metrics.Serve(ctx, promListen); err != nil {
+			if err := metrics.Serve(workerCtx, promListen); err != nil {
 				pterm.Error.Printfln("metrics server: %v", err)
 			}
 		}()
 		pterm.Success.Printfln("Metrics server: http://%s/metrics", promListen)
 	}
 	w := worker.New(node, cfg)
-	w.Start(ctx)
+	w.Start(workerCtx)
 }
 
 // defaultPromListen picks the listen address: if the operator passed a
@@ -252,14 +260,16 @@ func runBossMode(ctx context.Context, netCfg network.Config) {
 
 // runAPIMode starts the HTTP gateway that SDK clients talk to. The
 // gateway's own error is returned all the way back here so the process
-// exit code reflects whether the server came up cleanly.
-func runAPIMode(ctx context.Context, netCfg network.Config, apiPort string) {
+// exit code reflects whether the server came up cleanly. Errors include
+// startup-refusal (public bind without API keys) so a misconfigured
+// deployment fails loudly instead of silently exposing compute.
+func runAPIMode(ctx context.Context, netCfg network.Config, apiBind, apiPort string) {
 	node, err := network.Setup(ctx, netCfg)
 	if err != nil {
 		pterm.Fatal.Println(err)
 	}
 	b := boss.New(node)
-	if err := b.StartAPIServer(apiPort); err != nil {
+	if err := b.StartAPIServer(apiBind, apiPort); err != nil {
 		pterm.Fatal.Printfln("❌ API Gateway exited with error: %v", err)
 	}
 }

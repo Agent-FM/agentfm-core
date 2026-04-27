@@ -29,6 +29,7 @@ func setupHelpMenu() {
 			{pterm.Cyan("-mode"), pterm.LightMagenta("string"), "Node mode: 'boss', 'worker', 'relay', 'api', 'test', 'genkey'", pterm.Gray("none")},
 			{pterm.Cyan("-prompt"), pterm.LightMagenta("string"), "Text prompt to send to agent (only for -mode test)", pterm.Gray("none")},
 			{pterm.Cyan("-apiport"), pterm.LightMagenta("string"), "Port for the local API gateway", pterm.Gray("8080")},
+			{pterm.Cyan("-api-bind"), pterm.LightMagenta("string"), "Bind host for the API gateway (api mode)", pterm.Gray("127.0.0.1")},
 			{pterm.Cyan("-swarmkey"), pterm.LightMagenta("string"), "Path to private swarm.key file", pterm.Gray("none")},
 			{pterm.Cyan("-bootstrap"), pterm.LightMagenta("string"), "Custom relay/bootstrap multiaddr", pterm.Gray("public lighthouse")},
 			{pterm.Cyan("-port"), pterm.LightMagenta("int"), "Network listen port", pterm.Gray("0 (Random)")},
@@ -76,5 +77,23 @@ func setupHelpMenu() {
 
 		pterm.Println(pterm.Yellow("6. Start a Dedicated Relay Node (VPS Lighthouse)"))
 		pterm.Println(pterm.White("   ./agentfm -mode relay -port 4001\n"))
+
+		pterm.Println(pterm.Yellow("7. Start an API Gateway (loopback by default — solo dev mode)"))
+		pterm.Println(pterm.White("   ./agentfm -mode api -apiport 8080\n"))
+
+		pterm.Println(pterm.Yellow("8. Start an API Gateway exposed off-host (requires API keys)"))
+		pterm.Println(pterm.White("   AGENTFM_API_KEYS=\"key1,key2\" \\"))
+		pterm.Println(pterm.White("     ./agentfm -mode api -api-bind 0.0.0.0 -apiport 8080\n"))
+
+		pterm.DefaultSection.Println("Environment variables")
+		envTable := pterm.TableData{
+			{"VARIABLE", "PURPOSE"},
+			{pterm.Cyan("AGENTFM_API_KEYS"), "Comma-separated bearer tokens for the API gateway. When unset, gateway runs unauthenticated (solo-dev mode)."},
+			{pterm.Cyan("AGENTFM_ALLOW_UNAUTH_PUBLIC"), "Set to 1 to allow -api-bind off-loopback without API keys (dangerous; documented escape hatch)."},
+			{pterm.Cyan("AGENTFM_WEBHOOK_SECRET"), "Shared secret for HMAC-SHA256-signing outbound webhook POSTs from /api/execute/async."},
+			{pterm.Cyan("AGENTFM_WEBHOOK_ALLOW_PRIVATE"), "Set to 1 to permit webhook URLs pointing at private/loopback addresses."},
+		}
+		pterm.DefaultTable.WithHasHeader().WithHeaderStyle(pterm.NewStyle(pterm.FgLightGreen, pterm.Bold)).WithData(envTable).Render()
+		fmt.Println()
 	}
 }

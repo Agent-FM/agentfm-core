@@ -281,6 +281,40 @@ def test_openai_routing_warning_fires_for_non_peer_id(
     assert any(issubclass(item.category, AgentFMRoutingWarning) for item in w)
 
 
+def test_openai_routing_warning_attributes_to_user_call(
+    gateway_url: str, mock_gateway: respx.MockRouter
+):
+    mock_gateway.post("/v1/chat/completions").respond(
+        json={
+            "id": "x",
+            "object": "chat.completion",
+            "created": 0,
+            "model": "test-attribution",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": "ok"},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        },
+    )
+    with AgentFMClient(gateway_url=gateway_url) as client, warnings.catch_warnings(record=True) as w:
+        client.openai._warner.reset()
+        warnings.simplefilter("always")
+        client.openai.chat.completions.create(
+            model="some-non-peer-id",
+            messages=[{"role": "user", "content": "hi"}],
+        )
+    routing = [item for item in w if issubclass(item.category, AgentFMRoutingWarning)]
+    assert routing, "expected at least one AgentFMRoutingWarning"
+    assert routing[0].filename.endswith("test_sync_client.py"), (
+        f"warning attributed to {routing[0].filename!r}, want test file "
+        "(stacklevel mis-tuned — should point at the user's create() call)"
+    )
+
+
 def test_openai_routing_warning_silent_for_peer_id(
     gateway_url: str, mock_gateway: respx.MockRouter
 ):

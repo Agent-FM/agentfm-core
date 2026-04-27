@@ -315,6 +315,12 @@ func renderChatPrompt(messages []ChatMessage) string {
 
 const sentinelPrefix = "[AGENTFM:"
 
+// maxLineBytes caps a single scanner line to defend against pathological
+// agents while still accommodating LLMs that emit large JSON state without
+// newlines. Hit at 1 MiB by structured-output agents in practice; 8 MiB
+// covers everything we've seen.
+const maxLineBytes = 8 * 1024 * 1024
+
 type sentinelFilterReader struct {
 	src     *bufio.Scanner
 	pending []byte
@@ -323,7 +329,7 @@ type sentinelFilterReader struct {
 
 func newSentinelFilter(r io.Reader) *sentinelFilterReader {
 	s := bufio.NewScanner(r)
-	s.Buffer(make([]byte, 64*1024), 1024*1024)
+	s.Buffer(make([]byte, 64*1024), maxLineBytes)
 	return &sentinelFilterReader{src: s}
 }
 
@@ -418,7 +424,7 @@ func newTaskStreamScanner(s netcore.Stream) *bufio.Scanner {
 	deadman := &timeoutReader{stream: s, timeout: network.TaskExecutionTimeout}
 	filtered := newSentinelFilter(deadman)
 	sc := bufio.NewScanner(filtered)
-	sc.Buffer(make([]byte, 64*1024), 1024*1024)
+	sc.Buffer(make([]byte, 64*1024), maxLineBytes)
 	return sc
 }
 
@@ -455,7 +461,13 @@ func writeSSEFrame(w http.ResponseWriter, payload any, flush func()) bool {
 }
 
 func writeSSEDone(w http.ResponseWriter, flush func()) {
-	_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	if _, err := w.Write([]byte("data: [DONE]\n\n")); err != nil {
+		// Client gone before we could close out the stream. Drop a debug
+		// crumb but no escalation — the response body is closed and there
+		// is nothing useful to do beyond record the disconnect.
+		slog.Debug("sse done write", slog.Any(obs.FieldErr, err))
+		return
+	}
 	flush()
 }
 

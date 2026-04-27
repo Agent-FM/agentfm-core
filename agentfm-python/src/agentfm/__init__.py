@@ -11,6 +11,7 @@ from .crypto import SwarmKey
 from .daemon import LocalMeshGateway
 from .exceptions import (
     AgentFMError,
+    AuthenticationError,
     GatewayConnectionError,
     GatewayInternalError,
     InvalidRequestError,
@@ -34,6 +35,7 @@ __all__ = [
     "AgentFMRoutingWarning",
     "ArtifactManager",
     "AsyncAgentFMClient",
+    "AuthenticationError",
     "GatewayConnectionError",
     "GatewayInternalError",
     "InvalidRequestError",

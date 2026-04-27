@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from functools import cached_property
 from pathlib import Path
 from types import TracebackType
@@ -33,14 +34,13 @@ from ._transport import (
     STREAMING_TIMEOUT,
     make_async_client,
     raise_for_response,
-    wrap_connection_error,
+    raise_translated_stream_error,
 )
 from .artifacts import ArtifactManager
 from .exceptions import (
     AgentFMError,
     GatewayConnectionError,
     WorkerNotFoundError,
-    WorkerStreamError,
 )
 from .models import (
     AsyncTaskAck,
@@ -155,13 +155,10 @@ class _AsyncTasksNamespace(AsyncResource):
                     yield TaskChunk(text=tail)
                 if filter_.artifacts_incoming:
                     yield TaskChunk(text="", kind="marker")
-        except httpx.ConnectError as exc:
-            raise wrap_connection_error(exc, base_url=self._client.gateway_url) from exc
         except httpx.HTTPError as exc:
-            raise WorkerStreamError(
-                f"worker stream failed: {exc}",
-                code="worker_stream_failed",
-            ) from exc
+            raise_translated_stream_error(
+                exc, base_url=self._client.gateway_url, label="worker"
+            )
 
     async def submit_async(
         self,
@@ -241,10 +238,18 @@ class _AsyncTasksNamespace(AsyncResource):
         *,
         model: str,
         max_workers: int | None = None,
+        pick: Callable[[List[WorkerProfile]], List[WorkerProfile]] | None = None,
         **scatter_opts: Any,
     ) -> list[ScatterResult]:
+        """Convenience: discover workers by ``model``, then ``scatter`` across them.
+
+        Mirrors :meth:`AgentFMClient.tasks.scatter_by_model`. ``pick`` overrides
+        ``max_workers`` when both are passed.
+        """
         candidates = await self._client.workers.list(model=model, available_only=True)
-        if max_workers is not None:
+        if pick is not None:
+            candidates = pick(candidates)
+        elif max_workers is not None:
             candidates = candidates[:max_workers]
         if not candidates:
             raise WorkerNotFoundError(f"no available workers advertise model={model!r}")
@@ -265,10 +270,15 @@ class AsyncAgentFMClient:
         timeout: float | httpx.Timeout | None = None,
         retries: int = 2,
         artifacts_dir: str | Path | None = None,
+        api_key: str | None | _Unset = _UNSET,
     ) -> None:
         self.gateway_url = gateway_url.rstrip("/")
         self.retries = retries
-        self._http = make_async_client(self.gateway_url, timeout=timeout)
+        if isinstance(api_key, _Unset):
+            self.api_key = os.environ.get("AGENTFM_API_KEY") or None
+        else:
+            self.api_key = api_key or None
+        self._http = make_async_client(self.gateway_url, timeout=timeout, api_key=self.api_key)
         self.artifacts: ArtifactManager | None = (
             ArtifactManager(watch_dir=artifacts_dir, extract_dir=artifacts_dir)
             if artifacts_dir is not None
@@ -296,11 +306,15 @@ class AsyncAgentFMClient:
         timeout: float | httpx.Timeout | None | _Unset = _UNSET,
         retries: int | _Unset = _UNSET,
         artifacts_dir: str | Path | None | _Unset = _UNSET,
+        api_key: str | None | _Unset = _UNSET,
     ) -> AsyncAgentFMClient:
         """Return a new client with the given options overridden.
 
         Each unspecified option is inherited from this client. The returned
         client owns a fresh ``httpx.AsyncClient`` — close it independently.
+
+        ``api_key`` follows the same sentinel rule: pass an explicit ``None``
+        to drop authentication on the derived client, omit to inherit.
         """
         return type(self)(
             gateway_url=self.gateway_url if isinstance(gateway_url, _Unset) else gateway_url,
@@ -311,10 +325,24 @@ class AsyncAgentFMClient:
                 if isinstance(artifacts_dir, _Unset)
                 else artifacts_dir
             ),
+            api_key=self.api_key if isinstance(api_key, _Unset) else api_key,
         )
 
     async def aclose(self) -> None:
         await self._http.aclose()
+
+    def __del__(self) -> None:
+        # Defensive close: synchronous in __del__ because there is no event
+        # loop guarantee at GC time. We close the transport directly to free
+        # sockets without scheduling on a running loop. Wrapped because
+        # __del__ during interpreter teardown can raise on already-collected
+        # attributes.
+        import contextlib
+        with contextlib.suppress(Exception):
+            transport = getattr(self._http, "_transport", None)
+            close = getattr(transport, "close", None)
+            if close is not None:
+                close()
 
     async def __aenter__(self) -> AsyncAgentFMClient:
         return self

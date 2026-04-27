@@ -2,6 +2,9 @@ package boss
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -69,7 +72,18 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (b *Boss) StartAPIServer(port string) error {
+func (b *Boss) StartAPIServer(bind, port string) error {
+	// Bearer-auth config FIRST so the startup-refusal guard fires before
+	// we open any listening socket. A failing-fast public deploy never
+	// gets a chance to serve a single unauthenticated request.
+	auth, err := newAuthConfig()
+	if err != nil {
+		return fmt.Errorf("auth config: %w", err)
+	}
+	if err := enforceStartupAuthGuard(bind, auth.tokens); err != nil {
+		return err
+	}
+
 	// Root ctx cancels on SIGINT/SIGTERM so every downstream goroutine
 	// (telemetry listener, async task workers, webhook POSTs) observes
 	// the same shutdown signal.
@@ -90,19 +104,34 @@ func (b *Boss) StartAPIServer(port string) error {
 		b.listenTelemetry(ctx)
 	}()
 
+	// Bearer-auth middleware. When AGENTFM_API_KEYS is unset the middleware
+	// is a transparent pass-through (back-compat solo-dev mode); when keys
+	// are configured, /api/* and /v1/* require Authorization: Bearer <tok>.
+	// /metrics and /health stay open for Prometheus + LB probes.
+	auth.limiter.startJanitor(ctx)
+
+	// CORS wraps auth so OPTIONS preflights bypass auth (browsers do not
+	// send credentials on preflight). corsMiddleware short-circuits OPTIONS
+	// before calling its `next`.
+	protected := func(route string, h http.HandlerFunc) http.HandlerFunc {
+		return corsMiddleware(auth.middleware(route, h))
+	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/workers", corsMiddleware(b.handleGetWorkers))
-	mux.HandleFunc("/api/execute", corsMiddleware(b.handleExecuteTask))
-	mux.HandleFunc("/api/execute/async", corsMiddleware(b.asyncExecuteHandler(ctx, &bgWG)))
-	mux.HandleFunc("/v1/models", corsMiddleware(b.handleModels))
-	mux.HandleFunc("/v1/chat/completions", corsMiddleware(b.handleChatCompletions))
-	mux.HandleFunc("/v1/completions", corsMiddleware(b.handleCompletions))
-	// /metrics is intentionally not wrapped in corsMiddleware — Prometheus
-	// scrapers don't need CORS, and exposing it would be misleading.
+	mux.HandleFunc("/api/workers", protected("/api/workers", b.handleGetWorkers))
+	mux.HandleFunc("/api/execute", protected("/api/execute", b.handleExecuteTask))
+	mux.HandleFunc("/api/execute/async", protected("/api/execute/async", b.asyncExecuteHandler(ctx, &bgWG)))
+	mux.HandleFunc("/v1/models", protected("/v1/models", b.handleModels))
+	mux.HandleFunc("/v1/chat/completions", protected("/v1/chat/completions", b.handleChatCompletions))
+	mux.HandleFunc("/v1/completions", protected("/v1/completions", b.handleCompletions))
+	// /metrics and /health are intentionally not wrapped in CORS or auth —
+	// Prometheus scrapers and LB health probes need neither, and exposing
+	// CORS on /metrics would be misleading.
 	mux.Handle("/metrics", metrics.Handler())
+	mux.HandleFunc("/health", b.handleHealth)
 
 	srv := &http.Server{
-		Addr:    ":" + port,
+		Addr:    net.JoinHostPort(bind, port),
 		Handler: mux,
 		// Defensive server timeouts so slow-loris clients cannot exhaust
 		// handler goroutines.
@@ -125,7 +154,12 @@ func (b *Boss) StartAPIServer(port string) error {
 	// main.go decide the exit code.
 	serverErrCh := make(chan error, 1)
 	go func() {
-		pterm.Success.Printfln("🚀 AgentFM Local API Gateway listening on http://127.0.0.1:%s", port)
+		pterm.Success.Printfln("🚀 AgentFM API Gateway listening on http://%s", srv.Addr)
+		if auth.tokens.empty() {
+			pterm.Warning.Println("Auth disabled (AGENTFM_API_KEYS unset). Loopback bind keeps the gateway off the network.")
+		} else {
+			pterm.Info.Printfln("Auth enabled (%d API key(s) configured).", len(auth.tokens.tokens))
+		}
 		serverErrCh <- srv.ListenAndServe()
 	}()
 
@@ -169,4 +203,27 @@ func (b *Boss) StartAPIServer(port string) error {
 
 	pterm.Success.Println("API Gateway offline.")
 	return listenErr
+}
+
+// handleHealth serves an unauthenticated liveness/readiness probe.
+// Intended for load-balancer health checks and uptime monitors. Returns
+// 200 + a tiny JSON body carrying the count of workers currently visible
+// in telemetry — enough for an LB to also do shallow capacity-aware
+// routing if it wants to.
+func (b *Boss) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	b.mu.RLock()
+	online := len(b.activeWorkers)
+	b.mu.RUnlock()
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]any{
+		"status":         "ok",
+		"online_workers": online,
+	}); err != nil {
+		// Body already started; nothing useful to do.
+		_ = err
+	}
 }

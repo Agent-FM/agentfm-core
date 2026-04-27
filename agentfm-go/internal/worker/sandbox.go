@@ -2,6 +2,8 @@ package worker
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +13,14 @@ import (
 
 	"github.com/pterm/pterm"
 )
+
+func newSessionID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
+}
 
 func (w *Worker) buildSandboxImage(ctx context.Context) error {
 	pterm.Info.Printfln("Checking for Dockerfile in %s...", pterm.Cyan(w.config.AgentDir))
@@ -40,8 +50,8 @@ func (w *Worker) buildSandboxImage(ctx context.Context) error {
 }
 
 func (w *Worker) executePodman(ctx context.Context, prompt string, outStream, errStream io.Writer) string {
-	sessionID := time.Now().UnixNano()
-	containerName := fmt.Sprintf("agentfm-sandbox-%d", sessionID)
+	sessionID := newSessionID()
+	containerName := fmt.Sprintf("agentfm-sandbox-%s", sessionID)
 	// Cleanup runs on a detached, bounded ctx so a cancelled parent doesn't
 	// short-circuit the `podman rm -f` that catches orphaned containers
 	// from SIGKILLed `podman run` processes.
@@ -57,7 +67,7 @@ func (w *Worker) executePodman(ctx context.Context, prompt string, outStream, er
 	}
 
 	agentTempBase := filepath.Join(baseDir, ".agentfm_temp")
-	absOutputDir := filepath.Join(agentTempBase, fmt.Sprintf("run_%d", sessionID))
+	absOutputDir := filepath.Join(agentTempBase, fmt.Sprintf("run_%s", sessionID))
 
 	if err := os.MkdirAll(absOutputDir, 0755); err != nil {
 		fmt.Fprintf(errStream, "❌ Failed to create output dir: %v\n", err)

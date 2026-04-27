@@ -90,6 +90,10 @@ func discoverPeers(ctx context.Context, h host.Host, routingDiscovery *routing.R
 				continue
 			}
 			for p := range peerChan {
+				if ctx.Err() != nil {
+					lookupCancel()
+					return
+				}
 				if p.ID == h.ID() || len(p.Addrs) == 0 {
 					continue
 				}

@@ -34,11 +34,14 @@ const (
 // Standard log field names. Use these in slog.String / slog.Any calls so
 // every component agrees on the schema.
 const (
-	FieldComponent = "component"
-	FieldPeerID    = "peer_id"
-	FieldTaskID    = "task_id"
-	FieldProtocol  = "protocol"
-	FieldErr       = "err"
+	FieldComponent   = "component"
+	FieldPeerID      = "peer_id"
+	FieldTaskID      = "task_id"
+	FieldProtocol    = "protocol"
+	FieldErr         = "err"
+	FieldRemoteAddr  = "remote_addr"
+	FieldRoute       = "route"
+	FieldAuthOutcome = "auth_outcome"
 )
 
 // Init configures slog.Default() for the calling binary.

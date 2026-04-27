@@ -153,16 +153,14 @@ class WebhookReceiver:
                     self.end_headers()
                     return
 
-                # Reject early on body size. Read at most max_body_bytes — a
-                # hostile Content-Length: 4000000000 cannot make rfile.read()
-                # allocate billions of bytes.
-                content_length = self._parse_content_length()
+                # Reject early on body size. Cap is enforced inside
+                # _parse_content_length so a hostile Content-Length:
+                # 4000000000 cannot make rfile.read() allocate billions
+                # of bytes — the parser fails closed before we touch the
+                # body.
+                content_length = self._parse_content_length(max_body_bytes)
                 if content_length is None:
                     return  # response already sent
-                if content_length > max_body_bytes:
-                    self.send_response(413)
-                    self.end_headers()
-                    return
 
                 content_type = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
                 if content_type and content_type != "application/json":
@@ -201,8 +199,14 @@ class WebhookReceiver:
                 self.send_response(200)
                 self.end_headers()
 
-            def _parse_content_length(self) -> int | None:
-                """Return Content-Length as int, or send 411 / 400 on failure."""
+            def _parse_content_length(self, cap: int) -> int | None:
+                """Return Content-Length as int, or send 411 / 400 / 413 on failure.
+
+                ``cap`` is the upper bound (max_body_bytes). Sending 413 here
+                so the cap is enforced in one place and a future refactor that
+                accepted chunked transfer-encoding can't accidentally bypass
+                the size guard.
+                """
                 raw = self.headers.get("Content-Length")
                 if raw is None:
                     self.send_response(411)
@@ -216,6 +220,10 @@ class WebhookReceiver:
                     return None
                 if n < 0:
                     self.send_response(400)
+                    self.end_headers()
+                    return None
+                if n > cap:
+                    self.send_response(413)
                     self.end_headers()
                     return None
                 return n

@@ -54,6 +54,27 @@ for chunk in client.openai.chat.completions.create(
         print(chunk.choices[0].delta.content, end="", flush=True)
 ```
 
+## Authentication
+
+```python
+from agentfm import AgentFMClient, AuthenticationError
+
+# Three modes:
+client = AgentFMClient(api_key="your-key")    # explicit
+client = AgentFMClient()                       # falls back to AGENTFM_API_KEY env
+client = AgentFMClient(api_key=None)           # explicit no-auth (skips env)
+
+try:
+    client.workers.list()
+except AuthenticationError as e:
+    print(e.code, e.status)  # "invalid_api_key" 401
+```
+
+`with_options(api_key="other")` derives a client with a different key; pass
+`api_key=None` to clear auth on the derived client. See the gateway-side
+[Authentication](https://github.com/Agent-FM/agentfm-core#authentication)
+docs for setting up `AGENTFM_API_KEYS` on the boss.
+
 ## Async
 
 ```python

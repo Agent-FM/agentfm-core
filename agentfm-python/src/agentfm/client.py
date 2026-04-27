@@ -17,6 +17,7 @@ Surface (canonical):
 from __future__ import annotations
 
 import logging
+import os
 import time
 import uuid
 from collections.abc import Callable, Iterator
@@ -44,14 +45,13 @@ from ._transport import (
     STREAMING_TIMEOUT,
     make_client,
     raise_for_response,
-    wrap_connection_error,
+    raise_translated_stream_error,
 )
 from .artifacts import ArtifactManager
 from .exceptions import (
     AgentFMError,
     GatewayConnectionError,
     WorkerNotFoundError,
-    WorkerStreamError,
 )
 from .models import (
     AsyncTaskAck,
@@ -182,17 +182,15 @@ class _TasksNamespace(SyncResource):
                     yield TaskChunk(text=tail)
                 if filt.artifacts_incoming:
                     yield TaskChunk(text="", kind="marker")
-        except httpx.ConnectError as exc:
-            raise wrap_connection_error(exc, base_url=self._client.gateway_url) from exc
         except httpx.HTTPError as exc:
-            # Anything else httpx surfaces mid-stream (ReadTimeout, ReadError,
-            # RemoteProtocolError, WriteError, PoolTimeout, ...) is a worker
-            # stream failure from the SDK caller's perspective. Wrap so
-            # tasks.scatter's "never raises non-AgentFMError" contract holds.
-            raise WorkerStreamError(
-                f"worker stream failed: {exc}",
-                code="worker_stream_failed",
-            ) from exc
+            # Centralised translation: ConnectError -> GatewayConnectionError,
+            # UnsupportedProtocol -> InvalidRequestError, anything else
+            # mid-stream -> WorkerStreamError. Keeps the six streaming sites
+            # in lockstep so tasks.scatter's "never raises non-AgentFMError"
+            # contract holds.
+            raise_translated_stream_error(
+                exc, base_url=self._client.gateway_url, label="worker"
+            )
 
     def submit_async(
         self,
@@ -307,6 +305,7 @@ class AgentFMClient:
         timeout: float | httpx.Timeout | None = None,
         retries: int = 2,
         artifacts_dir: str | Path | None = None,
+        api_key: str | None | _Unset = _UNSET,
     ) -> None:
         """Build a client.
 
@@ -315,10 +314,19 @@ class AgentFMClient:
         unset, ``tasks.run`` does NOT attempt to harvest artifacts and
         returns ``artifacts=[]``. Set this only when the SDK process and
         the boss process share a filesystem.
+
+        ``api_key`` sets the bearer token sent on every request. Three modes:
+        omit the argument to fall back to the ``AGENTFM_API_KEY`` env var;
+        pass an explicit ``None`` to disable auth (no fallback); pass a
+        string to use that token verbatim.
         """
         self.gateway_url = gateway_url.rstrip("/")
         self.retries = retries
-        self._http = make_client(self.gateway_url, timeout=timeout)
+        if isinstance(api_key, _Unset):
+            self.api_key = os.environ.get("AGENTFM_API_KEY") or None
+        else:
+            self.api_key = api_key or None
+        self._http = make_client(self.gateway_url, timeout=timeout, api_key=self.api_key)
         self.artifacts: ArtifactManager | None = (
             ArtifactManager(watch_dir=artifacts_dir, extract_dir=artifacts_dir)
             if artifacts_dir is not None
@@ -346,11 +354,15 @@ class AgentFMClient:
         timeout: float | httpx.Timeout | None | _Unset = _UNSET,
         retries: int | _Unset = _UNSET,
         artifacts_dir: str | Path | None | _Unset = _UNSET,
+        api_key: str | None | _Unset = _UNSET,
     ) -> AgentFMClient:
         """Return a new client with the given options overridden.
 
         Each unspecified option is inherited from this client. The returned
         client owns a fresh ``httpx.Client`` — close it independently.
+
+        ``api_key`` follows the same sentinel rule: pass an explicit ``None``
+        to drop authentication on the derived client, omit to inherit.
         """
         return type(self)(
             gateway_url=self.gateway_url if isinstance(gateway_url, _Unset) else gateway_url,
@@ -361,10 +373,20 @@ class AgentFMClient:
                 if isinstance(artifacts_dir, _Unset)
                 else artifacts_dir
             ),
+            api_key=self.api_key if isinstance(api_key, _Unset) else api_key,
         )
 
     def close(self) -> None:
         self._http.close()
+
+    def __del__(self) -> None:
+        # Defensive close so a user who built a client via with_options(...)
+        # outside a `with` block does not leak the underlying httpx.Client
+        # until interpreter exit. Wrapped because __del__ during interpreter
+        # teardown can raise on previously-collected attributes.
+        import contextlib
+        with contextlib.suppress(Exception):
+            self.close()
 
     def __enter__(self) -> AgentFMClient:
         return self
