@@ -173,7 +173,7 @@ func enforceStartupAuthGuard(bind string, tokens *tokenSet) error {
 // "0.0.0.0" and any non-loopback IP literal.
 func isLoopbackBind(bind string) bool {
 	switch strings.ToLower(strings.TrimSpace(bind)) {
-	case "", "localhost", "127.0.0.1", "::1", "[::1]":
+	case "", "localhost", "127.0.0.1", "::1":
 		return true
 	}
 	if ip := net.ParseIP(bind); ip != nil {
