@@ -5,7 +5,7 @@
 APP_NAME := agentfm
 RELAY_NAME := relay
 RELAY_INSTALL_NAME := agentfm-relay
-VERSION := 1.1.0
+VERSION := 1.2.0
 RELEASE_TAG := AgentFM
 MAIN_FILE := ./cmd/agentfm
 RELAY_MAIN_FILE := ./cmd/relay
