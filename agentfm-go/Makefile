@@ -106,27 +106,47 @@ build: build-agentfm build-relay
 build-all: clean
 	@echo "🌍 Cross-compiling for all major platforms..."
 	@mkdir -p $(BUILD_DIR)
-	
+
 	@echo "  -> Compiling Linux (amd64)..."
-	@GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o $(BUILD_DIR)/$(APP_NAME)_linux_amd64 $(MAIN_FILE)
-	@GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o $(BUILD_DIR)/$(RELAY_NAME)_linux_amd64 $(RELAY_MAIN_FILE)
-	
+	@GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_linux_amd64 $(MAIN_FILE)
+	@GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_linux_amd64 $(RELAY_MAIN_FILE)
+
 	@echo "  -> Compiling Linux (arm64)..."
-	@GOOS=linux GOARCH=arm64 go build -ldflags "-s -w" -o $(BUILD_DIR)/$(APP_NAME)_linux_arm64 $(MAIN_FILE)
-	@GOOS=linux GOARCH=arm64 go build -ldflags "-s -w" -o $(BUILD_DIR)/$(RELAY_NAME)_linux_arm64 $(RELAY_MAIN_FILE)
-	
+	@GOOS=linux GOARCH=arm64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_linux_arm64 $(MAIN_FILE)
+	@GOOS=linux GOARCH=arm64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_linux_arm64 $(RELAY_MAIN_FILE)
+
+	@echo "  -> Compiling Linux (arm/v7)..."
+	@GOOS=linux GOARCH=arm GOARM=7 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_linux_arm $(MAIN_FILE)
+	@GOOS=linux GOARCH=arm GOARM=7 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_linux_arm $(RELAY_MAIN_FILE)
+
+	@echo "  -> Compiling Linux (386)..."
+	@GOOS=linux GOARCH=386 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_linux_386 $(MAIN_FILE)
+	@GOOS=linux GOARCH=386 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_linux_386 $(RELAY_MAIN_FILE)
+
+	@echo "  -> Compiling Linux (riscv64)..."
+	@GOOS=linux GOARCH=riscv64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_linux_riscv64 $(MAIN_FILE)
+	@GOOS=linux GOARCH=riscv64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_linux_riscv64 $(RELAY_MAIN_FILE)
+
 	@echo "  -> Compiling macOS (amd64/Intel)..."
-	@GOOS=darwin GOARCH=amd64 go build -ldflags "-s -w" -o $(BUILD_DIR)/$(APP_NAME)_darwin_amd64 $(MAIN_FILE)
-	@GOOS=darwin GOARCH=amd64 go build -ldflags "-s -w" -o $(BUILD_DIR)/$(RELAY_NAME)_darwin_amd64 $(RELAY_MAIN_FILE)
-	
+	@GOOS=darwin GOARCH=amd64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_darwin_amd64 $(MAIN_FILE)
+	@GOOS=darwin GOARCH=amd64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_darwin_amd64 $(RELAY_MAIN_FILE)
+
 	@echo "  -> Compiling macOS (arm64/Apple Silicon)..."
-	@GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w" -o $(BUILD_DIR)/$(APP_NAME)_darwin_arm64 $(MAIN_FILE)
-	@GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w" -o $(BUILD_DIR)/$(RELAY_NAME)_darwin_arm64 $(RELAY_MAIN_FILE)
-	
+	@GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_darwin_arm64 $(MAIN_FILE)
+	@GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_darwin_arm64 $(RELAY_MAIN_FILE)
+
 	@echo "  -> Compiling Windows (amd64)..."
-	@GOOS=windows GOARCH=amd64 go build -ldflags "-s -w" -o $(BUILD_DIR)/$(APP_NAME)_windows_amd64.exe $(MAIN_FILE)
-	@GOOS=windows GOARCH=amd64 go build -ldflags "-s -w" -o $(BUILD_DIR)/$(RELAY_NAME)_windows_amd64.exe $(RELAY_MAIN_FILE)
-	
+	@GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_windows_amd64.exe $(MAIN_FILE)
+	@GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_windows_amd64.exe $(RELAY_MAIN_FILE)
+
+	@echo "  -> Compiling Windows (arm64)..."
+	@GOOS=windows GOARCH=arm64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_windows_arm64.exe $(MAIN_FILE)
+	@GOOS=windows GOARCH=arm64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_windows_arm64.exe $(RELAY_MAIN_FILE)
+
+	@echo "  -> Compiling FreeBSD (amd64)..."
+	@GOOS=freebsd GOARCH=amd64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_freebsd_amd64 $(MAIN_FILE)
+	@GOOS=freebsd GOARCH=amd64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_freebsd_amd64 $(RELAY_MAIN_FILE)
+
 	@echo "✅ All binaries generated in ./$(BUILD_DIR)/"
 
 # ==========================================
