@@ -43,6 +43,20 @@ func New(node *network.MeshNode, cfg Config) *Worker {
 	return &Worker{node: node, config: cfg}
 }
 
+// printHostNetworkWarning surfaces the --network host security caveat
+// to the operator. Called from both Worker.Start (long-lived worker)
+// and RunLocalTest (single-shot test mode) so a workshop attendee
+// running `agentfm -mode test` against a developer laptop sees the
+// same loopback-exposure warning the production worker prints.
+func printHostNetworkWarning() {
+	pterm.Warning.Println(
+		"Containers run with --network host: the agent has full access to this " +
+			"machine's network namespace, including loopback (127.0.0.1) services like " +
+			"Ollama, internal admin endpoints, and cloud metadata (169.254.169.254). " +
+			"Treat agent images as TRUSTED CODE; review their Dockerfiles before running.",
+	)
+}
+
 // RunLocalTest allows users to test their dockerfile/script locally without libp2p
 func RunLocalTest(ctx context.Context, cfg Config, prompt string) error {
 	w := &Worker{config: cfg}
@@ -50,6 +64,8 @@ func RunLocalTest(ctx context.Context, cfg Config, prompt string) error {
 	if err := w.buildSandboxImage(ctx); err != nil {
 		return err
 	}
+
+	printHostNetworkWarning()
 
 	fmt.Printf("\n🤖 Sending Prompt: '%s'\n", pterm.LightGreen(prompt))
 	fmt.Println("--------------------------------------------------")
@@ -78,12 +94,7 @@ func (w *Worker) Start(ctx context.Context) {
 		os.Exit(1)
 	}
 
-	pterm.Warning.Println(
-		"Containers run with --network host: the agent has full access to this " +
-			"machine's network namespace, including loopback (127.0.0.1) services like " +
-			"Ollama, internal admin endpoints, and cloud metadata (169.254.169.254). " +
-			"Treat agent images as TRUSTED CODE; review their Dockerfiles before running.",
-	)
+	printHostNetworkWarning()
 
 	w.printMetadata()
 	w.wg.Add(1)

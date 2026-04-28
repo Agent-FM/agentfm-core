@@ -38,6 +38,17 @@ const asyncArtifactWait = 10 * time.Second
 // Returns whether the file was observed (currently informational only;
 // callers fire the webhook either way).
 func waitForArtifact(ctx context.Context, taskID string, maxWait time.Duration) bool {
+	// Defense-in-depth: today the only caller passes a newCompletionID()
+	// (crypto/rand hex), so a path-traversal payload is impossible. But
+	// the helper is generic; refuse anything that can't safely be joined
+	// into a filesystem path so a future caller can't accidentally
+	// inherit a traversal bug.
+	if !network.SafeTaskIDPattern.MatchString(taskID) {
+		slog.Warn("waitForArtifact rejected unsafe taskID",
+			slog.String(obs.FieldTaskID, taskID),
+		)
+		return false
+	}
 	deadline := time.Now().Add(maxWait)
 	zipPath := filepath.Join("agentfm_artifacts", taskID+".zip")
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -107,23 +118,13 @@ func (b *Boss) asyncExecuteHandler(rootCtx context.Context, wg *sync.WaitGroup) 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusAccepted)
-		if err := json.NewEncoder(w).Encode(map[string]string{
-			"task_id": taskID,
-			"status":  "queued",
-			"message": "Task dispatched to P2P mesh.",
-		}); err != nil {
-			slog.Error("async task ack write", slog.Any(obs.FieldErr, err))
-			<-b.asyncSlots
-			return
-		}
-
-		// Budget the whole background job (stream + webhook) by the task
-		// execution timeout so a ghosted worker can't hold a goroutine
-		// past server shutdown.
+		// Spawn-before-ack: the goroutine starts BEFORE we attempt to
+		// write the 202 body. This preserves the contract "if the client
+		// got a 202 with a task_id, the task is being executed." A failed
+		// ack write (client hung up between header and body) leaves the
+		// background task running so a webhook delivery can still fire,
+		// rather than silently dropping committed work.
 		taskCtx, cancelTask := context.WithTimeout(rootCtx, network.TaskExecutionTimeout)
-
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -132,6 +133,19 @@ func (b *Boss) asyncExecuteHandler(rootCtx context.Context, wg *sync.WaitGroup) 
 
 			b.runAsyncTask(taskCtx, peerID, taskID, req)
 		}()
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		if err := json.NewEncoder(w).Encode(map[string]string{
+			"task_id": taskID,
+			"status":  "queued",
+			"message": "Task dispatched to P2P mesh.",
+		}); err != nil {
+			slog.Warn("async task ack write failed; goroutine continues",
+				slog.String(obs.FieldTaskID, taskID),
+				slog.Any(obs.FieldErr, err),
+			)
+		}
 	}
 }
 

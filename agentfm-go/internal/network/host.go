@@ -17,18 +17,18 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/host/autonat"
 )
 
-// loadOrGenerateIdentity returns the persistent Ed25519 private key for
-// this node, creating one on first boot. Stable peer IDs across restarts
-// are important: they let other nodes cache our address and skip the DHT
-// lookup next time, and private swarms often allowlist peers by ID.
-func loadOrGenerateIdentity(mode string) (crypto.PrivKey, error) {
-	keyPath := fmt.Sprintf(".agentfm_%s_identity.key", mode)
-
-	// Try the existing identity first. A read failure is fine on the
-	// very first boot, but a successful read that fails to unmarshal
-	// means the file on disk is corrupt. We surface that so the
-	// operator realises their peer ID is about to change, instead of
-	// silently regenerating.
+// LoadOrGenerateIdentity returns the persistent Ed25519 private key at
+// keyPath, creating one on first boot. Shared by both binaries:
+// internal/network's mode-suffixed boss/worker/api identities, and the
+// dedicated relay binary's relay_identity.key. Stable peer IDs across
+// restarts let other nodes cache our address and skip DHT lookups, and
+// private swarms often allowlist peers by ID.
+//
+// A read failure is fine on the very first boot, but a successful read
+// that fails to unmarshal means the file on disk is corrupt. We surface
+// that so the operator realises their peer ID is about to change instead
+// of silently regenerating.
+func LoadOrGenerateIdentity(keyPath string) (crypto.PrivKey, error) {
 	if keyBytes, err := os.ReadFile(keyPath); err == nil {
 		priv, err := crypto.UnmarshalPrivateKey(keyBytes)
 		if err == nil {
@@ -60,6 +60,13 @@ func loadOrGenerateIdentity(mode string) (crypto.PrivKey, error) {
 	}
 
 	return priv, nil
+}
+
+// loadOrGenerateIdentity preserves the legacy package-internal call sites
+// (createHost) that pass a mode string and want the .agentfm_<mode>_identity.key
+// naming convention. New callers should use LoadOrGenerateIdentity directly.
+func loadOrGenerateIdentity(mode string) (crypto.PrivKey, error) {
+	return LoadOrGenerateIdentity(fmt.Sprintf(".agentfm_%s_identity.key", mode))
 }
 
 // createHost assembles the libp2p Host with the correct options for this
@@ -116,7 +123,9 @@ func createHost(cfg Config, bootstrapAddr string) (host.Host, error) {
 
 	if cfg.Mode != "relay" {
 		if _, err = autonat.New(h); err != nil {
-			fmt.Printf("⚠️  [NAT] Failed to start AutoNAT service: %v\n", err)
+			slog.Warn("autonat unavailable; reachability autodetection disabled",
+				slog.Any(obs.FieldErr, err),
+			)
 		} else {
 			fmt.Println("🌐 [NAT] AutoNAT service started. Testing public reachability...")
 		}

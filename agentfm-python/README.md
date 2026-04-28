@@ -75,6 +75,12 @@ except AuthenticationError as e:
 [Authentication](https://github.com/Agent-FM/agentfm-core#authentication)
 docs for setting up `AGENTFM_API_KEYS` on the boss.
 
+> **`client.api_key` is read-after-construction.** The token is baked into
+> the underlying `httpx.Client.headers` once at `__init__`. Mutating
+> `client.api_key = "new-key"` afterwards does NOT update the request
+> header — use `client.with_options(api_key="new-key")` to derive a
+> client with a new key. Matches the OpenAI Python SDK's behaviour.
+
 ## Async
 
 ```python

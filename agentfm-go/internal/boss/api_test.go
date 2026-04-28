@@ -281,6 +281,32 @@ func TestHandleExecuteTask_InvalidWorkerIDFormat(t *testing.T) {
 	}
 }
 
+// TestShortID_GuardsShortInput: regression for round-2 audit finding I-8.
+// The routing log line in handleExecuteTask previously sliced
+// req.TaskID[:8] directly, which panics when a user-supplied TaskID is
+// shorter than 8 chars. shortID() caps the slice safely. We unit-test
+// the helper directly because invoking the full handler path triggers
+// a pre-existing pterm-spinner concurrency issue under -race.
+func TestShortID_GuardsShortInput(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in   string
+		n    int
+		want string
+	}{
+		{"abc", 8, "abc"},
+		{"task_abcdef12345", 8, "task_abc"},
+		{"", 8, ""},
+		{"x", 0, ""},
+		{"exactly8", 8, "exactly8"},
+	}
+	for _, tc := range cases {
+		if got := shortID(tc.in, tc.n); got != tc.want {
+			t.Errorf("shortID(%q, %d) = %q; want %q", tc.in, tc.n, got, tc.want)
+		}
+	}
+}
+
 // --- POST /api/execute/async -----------------------------------------------
 
 // TestAsyncExecuteHandler_MethodNotAllowed covers the factory-returned

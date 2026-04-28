@@ -49,6 +49,7 @@ class LocalMeshGateway:
         debug: bool = False,
         log_file: str | Path | None = None,
         startup_timeout: float = 15.0,
+        api_key: str | None = None,
     ) -> None:
         self.binary_path = binary_path
         self.port = port
@@ -60,6 +61,10 @@ class LocalMeshGateway:
         self.process: subprocess.Popen[bytes] | None = None
         self._log_handle: IO[bytes] | None = None
         self.url = f"http://127.0.0.1:{self.port}"
+        # api_key is forwarded as Authorization: Bearer ... on the readiness
+        # probe so a gateway with AGENTFM_API_KEYS set doesn't reject the
+        # probe with 401. Falls back to AGENTFM_API_KEY env var if unset.
+        self.api_key = api_key if api_key is not None else os.environ.get("AGENTFM_API_KEY") or None
 
     # -- context-manager protocol -------------------------------------------
 
@@ -166,11 +171,22 @@ class LocalMeshGateway:
             self._cleanup_log()
 
     def _is_ready(self) -> bool:
-        try:
-            r = httpx.get(f"{self.url}/api/workers", timeout=1.0)
-            return r.status_code == 200
-        except httpx.HTTPError:
-            return False
+        # Prefer /health (always unauthenticated; cheaper than /api/workers
+        # which does a map walk under lock). Falls back to /api/workers if
+        # the gateway is too old to expose /health.
+        headers = (
+            {"Authorization": f"Bearer {self.api_key}"}
+            if self.api_key
+            else {}
+        )
+        for path in ("/health", "/api/workers"):
+            try:
+                r = httpx.get(f"{self.url}{path}", timeout=1.0, headers=headers)
+            except httpx.HTTPError:
+                continue
+            if r.status_code == 200:
+                return True
+        return False
 
     def _cleanup_log(self) -> None:
         if self._log_handle is not None:

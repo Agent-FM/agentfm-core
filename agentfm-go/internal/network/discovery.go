@@ -103,6 +103,11 @@ func discoverPeers(ctx context.Context, h host.Host, routingDiscovery *routing.R
 				dialCtx, dialCancel := context.WithTimeout(ctx, StreamDialTimeout)
 				if err := h.Connect(dialCtx, p); err == nil {
 					fmt.Printf("\n🌍 [DHT Fallback] Successfully connected to peer: %s\n", p.ID.String()[:8])
+				} else {
+					slog.Debug("dht fallback dial failed",
+						slog.String(obs.FieldPeerID, p.ID.String()),
+						slog.Any(obs.FieldErr, err),
+					)
 				}
 				dialCancel()
 			}

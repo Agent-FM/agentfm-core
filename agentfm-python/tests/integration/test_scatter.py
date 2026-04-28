@@ -248,3 +248,62 @@ async def test_async_scatter_failed_prompt_at_correct_index(
 
     assert [r.prompt for r in results] == prompts
     assert [r.status for r in results] == ["success", "failed", "success"]
+
+
+# ---------------------------------------------------------------------------
+# round-2 audit Py I-6: scatter must NOT propagate non-AgentFMError. Today
+# tasks.run can raise OSError from artifact harvesting if artifacts_dir
+# disappears. The "scatter never raises" contract requires that to surface
+# as ScatterResult(status="failed").
+# ---------------------------------------------------------------------------
+
+
+def test_sync_scatter_treats_non_agentfm_error_as_failure(
+    gateway_url: str, mock_gateway: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+):
+    mock_gateway.post("/api/execute").mock(
+        return_value=httpx.Response(
+            200, content=b"ok\n", headers={"Content-Type": "text/plain"}
+        )
+    )
+
+    with AgentFMClient(gateway_url=gateway_url) as client:
+        def boom(**kwargs: object) -> object:
+            raise OSError("simulated artifact harvest failure")
+
+        monkeypatch.setattr(client.tasks, "run", boom)
+
+        results = client.tasks.scatter(
+            ["p1", "p2"], peer_ids=["12D3KooWA"], max_concurrency=1, max_retries=0
+        )
+
+    assert len(results) == 2
+    assert all(r.status == "failed" for r in results), (
+        f"got {[r.status for r in results]}; scatter must surface non-AgentFMError as ScatterResult(failed)"
+    )
+    assert all("simulated artifact harvest failure" in (r.error or "") for r in results)
+
+
+@pytest.mark.asyncio
+async def test_async_scatter_treats_non_agentfm_error_as_failure(
+    gateway_url: str, mock_gateway: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+):
+    mock_gateway.post("/api/execute").mock(
+        return_value=httpx.Response(
+            200, content=b"ok\n", headers={"Content-Type": "text/plain"}
+        )
+    )
+
+    async with AsyncAgentFMClient(gateway_url=gateway_url) as client:
+        async def boom(**kwargs: object) -> object:
+            raise OSError("simulated artifact harvest failure")
+
+        monkeypatch.setattr(client.tasks, "run", boom)
+
+        results = await client.tasks.scatter(
+            ["p1", "p2"], peer_ids=["12D3KooWA"], max_concurrency=1, max_retries=0
+        )
+
+    assert len(results) == 2
+    assert all(r.status == "failed" for r in results)
+    assert all("simulated artifact harvest failure" in (r.error or "") for r in results)

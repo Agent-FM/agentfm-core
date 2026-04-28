@@ -85,6 +85,33 @@ def filter_iter(chunks: Iterable[str]) -> Iterator[str]:
 # Server-Sent Events (SSE) parsing for /v1/* streaming responses
 # ---------------------------------------------------------------------------
 
+SSE_DONE = object()
+"""Sentinel returned by :func:`classify_sse_line` for the ``data: [DONE]``
+terminator. Callers should stop iterating when they see it."""
+
+
+def classify_sse_line(raw: str) -> str | object | None:
+    """Classify a single SSE line.
+
+    Returns:
+    - the payload string when the line carries ``data: <body>``
+    - :data:`SSE_DONE` when the line is the terminator ``data: [DONE]``
+    - ``None`` for empty lines, comments, and non-data fields
+
+    Shared by the sync :func:`parse_sse_lines` (operating on an
+    ``Iterable[str]``) and the async ``_aiter_sse`` in the OpenAI
+    namespace (operating on an ``AsyncIterator[str]``). Keeping a single
+    classifier means the two iterators can never drift on what counts as
+    a payload vs a terminator.
+    """
+    line = raw.rstrip("\r\n")
+    if not line or line.startswith(":") or not line.startswith("data:"):
+        return None
+    body = line[len("data:") :].lstrip()
+    if body == "[DONE]":
+        return SSE_DONE
+    return body or None
+
 
 def parse_sse_lines(lines: Iterable[str]) -> Iterator[str]:
     """Decode an SSE byte/line stream into raw ``data:`` payload bodies.
@@ -94,23 +121,20 @@ def parse_sse_lines(lines: Iterable[str]) -> Iterator[str]:
     ``event:``/``id:`` for anything).
     """
     for raw in lines:
-        line = raw.rstrip("\r\n")
-        if not line or line.startswith(":"):
-            continue
-        if not line.startswith("data:"):
-            continue
-        body = line[len("data:") :].lstrip()
-        if body == "[DONE]":
+        result = classify_sse_line(raw)
+        if result is SSE_DONE:
             return
-        if body:
-            yield body
+        if isinstance(result, str):
+            yield result
 
 
 __all__ = [
     "ARTIFACT_INCOMING",
     "ARTIFACT_NONE",
     "SENTINEL_PREFIX",
+    "SSE_DONE",
     "SentinelFilter",
+    "classify_sse_line",
     "filter_iter",
     "parse_sse_lines",
 ]

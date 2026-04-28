@@ -292,7 +292,7 @@ For non-Python clients (Next.js, n8n, curl, Slack bots).
 |---|---|
 | `GET /api/workers` | Live list of every worker on the mesh with telemetry. |
 | `POST /api/execute` | Sync streaming task dispatch. Body: `{"worker_id":..., "prompt":..., "task_id":...}`. Streams worker stdout back chunked. |
-| `POST /api/execute/async` | Fire-and-forget. Returns `202 {"task_id":...}` immediately. POSTs to `webhook_url` on completion (signed if `AGENTFM_WEBHOOK_SECRET` is set). |
+| `POST /api/execute/async` | Fire-and-forget. Returns `202 {"task_id":...}` immediately. POSTs to `webhook_url` on completion (signed if `AGENTFM_WEBHOOK_SECRET` is set). The background task spawns *before* the 202 ack is written: a 202 means the task is being executed, even if the client hangs up before reading the body. |
 | `GET /metrics` | Prometheus scrape endpoint (see Observability). |
 
 Webhook POSTs are bounded by a 30 s timeout, do not follow redirects, and the response body is capped at 64 KiB.
