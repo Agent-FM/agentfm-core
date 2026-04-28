@@ -66,6 +66,52 @@ That's it. Files the agent drops into `/tmp/output` get zipped and shipped back 
 
 ---
 
+## Features
+
+- **OpenAI-compatible API** on `/v1/chat/completions`, `/v1/completions`, `/v1/models`. Drop-in for LangChain, LlamaIndex, LiteLLM, Continue, Open WebUI, the official OpenAI SDKs, anything.
+- **Hardware-aware routing.** Workers broadcast live CPU / GPU / RAM / queue every 2s. The matcher picks the least-loaded peer per request. No central scheduler.
+- **End-to-end encrypted P2P.** libp2p Noise streams between Boss and Worker. The Relay sees discovery metadata only; never prompt content.
+- **Bearer-token auth.** `AGENTFM_API_KEYS` enables per-request bearer validation, constant-time comparison, per-IP rate limiting on failed attempts. Refuses to start with public bind + no keys.
+- **Public mesh, private swarms, or solo-dev.** Same binary. Toggle PSK mode for fully isolated darknet meshes invisible to the public network.
+- **Container sandboxing.** Every task runs in a fresh Podman container. SIGKILL'd the instant the stream dies. Resource budgets stop a noisy task from hurting its operator.
+- **Live artifact streaming.** Anything an agent writes to `/tmp/output` is auto-zipped, transferred, and extracted client-side. Zip-slip + zip-bomb defense baked in.
+- **Observability built in.** Prometheus metrics on every node (`/metrics`), structured slog JSON logs ready for Loki / ELK / Datadog, `/health` endpoint for load balancers.
+- **Async + webhook callbacks.** Fire-and-forget submission with HMAC-signed webhook delivery on completion. SSRF-guarded against private network attacks.
+- **Cross-platform.** Single statically-linked binary for Linux, macOS, Windows, FreeBSD across amd64, arm64, armv7, 386, and RISC-V.
+
+---
+
+## Python SDK
+
+```bash
+pip install agentfm-sdk
+```
+
+Typed sync and async clients with full OpenAI-compatible namespace, scatter-gather batch dispatch, signed webhook callbacks, and strict mypy compliance.
+
+```python
+from agentfm import AgentFMClient
+
+with AgentFMClient(gateway_url="http://127.0.0.1:8080") as client:
+    workers = client.workers.list(model="llama3.2", available_only=True)
+    result = client.tasks.run(worker_id=workers[0].peer_id, prompt="Draft a leave policy.")
+    print(result.text)
+    print(result.artifacts)   # list[Path] auto-extracted
+```
+
+The OpenAI namespace mirrors the official SDK's surface:
+
+```python
+resp = client.openai.chat.completions.create(
+    model=workers[0].peer_id,
+    messages=[{"role": "user", "content": "hi"}],
+)
+```
+
+Async mirror via `AsyncAgentFMClient`. Full SDK docs: [agentfm-python/README.md](agentfm-python/README.md). PyPI: [pypi.org/project/agentfm-sdk](https://pypi.org/project/agentfm-sdk/).
+
+---
+
 ## Documentation
 
 | Topic | Doc |
