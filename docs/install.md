@@ -26,7 +26,7 @@ make build && make install
 ## Python SDK
 
 ```bash
-pip install agentfm
+pip install agentfm-sdk
 ```
 
 Full SDK docs: [agentfm-python/README.md](../agentfm-python/README.md).

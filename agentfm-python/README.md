@@ -1,11 +1,13 @@
-# agentfm
+# agentfm-sdk
 
 Official Python SDK for [AgentFM](https://agentfm.net), a peer-to-peer compute mesh
 for containerized AI agents.
 
 ```bash
-pip install agentfm
+pip install agentfm-sdk
 ```
+
+> **Distribution name vs import name.** The package is published as `agentfm-sdk` on PyPI (the bare name `agentfm` is taken by an unrelated project), but you import it as `agentfm` in code. So `pip install agentfm-sdk` then `from agentfm import AgentFMClient`.
 
 Typed sync and async clients, full OpenAI-compatible namespace, scatter-gather
 batch dispatch, signed webhook callbacks, and strict mypy compliance.

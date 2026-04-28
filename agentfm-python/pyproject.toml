@@ -3,7 +3,7 @@ requires = ["hatchling>=1.21"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agentfm"
+name = "agentfm-sdk"
 description = "Official Python SDK for the AgentFM peer-to-peer compute mesh."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -51,7 +51,7 @@ cli = [
     "rich>=13.7",
 ]
 dev = [
-    "agentfm[cli]",
+    "agentfm-sdk[cli]",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "pytest-cov>=5.0",

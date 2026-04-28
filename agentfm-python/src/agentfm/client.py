@@ -16,6 +16,7 @@ Surface (canonical):
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import time
@@ -399,8 +400,9 @@ class AgentFMClient:
         # Defensive close so a user who built a client via with_options(...)
         # outside a `with` block does not leak the underlying httpx.Client
         # until interpreter exit. Wrapped because __del__ during interpreter
-        # teardown can raise on previously-collected attributes.
-        import contextlib
+        # teardown can raise on previously-collected attributes. The import
+        # of contextlib lives at module top so __del__ does not trigger the
+        # import system when sys.meta_path is already None during shutdown.
         with contextlib.suppress(Exception):
             self.close()
 

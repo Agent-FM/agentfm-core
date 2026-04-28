@@ -6,6 +6,7 @@ Mirrors :class:`agentfm.AgentFMClient` with ``async`` / ``await`` semantics.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import time
@@ -361,8 +362,8 @@ class AsyncAgentFMClient:
         # loop guarantee at GC time. We close the transport directly to free
         # sockets without scheduling on a running loop. Wrapped because
         # __del__ during interpreter teardown can raise on already-collected
-        # attributes.
-        import contextlib
+        # attributes. The import of contextlib lives at module top so __del__
+        # does not trigger the import system when sys.meta_path is None.
         with contextlib.suppress(Exception):
             transport = getattr(self._http, "_transport", None)
             close = getattr(transport, "close", None)
