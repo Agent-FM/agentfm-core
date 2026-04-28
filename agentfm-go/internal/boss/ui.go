@@ -62,24 +62,17 @@ func (b *Boss) selectWorkerInteractive(parentCtx context.Context) (types.WorkerP
 	defer area.Stop()
 
 	draw := func() {
-		b.mu.Lock()
-
-		for peerID, seen := range b.lastSeen {
-			if time.Since(seen) > 15*time.Second {
-				delete(b.activeWorkers, peerID)
-				delete(b.lastSeen, peerID)
-			}
-		}
-
+		// Pure read: pruning is handled by listenTelemetry's pruneTicker
+		// (boss.go) so the TUI and /api/workers always agree on which
+		// workers are visible. RLock is sufficient.
+		b.mu.RLock()
 		nextList := make([]types.WorkerProfile, 0, len(b.activeWorkers))
 		for _, w := range b.activeWorkers {
 			nextList = append(nextList, w)
 		}
-
 		activeCount := len(b.activeWorkers)
 		peerCount := len(b.node.PubSub.ListPeers(network.TelemetryTopic))
-
-		b.mu.Unlock()
+		b.mu.RUnlock()
 
 		sort.Slice(nextList, func(i, j int) bool {
 			return nextList[i].PeerID < nextList[j].PeerID

@@ -132,3 +132,29 @@ def test_constructor_explicit_none_api_key_skips_env_fallback(monkeypatch):
         assert "authorization" not in {k.lower() for k in c._http.headers}
     finally:
         c.close()
+
+
+def test_sync_client_del_tolerates_construction_failure(monkeypatch):
+    import contextlib
+
+    import agentfm.client as client_mod
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("simulated httpx.Client construction failure")
+
+    monkeypatch.setattr(client_mod, "make_client", boom)
+    with contextlib.suppress(RuntimeError):
+        AgentFMClient(gateway_url="http://x:8080")
+
+
+def test_async_client_del_tolerates_construction_failure(monkeypatch):
+    import contextlib
+
+    import agentfm.async_client as async_client_mod
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("simulated httpx.AsyncClient construction failure")
+
+    monkeypatch.setattr(async_client_mod, "make_async_client", boom)
+    with contextlib.suppress(RuntimeError):
+        AsyncAgentFMClient(gateway_url="http://x:8080")

@@ -76,11 +76,18 @@ func main() {
 		return
 	}
 
-	validateOperatorConfig(cfg)
-
 	if *mode == "" {
 		pterm.Error.Println("Please specify a mode: -mode boss, worker, relay, api, test, or genkey")
 		os.Exit(1)
+	}
+
+	// Worker-config bounds (maxtasks, maxcpu, maxgpu, agent/desc/model
+	// lengths) only apply to roles that actually consume worker.Config.
+	// Boss/relay/api take defaults, so running the validator there would
+	// just be noise — and would surface confusing limits in --help that
+	// don't apply to the chosen mode.
+	if *mode == "worker" || *mode == "test" {
+		validateOperatorConfig(cfg)
 	}
 
 	ctx := context.Background()

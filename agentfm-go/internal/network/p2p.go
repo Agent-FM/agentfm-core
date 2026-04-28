@@ -3,6 +3,9 @@ package network
 import (
 	"context"
 	"fmt"
+	"log/slog"
+
+	"agentfm/internal/obs"
 
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -56,7 +59,13 @@ func Setup(ctx context.Context, cfg Config) (*MeshNode, error) {
 
 	var relayPeerID peer.ID
 	if cfg.Mode != "relay" && bootstrapAddr != "" {
-		if relayInfo, err := parseRelayInfo(bootstrapAddr); err == nil {
+		relayInfo, err := parseRelayInfo(bootstrapAddr)
+		if err != nil {
+			slog.Warn("invalid bootstrap multiaddr; skipping lighthouse",
+				slog.String("bootstrap", bootstrapAddr),
+				slog.Any(obs.FieldErr, err),
+			)
+		} else {
 			relayPeerID = relayInfo.ID
 			connectToLighthouse(ctx, h, relayInfo)
 		}

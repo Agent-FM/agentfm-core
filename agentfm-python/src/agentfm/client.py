@@ -257,7 +257,17 @@ class _TasksNamespace(SyncResource):
                             text=res.text,
                             artifacts=res.artifacts,
                         )
-                    except AgentFMError as exc:
+                    except Exception as exc:
+                        # Wider than AgentFMError on purpose: tasks.run can
+                        # raise OSError from artifact harvesting (artifacts_dir
+                        # disappeared, perm denied) which would otherwise
+                        # break the "scatter never raises" contract. Anything
+                        # unexpected is logged so it isn't silently swallowed.
+                        if not isinstance(exc, AgentFMError):
+                            _log.exception(
+                                "scatter prompt #%s raised non-AgentFMError; treating as failure",
+                                idx,
+                            )
                         attempts[idx] += 1
                         if attempts[idx] <= max_retries:
                             _log.info("retrying prompt #%s (attempt %s)", idx, attempts[idx])
@@ -319,6 +329,12 @@ class AgentFMClient:
         omit the argument to fall back to the ``AGENTFM_API_KEY`` env var;
         pass an explicit ``None`` to disable auth (no fallback); pass a
         string to use that token verbatim.
+
+        The token is read once at construction time and baked into the
+        underlying ``httpx.Client.headers``. Mutating ``client.api_key``
+        after construction does NOT update the request header — use
+        :meth:`with_options` to derive a new client with a different key.
+        Matches the OpenAI Python SDK's behaviour.
         """
         self.gateway_url = gateway_url.rstrip("/")
         self.retries = retries

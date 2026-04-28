@@ -25,7 +25,7 @@ import httpx
 from .._internal.resource import AsyncResource, SyncResource
 from .._transport import STREAMING_TIMEOUT, raise_for_response, raise_translated_stream_error
 from .._warnings import ROUTING_WARNING_STACKLEVEL, AgentFMRoutingWarning
-from ..streaming import parse_sse_lines
+from ..streaming import SSE_DONE, classify_sse_line, parse_sse_lines
 from .models import (
     ChatCompletion,
     ChatCompletionChunk,
@@ -45,11 +45,14 @@ _PEER_ID_PREFIX = "12D3KooW"
 
 
 class _RoutingWarner:
-    """Per-namespace dedup of :class:`AgentFMRoutingWarning`.
+    """Process-wide dedup of :class:`AgentFMRoutingWarning`.
 
-    Each ``OpenAINamespace`` / ``AsyncOpenAINamespace`` owns one. Sharing a
-    single instance across the chat and text-completion resources within a
-    namespace gives "warn once per model per client" semantics. Thread-safe.
+    A single module-level instance (``_GLOBAL_WARNER`` below) is shared by
+    every :class:`OpenAINamespace` and :class:`AsyncOpenAINamespace` so the
+    "warn once per model" promise actually holds across short-lived client
+    instances — e.g. a FastAPI handler that constructs a fresh
+    :class:`AgentFMClient` per request would otherwise re-warn for every
+    request. Thread-safe.
     """
 
     __slots__ = ("_lock", "_seen")
@@ -77,6 +80,12 @@ class _RoutingWarner:
         """Clear the dedup state. Used by tests."""
         with self._lock:
             self._seen.clear()
+
+
+# Process-wide warner. Sharing across all namespace instances gives the
+# user-facing "warn once per model" guarantee actual teeth even when the
+# caller pattern is to build a fresh client per request.
+_GLOBAL_WARNER = _RoutingWarner()
 
 
 def _build_chat_body(
@@ -110,7 +119,7 @@ class OpenAINamespace:
 
     def __init__(self, client: AgentFMClient) -> None:
         self._client = client
-        self._warner = _RoutingWarner()
+        self._warner = _GLOBAL_WARNER
         self.models = _Models(client)
         self.chat = _Chat(client, self._warner)
         self.completions = _Completions(client, self._warner)
@@ -248,7 +257,7 @@ class AsyncOpenAINamespace:
 
     def __init__(self, client: AsyncAgentFMClient) -> None:
         self._client = client
-        self._warner = _RoutingWarner()
+        self._warner = _GLOBAL_WARNER
         self.models = _AsyncModels(client)
         self.chat = _AsyncChat(client, self._warner)
         self.completions = _AsyncCompletions(client, self._warner)
@@ -402,13 +411,15 @@ class _AsyncCompletions(AsyncResource):
 
 
 async def _aiter_sse(r: httpx.Response) -> AsyncIterator[str]:
-    """Async equivalent of :func:`agentfm.streaming.parse_sse_lines`."""
+    """Async equivalent of :func:`agentfm.streaming.parse_sse_lines`.
+
+    Both iterators share :func:`classify_sse_line` so a future change to
+    SSE parsing (e.g. multi-line ``data:`` continuation) lands in one
+    place and applies symmetrically to sync + async paths.
+    """
     async for raw in r.aiter_lines():
-        line = raw.rstrip("\r\n")
-        if not line or line.startswith(":") or not line.startswith("data:"):
-            continue
-        body = line[len("data:") :].lstrip()
-        if body == "[DONE]":
+        result = classify_sse_line(raw)
+        if result is SSE_DONE:
             return
-        if body:
-            yield body
+        if isinstance(result, str):
+            yield result

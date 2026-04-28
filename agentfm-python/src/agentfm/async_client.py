@@ -135,6 +135,21 @@ class _AsyncTasksNamespace(AsyncResource):
         prompt: str,
         task_id: str | None = None,
     ) -> AsyncIterator[TaskChunk]:
+        """Stream worker stdout chunk-by-chunk as ``TaskChunk`` objects.
+
+        Early termination of the consumer (``async for ... break``) requires
+        explicit cleanup so the underlying httpx response is released
+        promptly. Wrap the iteration with :func:`contextlib.aclosing`::
+
+            from contextlib import aclosing
+            async with aclosing(client.tasks.stream(...)) as gen:
+                async for chunk in gen:
+                    if want_to_stop: break
+
+        CPython's reference-counting usually finalises the generator on
+        the next GC cycle, but on PyPy / under pressure / if the generator
+        is stored in a future, the response can outlive the loop.
+        """
         payload = build_task_payload(str(worker_id), prompt, task_id=task_id)
         filter_ = SentinelFilter()
         try:
@@ -199,7 +214,7 @@ class _AsyncTasksNamespace(AsyncResource):
             # max_concurrency=1 doesn't deadlock and a failing peer is not
             # reused on retry. The cursor advances by attempt count, giving
             # automatic failover across the supplied peer pool.
-            last_exc: AgentFMError | None = None
+            last_exc: BaseException | None = None
             last_peer = peers_str[idx % len(peers_str)]
             for attempt in range(max_retries + 1):
                 peer = peers_str[(idx + attempt) % len(peers_str)]
@@ -207,7 +222,17 @@ class _AsyncTasksNamespace(AsyncResource):
                 async with sem:
                     try:
                         res = await self.run(worker_id=peer, prompt=prompt)
-                    except AgentFMError as exc:
+                    except Exception as exc:
+                        # Wider than AgentFMError on purpose: tasks.run can
+                        # raise OSError from artifact harvesting which would
+                        # otherwise propagate via asyncio.gather and cancel
+                        # siblings, breaking the "scatter never raises"
+                        # contract. Anything unexpected is logged.
+                        if not isinstance(exc, AgentFMError):
+                            _log.exception(
+                                "scatter prompt #%s raised non-AgentFMError; treating as failure",
+                                idx,
+                            )
                         last_exc = exc
                         if attempt < max_retries:
                             _log.info(

@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -27,25 +28,12 @@ func fatalf(format string, args ...interface{}) {
 	pterm.Fatal.Printfln(format, args...)
 }
 
-// This function loads a saved identity or generates a new one
+// getStaticIdentity is a thin wrapper around network.LoadOrGenerateIdentity
+// kept for the cmd/relay binary's existing logging idiom. The shared helper
+// takes care of the corrupt-file warning, the 0600 perm, and the
+// regenerate-on-missing semantics so both binaries stay in lockstep.
 func getStaticIdentity(keyFile string) (crypto.PrivKey, error) {
-	if keyBytes, err := os.ReadFile(keyFile); err == nil {
-		fmt.Printf("🔑 Loaded existing permanent identity from %s!\n", keyFile)
-		return crypto.UnmarshalPrivateKey(keyBytes)
-	}
-
-	fmt.Printf("✨ Generating new permanent identity at %s...\n", keyFile)
-	priv, _, err := crypto.GenerateKeyPair(crypto.Ed25519, -1)
-	if err != nil {
-		return nil, err
-	}
-
-	keyBytes, err := crypto.MarshalPrivateKey(priv)
-	if err != nil {
-		return nil, err
-	}
-	err = os.WriteFile(keyFile, keyBytes, 0600)
-	return priv, err
+	return network.LoadOrGenerateIdentity(keyFile)
 }
 
 func main() {
@@ -166,6 +154,10 @@ func main() {
 
 	fmt.Println("\nShutting down relay node...")
 	if err := host.Close(); err != nil {
-		pterm.Error.Printfln("Host close error: %v", err)
+		// slog (not pterm) so log shippers see structured failure events
+		// for relays running unattended under systemd / docker / k8s.
+		slog.Error("relay host close",
+			slog.Any(obs.FieldErr, err),
+		)
 	}
 }

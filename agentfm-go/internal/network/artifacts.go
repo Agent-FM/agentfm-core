@@ -20,7 +20,12 @@ import (
 	"github.com/pterm/pterm"
 )
 
-var safeTaskIDPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$`)
+// SafeTaskIDPattern bounds the alphabet of a task ID that's used as a
+// path component (the artifact zip filename, the per-task /tmp/output
+// bind-mount). Exported so other packages (e.g. boss/api_async.go's
+// waitForArtifact) can apply the same defense-in-depth check rather
+// than trusting a string they got from upstream code.
+var SafeTaskIDPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$`)
 
 func SendArtifacts(ctx context.Context, h host.Host, bossID peer.ID, zipFilePath string, taskID string) error {
 	fmt.Println("📦 Opening secure artifact channel to Boss...")
@@ -157,7 +162,7 @@ func HandleArtifactStream(stream network.Stream) {
 
 	taskID := string(idBytes)
 	safeTaskID := filepath.Base(filepath.Clean(taskID))
-	if !safeTaskIDPattern.MatchString(safeTaskID) {
+	if !SafeTaskIDPattern.MatchString(safeTaskID) {
 		safeTaskID = fmt.Sprintf("fallback_%d", time.Now().UnixNano())
 	}
 

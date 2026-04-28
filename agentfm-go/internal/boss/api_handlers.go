@@ -115,7 +115,8 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pterm.Info.Printfln("📡 API Gateway routing task %s to Worker %s...", req.TaskID[:8], pterm.Cyan(peerID.String()[:8]))
+	pterm.Info.Printfln("📡 API Gateway routing task %s to Worker %s...",
+		shortID(req.TaskID, 8), pterm.Cyan(peerID.String()[:8]))
 
 	// Tie the dial to the inbound HTTP request's context so a client
 	// hanging up aborts the libp2p dial instead of waiting out the full
