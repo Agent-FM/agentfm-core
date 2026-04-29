@@ -93,20 +93,43 @@ Typed sync and async clients with full OpenAI-compatible namespace, scatter-gath
 from agentfm import AgentFMClient
 
 with AgentFMClient(gateway_url="http://127.0.0.1:8080") as client:
+    # workers.list(model=...) is a discovery FILTER: "show me workers
+    # whose advertised engine string equals 'llama3.2'"
     workers = client.workers.list(model="llama3.2", available_only=True)
+
+    # tasks.run dispatches to a specific machine by its cryptographic peer_id
     result = client.tasks.run(worker_id=workers[0].peer_id, prompt="Draft a leave policy.")
     print(result.text)
     print(result.artifacts)   # list[Path] auto-extracted
 ```
 
-The OpenAI namespace mirrors the official SDK's surface:
+### A note on the word "model"
+
+The SDK uses `model` for two different things, which trips people up:
+
+- **`workers.list(model=...)`** is a **discovery filter** — exact-match against what each worker advertised at startup (`-model llama3.2`).
+- **`openai.chat.completions.create(model=...)`** is a **routing identifier** — the gateway accepts three kinds of values here, matched in priority order: a `peer_id` (most specific, cryptographically verifiable), an agent name, or an engine name.
+
+Both forms work for the OpenAI namespace:
 
 ```python
+# Option 1: OpenAI-native shape — route to ANY worker advertising "llama3.2".
+# Familiar if you're coming from the cloud OpenAI SDK.
+resp = client.openai.chat.completions.create(
+    model="llama3.2",
+    messages=[{"role": "user", "content": "hi"}],
+)
+
+# Option 2: pin to a SPECIFIC machine by peer_id.
+# Recommended for production: peer_id is the only cryptographically
+# verifiable identifier, so you know exactly which worker served the request.
 resp = client.openai.chat.completions.create(
     model=workers[0].peer_id,
     messages=[{"role": "user", "content": "hi"}],
 )
 ```
+
+Both calls work; pick the one that matches your trust model. In a federated mesh, anyone can advertise themselves as running `llama3.2`, so production code that cares about provenance should pin by `peer_id`.
 
 Async mirror via `AsyncAgentFMClient`. Full SDK docs: [agentfm-python/README.md](agentfm-python/README.md). PyPI: [pypi.org/project/agentfm-sdk](https://pypi.org/project/agentfm-sdk/).
 
