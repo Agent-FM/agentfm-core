@@ -105,7 +105,7 @@ with AgentFMClient(gateway_url="http://127.0.0.1:8080") as client:
 
 ### A note on the word "model"
 
-The SDK uses `model` for two different things, which trips people up:
+The SDK uses `model` for two different things:
 
 - **`workers.list(model=...)`** is a **discovery filter** — exact-match against what each worker advertised at startup (`-model llama3.2`).
 - **`openai.chat.completions.create(model=...)`** is a **routing identifier** — the gateway accepts three kinds of values here, matched in priority order: a `peer_id` (most specific, cryptographically verifiable), an agent name, or an engine name.
