@@ -131,6 +131,21 @@ resp = client.openai.chat.completions.create(
 
 Both calls work; pick the one that matches your trust model. In a federated mesh, anyone can advertise themselves as running `llama3.2`, so production code that cares about provenance should pin by `peer_id`.
 
+#### What actually happens for each form
+
+The two forms behave very differently when worker state changes. **Engine-name routing trades guaranteed placement for automatic fallback. PeerID pinning trades fallback for guaranteed placement.**
+
+| Worker state | `model="12D3KooW..."` (pin) | `model="llama3.2"` (engine) |
+|---|---|---|
+| Worker online with capacity | 200 — served by that exact machine | 200 — served by least-loaded `llama3.2` worker |
+| Worker online but at `max_tasks` | **503 `mesh_overloaded`** (no fallback) | 200 — served by another `llama3.2` worker |
+| Worker offline / wrong peer_id | **404 `model_not_found`** | 200 — any other `llama3.2` worker |
+| All matching workers at capacity | n/a | 503 `mesh_overloaded` |
+
+For engine-name routing, the gateway picks the worker with the lowest `current_tasks/max_tasks` ratio (CPU usage as tiebreaker). The OpenAI response doesn't tell you which peer served the request — if you need that, list-and-pick yourself, or use the AgentFM-native `client.tasks.run()` which returns `result.worker_id`.
+
+**Pick by peer_id** when you need provenance, reproducibility, or a specific machine (custom weights, fine-tunes, hardware benchmarking). **Use engine-name routing** when all matching workers are equivalent and trusted, and you want automatic load balancing and failover.
+
 Async mirror via `AsyncAgentFMClient`. Full SDK docs: [agentfm-python/README.md](agentfm-python/README.md). PyPI: [pypi.org/project/agentfm-sdk](https://pypi.org/project/agentfm-sdk/).
 
 ---
