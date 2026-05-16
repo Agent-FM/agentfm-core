@@ -5,6 +5,7 @@ import (
 
 	pb "agentfm/internal/ledger/pb"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 )
 
@@ -67,11 +68,15 @@ type Ledger interface {
 // otherwise verifiers on other peers will reject every entry this
 // ledger emits.
 //
-// Until P1-1..P1-4 land, New returns (nil, ErrNotImplemented). Callers
-// SHOULD still construct one at boot so the unwired state is detected
-// immediately rather than at first Append.
-func New(path string, key crypto.PrivKey) (Ledger, error) {
-	_ = path
-	_ = key
-	return nil, ErrNotImplemented
+// ps is the GossipSub instance the ledger publishes appended entries
+// on (topic network.FeedbackTopic). Pass nil to run in local-only
+// mode: writes still persist and pass through the Merkle tree, but
+// nothing is disseminated. Production bootstrap always supplies a
+// real *pubsub.PubSub; tests that don't care about gossip may omit it.
+//
+// The implementation rebuilds the in-memory Merkle tree from the
+// on-disk store at Open, so a process restart resumes the chain at
+// the correct prev_hash without losing any entries.
+func New(path string, key crypto.PrivKey, ps *pubsub.PubSub) (Ledger, error) {
+	return newImpl(path, key, ps)
 }
