@@ -37,6 +37,45 @@ The `agentfm` binary is multi-mode; the `agentfm-relay` binary is a dedicated li
 | `test` | Local Podman-only sandbox dry-run; bypasses libp2p entirely. |
 | `genkey` | Generate a 256-bit `swarm.key` for private-mesh PSK. |
 
+### Subcommands
+
+In addition to the flag-driven modes above, `agentfm` exposes verb-style
+subcommands that operate on local state without needing a libp2p stack.
+
+#### `agentfm reputation show <peer_id>`
+
+Reads the local ledger inbox and prints every rating about the given
+peer (v1.3 verifiable agent mesh, P1-6). Read-only — safe to run
+alongside a live worker / boss that shares the same database file.
+
+```bash
+agentfm reputation show 12D3KooW...        # default DB: .agentfm_ledger.db
+agentfm reputation show -limit 50 12D3K... # show 50 most-recent entries
+agentfm reputation show -db /var/run/agentfm/ledger.db 12D3K...
+```
+
+| Flag | Default | Description |
+|---|:---:|---|
+| `-db` | `.agentfm_ledger.db` | Path to the ledger SQLite database |
+| `-limit` | `20` | Number of most-recent entries to print |
+
+Output (illustrative; real peer IDs are longer):
+
+```
+Peer:       12D3KooW...
+Entries:    1240 (last: 2026-05-16T08:12:33Z)
+Honesty:    [pending P3-7 reputation derivation]
+
+Latest:
+            +0.10 honesty by 12D3Ko...8s5zL (probe_ok) 2m ago
+            -0.70 honesty by 12D3Ko...kBs5z (probe_fail) 14m ago
+            ...
+```
+
+The `Honesty:` row is a placeholder until the EigenTrust-lite scorer in
+P3-7 lands; for now you can read the raw ratings and infer the score
+yourself.
+
 ## `agentfm-relay`
 
 A dedicated relay binary for permanent lighthouse deploys (e.g. a $5/mo VPS). Identity persists in `relay_identity.key` so the multiaddr stays stable across restarts.

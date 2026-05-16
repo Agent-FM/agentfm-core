@@ -20,6 +20,16 @@ import (
 )
 
 func main() {
+	// Subcommand interception: `agentfm reputation <action> [args...]`
+	// is shaped like a git/kubectl subcommand rather than `-mode X`, so
+	// we peel it off before the main flag parse touches os.Args. Any
+	// other future verb-style subcommands (e.g. `agentfm trust verify`)
+	// should slot in here.
+	if len(os.Args) >= 2 && os.Args[1] == "reputation" {
+		runReputationSubcommand(os.Args[2:])
+		return
+	}
+
 	mode := flag.String("mode", "", "Node mode: 'boss', 'worker', 'relay', 'api', 'test', or 'genkey'")
 
 	// Private Swarm & Network Flags

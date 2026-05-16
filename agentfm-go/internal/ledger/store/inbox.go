@@ -211,6 +211,46 @@ func (s *Store) GetInboxChainHead(ctx context.Context, peerID []byte) ([32]byte,
 	return out, true, nil
 }
 
+// IterateAllInboxEntries streams every accepted inbox entry across
+// all rater peers in (peer_id, received_at) order, invoking fn for
+// each. If fn returns a non-nil error, iteration stops and that error
+// is propagated.
+//
+// Used today by the P1-6 CLI to gather entries about a specific
+// subject by filtering in Go (we do not yet have a subject index on
+// inbox_entries — keyed by (peer_id, hash) — because filling that
+// index would mean an ALTER TABLE migration on a column we don't yet
+// need for any hot path. The index will land alongside P3-7 when
+// reputation scoring needs efficient subject lookups).
+func (s *Store) IterateAllInboxEntries(ctx context.Context, fn func(*InboxEntry) error) error {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT peer_id, hash, prev_hash, payload, received_at
+		 FROM inbox_entries
+		 ORDER BY peer_id ASC, received_at ASC`,
+	)
+	if err != nil {
+		return fmt.Errorf("query inbox_entries: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		e := &InboxEntry{}
+		var h, p []byte
+		if err := rows.Scan(&e.PeerID, &h, &p, &e.Payload, &e.ReceivedAt); err != nil {
+			return fmt.Errorf("scan inbox row: %w", err)
+		}
+		if len(h) != 32 || len(p) != 32 {
+			return fmt.Errorf("malformed inbox row: hash=%d prev=%d", len(h), len(p))
+		}
+		copy(e.Hash[:], h)
+		copy(e.PrevHash[:], p)
+		if err := fn(e); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
 // GetInboxEntry returns the inbox row for (peerID, hash) or
 // ErrInboxEntryNotFound. Used by Inbox.HasEntry-style tests and by
 // downstream pull-on-demand fetch (P4-2 surface).
