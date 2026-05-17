@@ -158,45 +158,86 @@ func (b *Boss) handleReputation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, view)
 }
 
-// handleLog services GET /v1/peers/{id}/log.
+// handleLog services GET /v1/peers/{id}/log?limit=N&offset=M.
+//
+// Returns a paginated list of PeerEntries for the requested subject peer,
+// gathered from both the boss's own log and inbox. Each entry is decorated
+// with rater_status ("verified" if rater honesty >= 0.1, else "unverified")
+// and rater_honesty_score from the live reputation engine.
 func (b *Boss) handleLog(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeOpenAIError(w, http.StatusMethodNotAllowed, errTypeInvalidRequest, "method_not_allowed", "only GET supported")
 		return
 	}
-	if b.ledger == nil {
+	if b.readStore == nil {
 		writeOpenAIError(w, http.StatusServiceUnavailable, errTypeServerError, "ledger_unavailable", "ledger not wired on this boss")
 		return
 	}
-	_ = extractPeerID(r.URL.Path, "/log") // currently unused — log is the local boss's view of all inbox entries about this peer
-	// For v1.3 the log endpoint returns the boss's own ledger entries
-	// (Boss-issued ratings + comments). Per-peer log filtering by
-	// SUBJECT is handled the same way the CLI does it: scan inbox
-	// and filter in Go (P3-7 will add a SQL index when this becomes
-	// a hot path).
-	from := parseUintQuery(r, "from", 1)
-	limit := parseUintQuery(r, "limit", 100)
-	if limit > 1000 {
-		limit = 1000
+
+	peerIDStr := extractPeerID(r.URL.Path, "/log")
+	if peerIDStr == "" {
+		writeOpenAIError(w, http.StatusBadRequest, errTypeInvalidRequest, "bad_request", "missing peer_id in path")
+		return
 	}
+	pid, err := peer.Decode(peerIDStr)
+	if err != nil {
+		writeOpenAIError(w, http.StatusBadRequest, errTypeInvalidRequest, "bad_peer_id", err.Error())
+		return
+	}
+
+	limit := int(parseUintQuery(r, "limit", 50))
+	if limit <= 0 || limit > 500 {
+		limit = 50
+	}
+	offset := int(parseUintQuery(r, "offset", 0))
+
 	ctx := r.Context()
-	resp := logResponse{Entries: make([]logEntryDTO, 0, limit)}
-	head, err := b.ledger.Head(ctx)
-	if err == nil && head != nil {
-		resp.Head = &headDTO{
-			TreeSize:     head.TreeSize,
-			RootHash:     hex.EncodeToString(head.RootHash),
-			WitnessCount: len(head.WitnessSigs),
-			SignedAt:     time.Unix(0, head.TimestampUnixNs).UTC().Format(time.RFC3339),
+
+	// Gather all matching entries (up to limit+offset so we can slice).
+	all, err := GatherPeerEntries(ctx, b.readStore, pid, limit+offset)
+	if err != nil {
+		writeOpenAIError(w, http.StatusInternalServerError, errTypeServerError, "gather_error", err.Error())
+		return
+	}
+
+	// Apply offset.
+	if offset > len(all) {
+		offset = len(all)
+	}
+	page := all[offset:]
+	if len(page) > limit {
+		page = page[:limit]
+	}
+
+	// Decorate entries with rater trust info.
+	for i := range page {
+		raterStr := page[i].Rater.String()
+		var honestyScore float64
+		if b.reputationEngine != nil {
+			honestyScore = b.reputationEngine.Score(raterStr)
+		}
+		page[i].RaterHonestyScore = honestyScore
+		if honestyScore >= 0.1 {
+			page[i].RaterStatus = "verified"
+		} else {
+			page[i].RaterStatus = "unverified"
 		}
 	}
-	// Iterate own entries via the ledger interface. We'd need a
-	// concrete-impl downcast for IterateOwnEntries — for v1.3 the
-	// simpler answer is: expose nothing here when the interface
-	// doesn't surface iteration, and let P4-5 / P4-4 use the
-	// already-supported /api/workers for telemetry.
-	_ = from
-	writeJSON(w, http.StatusOK, resp)
+
+	type peerLogResponse struct {
+		Subject string      `json:"subject"`
+		Count   int         `json:"count"`
+		Limit   int         `json:"limit"`
+		Offset  int         `json:"offset"`
+		Entries []PeerEntry `json:"entries"`
+	}
+	writeJSON(w, http.StatusOK, peerLogResponse{
+		Subject: peerIDStr,
+		Count:   len(all),
+		Limit:   limit,
+		Offset:  offset,
+		Entries: page,
+	})
 }
 
 // handleProof services GET /v1/peers/{id}/proof?entry={hex}.
