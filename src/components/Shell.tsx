@@ -2,6 +2,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
+import { RouteErrorBoundary } from './RouteErrorBoundary'
 import { useGlobalShortcuts } from '../hooks/useGlobalShortcuts'
 
 export function Shell() {
@@ -23,7 +24,9 @@ export function Shell() {
               transition={{ duration: 0.18 }}
               className="h-full"
             >
-              <Outlet />
+              <RouteErrorBoundary>
+                <Outlet />
+              </RouteErrorBoundary>
             </motion.div>
           </AnimatePresence>
         </main>
