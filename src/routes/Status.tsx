@@ -13,7 +13,7 @@ export default function Status() {
   const { data: about } = useAbout();
   const { data: workers } = useWorkers(true);
   const backend = useBackend();
-  const reputationFloor = useUIStore((s) => s.reputationFloor);
+  const reputationFloor = useUIStore((s) => s.activeProject()?.reputationFloor ?? -0.5);
 
   const [showLogs, setShowLogs] = useState(false);
   const [showTech, setShowTech] = useState(false);
