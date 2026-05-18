@@ -66,6 +66,7 @@ from .streaming import SentinelFilter
 
 if TYPE_CHECKING:
     from .openai import OpenAINamespace
+    from .peers import PeersNamespace
 
 _log = logging.getLogger(__name__)
 
@@ -363,6 +364,30 @@ class AgentFMClient:
         from .openai import OpenAINamespace
 
         return OpenAINamespace(self)
+
+    @cached_property
+    def reputation(self) -> "_ReputationNamespace":
+        """v1.3 verifiable agent mesh reputation namespace (P4-4).
+
+        See agentfm.reputation for the full surface — score lookup,
+        ledger inspection, inclusion proofs, signed comment
+        submission.
+        """
+        from .reputation import _ReputationNamespace
+
+        return _ReputationNamespace(self._http)
+
+    @cached_property
+    def peers(self) -> "PeersNamespace":
+        """v1.3.1 peer discovery and trust inspection namespace (Phase 9).
+
+        See agentfm.peers for the full surface — list peers (including
+        offline), single-peer summary, paginated ledger log, and comment
+        body hydration.
+        """
+        from .peers import PeersNamespace
+
+        return PeersNamespace(self._http)
 
     def with_options(
         self,

@@ -55,6 +55,7 @@ from .streaming import SentinelFilter
 
 if TYPE_CHECKING:
     from .openai import AsyncOpenAINamespace
+    from .peers import AsyncPeersNamespace
 
 _log = logging.getLogger(__name__)
 
@@ -324,6 +325,13 @@ class AsyncAgentFMClient:
         from .openai import AsyncOpenAINamespace
 
         return AsyncOpenAINamespace(self)
+
+    @cached_property
+    def peers(self) -> "AsyncPeersNamespace":
+        """v1.3.1 peer discovery and trust inspection namespace (Phase 9)."""
+        from .peers import AsyncPeersNamespace
+
+        return AsyncPeersNamespace(self._http)
 
     def with_options(
         self,

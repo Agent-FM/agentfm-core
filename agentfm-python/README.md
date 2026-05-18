@@ -248,6 +248,54 @@ async with aclosing(client.tasks.stream(worker_id=peer_id, prompt="...")) as str
             break  # response cleaned up via aclosing
 ```
 
+## Peer trust inspection (v1.3.1)
+
+`client.peers` mirrors the v1.3.1 HTTP endpoints for querying reputation and ledger data on any known peer.
+
+```python
+from agentfm import AgentFMClient
+
+with AgentFMClient(gateway_url="http://127.0.0.1:8080") as client:
+    # List all peers visible to the gateway — pass include_offline=True to
+    # also see peers that have recently gone offline.
+    peers = client.peers.list(include_offline=True)
+    for p in peers:
+        status = "online" if p.online else "offline"
+        print(f"{p.peer_id[:20]}...  {status}  honesty={p.honesty_score:.2f}")
+
+    # Fetch the full trust summary for a single peer.
+    peer_id = peers[0].peer_id
+    summary = client.peers.get(peer_id)
+    print(f"dispatch_allowed={summary.dispatch_allowed}")
+    if summary.rater_summary:
+        print(f"  verified raters: {summary.rater_summary.verified_raters_count}")
+
+    # Page through the peer's signed ledger (ratings + comments).
+    entries = client.peers.log(peer_id, limit=20, offset=0)
+    for e in entries:
+        print(f"  [{e.kind}] rater={e.rater_peer_id[:12]}... status={e.rater_status}")
+        if e.text_cid:
+            # Hydrate the comment body on demand.
+            body = client.peers.comment_body(peer_id, e.text_cid)
+            print(f"    comment: {body[:80]}")
+```
+
+The async client exposes the same surface under `await`:
+
+```python
+async with AsyncAgentFMClient() as client:
+    peers = await client.peers.list(include_offline=True)
+    summary = await client.peers.get(peers[0].peer_id)
+    entries = await client.peers.log(peers[0].peer_id, limit=10)
+```
+
+| Method | Endpoint |
+|---|---|
+| `peers.list(include_offline=False)` | `GET /api/workers[?include_offline=true]` |
+| `peers.get(peer_id)` | `GET /v1/peers/{id}` |
+| `peers.log(peer_id, limit=50, offset=0)` | `GET /v1/peers/{id}/log?limit=&offset=` |
+| `peers.comment_body(peer_id, cid)` | `GET /v1/peers/{id}/comments/{cid}` |
+
 ## Fire-and-forget with webhook
 
 Submit long-running jobs and receive HMAC-signed callbacks when they complete:
