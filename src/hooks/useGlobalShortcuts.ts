@@ -8,12 +8,15 @@ export function useGlobalShortcuts() {
   const closeFeedback = useUIStore((s) => s.closeFeedback);
   const setSearch = useUIStore((s) => s.setSearchTerm);
 
-  // Cmd+1..5 → routes
   useHotkeys('meta+1, ctrl+1', () => navigate('/radar'));
   useHotkeys('meta+2, ctrl+2', () => navigate('/chat'));
   useHotkeys('meta+3, ctrl+3', () => navigate('/activity'));
   useHotkeys('meta+4, ctrl+4', () => navigate('/status'));
-  useHotkeys('meta+5, ctrl+5', () => navigate('/settings'));
+
+  useHotkeys('mod+,', (e) => {
+    e.preventDefault();
+    useUIStore.getState().openSettingsSheet();
+  }, []);
 
   // Cmd+K → focus radar search (or open command palette in v2)
   useHotkeys('meta+k, ctrl+k', (e) => {
