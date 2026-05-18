@@ -1,20 +1,26 @@
 import type { ChatSession } from '../types/chat';
 
-const KEY = 'chat:sessions';
 const LIMIT = 50;
 
-export async function loadSessions(): Promise<ChatSession[]> {
+function keyFor(projectId: string): string {
+  return `chat:sessions:${projectId}`;
+}
+
+export async function loadSessions(projectId: string): Promise<ChatSession[]> {
   try {
-    const stored = await window.api.settings.get<ChatSession[]>(KEY);
+    const stored = await window.api.settings.get<ChatSession[]>(keyFor(projectId));
     return Array.isArray(stored) ? stored : [];
   } catch {
     return [];
   }
 }
 
-export async function saveSessions(sessions: ChatSession[]): Promise<void> {
+export async function saveSessions(
+  projectId: string,
+  sessions: ChatSession[],
+): Promise<void> {
   const trimmed = sessions.slice(-LIMIT);
-  await window.api.settings.set(KEY, trimmed);
+  await window.api.settings.set(keyFor(projectId), trimmed);
 }
 
 export function newSession(): ChatSession {

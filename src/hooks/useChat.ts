@@ -1,28 +1,34 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { api, ApiError } from '../lib/api';
 import { loadSessions, saveSessions, newSession } from '../lib/sessions';
+import { useUIStore } from '../lib/store';
 import type { ChatSession, ChatMessage } from '../types/chat';
 
 export function useChat() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const activeProjectId = useUIStore((s) => s.activeProjectId);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
-  // Load sessions once
   useEffect(() => {
-    loadSessions().then((s) => {
+    if (!activeProjectId) return;
+    setSessions([]);
+    setActiveId(null);
+    loadSessions(activeProjectId).then((s) => {
       setSessions(s);
       if (s.length > 0) setActiveId(s[0].id);
     });
-  }, []);
+  }, [activeProjectId]);
 
-  // Persist whenever sessions change
   useEffect(() => {
+    if (!activeProjectId) return;
     if (sessions.length === 0) return;
-    saveSessions(sessions);
-  }, [sessions]);
+    saveSessions(activeProjectId, sessions);
+  }, [sessions, activeProjectId]);
 
   const active = sessions.find((s) => s.id === activeId);
 
@@ -139,6 +145,7 @@ export function useChat() {
         let rafScheduled = false;
         const commit = () => {
           rafScheduled = false;
+          if (!mountedRef.current) return;
           setSessions((prev) =>
             prev.map((s) => {
               if (s.id !== sessionId) return s;
