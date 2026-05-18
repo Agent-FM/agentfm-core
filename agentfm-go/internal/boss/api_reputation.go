@@ -245,18 +245,18 @@ func (b *Boss) handleLog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type peerLogResponse struct {
-		Subject string      `json:"subject"`
-		Count   int         `json:"count"`
-		Limit   int         `json:"limit"`
-		Offset  int         `json:"offset"`
-		Entries []PeerEntry `json:"entries"`
+		Subject  string      `json:"subject"`
+		Limit    int         `json:"limit"`
+		Offset   int         `json:"offset"`
+		Returned int         `json:"returned"`
+		Entries  []PeerEntry `json:"entries"`
 	}
 	writeJSON(w, http.StatusOK, peerLogResponse{
-		Subject: peerIDStr,
-		Count:   len(all),
-		Limit:   limit,
-		Offset:  offset,
-		Entries: page,
+		Subject:  peerIDStr,
+		Limit:    limit,
+		Offset:   offset,
+		Returned: len(page),
+		Entries:  page,
 	})
 }
 
@@ -430,37 +430,21 @@ func countSubjectRatings(ctx context.Context, s *store.Store, subject []byte) (i
 	return count, latest
 }
 
-func bytesEqualPB(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// Compile-time unused-import suppression for store package — we'll
-// use it once Ledger interface adds OwnEntryIterator in a follow-up.
-var _ = store.KindRating
-
 // peerSummaryResponse is the JSON body for GET /v1/peers/{id}.
 type peerSummaryResponse struct {
-	PeerID               string      `json:"peer_id"`
-	AgentName            string      `json:"agent_name"`
-	Online               bool        `json:"online"`
-	LastSeen             *time.Time  `json:"last_seen,omitempty"`
-	HonestyScore         float64     `json:"honesty_score"`
-	IsEquivocator        bool        `json:"is_equivocator"`
-	DispatchAllowed      bool        `json:"dispatch_allowed"`
-	DispatchRefuseReason string      `json:"dispatch_refuse_reason,omitempty"`
-	EntriesCount         int         `json:"entries_count"`
-	LastEntryAt          *time.Time  `json:"last_entry_at,omitempty"`
-	AdvertisedImageRef   string      `json:"advertised_image_ref,omitempty"`
-	AdvertisedImageDgst  string      `json:"advertised_image_digest,omitempty"`
-	AdvertisedCapability string      `json:"advertised_capability,omitempty"`
+	PeerID               string       `json:"peer_id"`
+	AgentName            string       `json:"agent_name"`
+	Online               bool         `json:"online"`
+	LastSeen             *time.Time   `json:"last_seen,omitempty"`
+	HonestyScore         float64      `json:"honesty_score"`
+	IsEquivocator        bool         `json:"is_equivocator"`
+	DispatchAllowed      bool         `json:"dispatch_allowed"`
+	DispatchRefuseReason string       `json:"dispatch_refuse_reason,omitempty"`
+	EntriesCount         int          `json:"entries_count"`
+	LastEntryAt          *time.Time   `json:"last_entry_at,omitempty"`
+	AdvertisedImageRef   string       `json:"advertised_image_ref,omitempty"`
+	AdvertisedImageDgst  string       `json:"advertised_image_digest,omitempty"`
+	AdvertisedCapability string       `json:"advertised_capability,omitempty"`
 	RaterSummary         raterSummary `json:"rater_summary"`
 }
 

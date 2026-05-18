@@ -20,7 +20,7 @@ import (
 // PeerEntry is one decoded ledger entry about a subject peer.
 type PeerEntry struct {
 	ReceivedAt        time.Time `json:"received_at"`
-	Kind              string    `json:"kind"`              // "Rating" | "Comment"
+	Kind              string    `json:"kind"` // "Rating" | "Comment"
 	Rater             peer.ID   `json:"rater_peer_id"`
 	Dimension         string    `json:"dimension,omitempty"`
 	Score             float64   `json:"score,omitempty"`
@@ -108,4 +108,17 @@ func GatherPeerEntries(ctx context.Context, s *store.Store, subject peer.ID, lim
 		entries = entries[:limit]
 	}
 	return entries, nil
+}
+
+// bytesEqualPB compares two byte slices for equality.
+func bytesEqualPB(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

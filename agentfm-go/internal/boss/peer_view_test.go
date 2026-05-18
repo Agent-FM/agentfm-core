@@ -168,7 +168,7 @@ func TestHandlePeerLog_RaterStatus(t *testing.T) {
 	}
 
 	// Check envelope fields.
-	mustHaveKeys := []string{"subject", "count", "limit", "offset", "entries"}
+	mustHaveKeys := []string{"subject", "returned", "limit", "offset", "entries"}
 	for _, k := range mustHaveKeys {
 		if _, ok := resp[k]; !ok {
 			t.Errorf("key %q missing from response; got: %v", k, mapKeysAny(resp))
