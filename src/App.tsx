@@ -4,13 +4,11 @@ import { BackendDownOverlay } from './components/BackendDownOverlay'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { DispatchDrawer } from './components/DispatchDrawer'
 import { FeedbackModal } from './components/FeedbackModal'
-import { WelcomeModal } from './components/WelcomeModal'
 import { ProjectSwitchingOverlay } from './components/projects/ProjectSwitchingOverlay'
-import { ProjectSettingsSheet } from './components/projects/ProjectSettingsSheet'
 import { CreateProjectWizard } from './components/projects/CreateProjectWizard'
+import { SettingsSheet } from './components/SettingsSheet'
 import { useBackend } from './hooks/useBackend'
 import { useEventStream } from './hooks/useEventStream'
-import Settings from './routes/Settings'
 import Radar from './routes/Radar'
 import Chat from './routes/Chat'
 import PeerView from './routes/PeerView'
@@ -35,7 +33,6 @@ export default function App() {
               <Route path="peer/:peerId" element={<PeerView />} />
               <Route path="activity" element={<Activity />} />
               <Route path="status" element={<Status />} />
-              <Route path="settings" element={<Settings />} />
             </Route>
           </Routes>
         </ErrorBoundary>
@@ -43,10 +40,9 @@ export default function App() {
       <BackendDownOverlay show={showOverlay} />
       <DispatchDrawer />
       <FeedbackModal />
-      <WelcomeModal />
       <ProjectSwitchingOverlay />
-      <ProjectSettingsSheet />
       <CreateProjectWizard />
+      <SettingsSheet />
     </>
   )
 }
