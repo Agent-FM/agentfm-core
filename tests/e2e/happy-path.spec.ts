@@ -73,27 +73,11 @@ test('app boots and renders the Radar shell', async () => {
   }).toPass({ timeout: 15000 });
 });
 
-test('settings route renders app-level sections + reset button', async () => {
-  await page.keyboard.press('Meta+5');
-  await expect(page.locator('h1:has-text("App settings")')).toBeVisible({ timeout: 5000 });
-  await expect(page.locator('text=Appearance').first()).toBeVisible();
-  await expect(page.locator('text=Advanced').first()).toBeVisible();
-  await expect(page.locator('button:has-text("Reset to defaults")')).toBeVisible();
-});
-
-test('settings reset shows confirm and cancels cleanly', async () => {
-  await page.keyboard.press('Meta+5');
-  await expect(page.locator('h1:has-text("App settings")')).toBeVisible({ timeout: 5000 });
-
-  page.once('dialog', async (d) => {
-    expect(d.type()).toBe('confirm');
-    expect(d.message()).toMatch(/Reset appearance/i);
-    await d.dismiss();
-  });
-  await page.locator('button:has-text("Reset to defaults")').click();
-
-  // No toast for "not implemented yet" should appear.
-  await expect(page.locator('text=is not implemented yet')).toHaveCount(0);
+test('settings sheet opens from footer with theme control', async () => {
+  await page.locator('footer button:has-text("Settings")').click();
+  await expect(page.locator('h2:has-text("Settings")')).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('text=Theme').first()).toBeVisible();
+  await page.locator('button:has-text("✕")').click();
 });
 
 test('status dashboard renders friendly view', async () => {
