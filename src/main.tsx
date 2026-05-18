@@ -5,19 +5,28 @@ import { Toaster } from 'sonner'
 import { queryClient } from './lib/query'
 import { loadApiPortFromSettings, setApiPort } from './lib/api'
 import { useUIStore } from './lib/store'
+import { migrateLegacySettings } from './lib/projectMigration'
+import type { Project } from './types/project'
 import App from './App'
 import './styles/globals.css'
 
 async function bootstrap() {
   await loadApiPortFromSettings()
 
-  // Hydrate all settings from electron-store
+  await migrateLegacySettings({
+    get: (k) => window.api.settings.get(k),
+    set: (k, v) => window.api.settings.set(k, v),
+    delete: (k) => window.api.settings.delete(k),
+  } as never).catch((e) => console.warn('migration failed', e))
+
+  const projects = (await window.api.settings.get<Project[]>('projects')) ?? []
+  const activeId = (await window.api.settings.get<string | null>('activeProjectId')) ?? null
+  useUIStore.getState().hydrateProjects(projects, activeId)
+
   try {
     const theme = await window.api?.settings.get<'dark' | 'light' | 'auto'>('theme')
     const accent = await window.api?.settings.get<'emerald' | 'violet' | 'rose'>('accent')
     const apiPort = await window.api?.settings.get<number>('apiPort')
-    const reputationFloor = await window.api?.settings.get<number>('reputationFloor')
-    const relayMultiaddr = await window.api?.settings.get<string | null>('relayMultiaddr')
 
     const store = useUIStore.getState()
     if (theme) store.setTheme(theme)
@@ -26,11 +35,8 @@ async function bootstrap() {
       store.setApiPort(apiPort)
       setApiPort(apiPort)
     }
-    if (typeof reputationFloor === 'number') store.setReputationFloor(reputationFloor)
-    if (relayMultiaddr !== undefined) store.setRelayMultiaddr(relayMultiaddr)
   } catch {}
 
-  // Apply stored or default values to <html> attributes
   const { theme, accent } = useUIStore.getState()
   document.documentElement.setAttribute('data-theme', theme)
   document.documentElement.setAttribute('data-accent', accent)
