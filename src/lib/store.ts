@@ -22,6 +22,9 @@ export interface UIState {
   activeProjectId: string | null
   isProjectSwitching: boolean
   isCreateWizardOpen: boolean
+  isSettingsSheetOpen: boolean
+  openSettingsSheet: () => void
+  closeSettingsSheet: () => void
 
   setTheme: (t: UIState['theme']) => void
   setAccent: (a: UIState['accent']) => void
@@ -64,6 +67,7 @@ export const useUIStore = create<UIState>()(
     activeProjectId: null,
     isProjectSwitching: false,
     isCreateWizardOpen: false,
+    isSettingsSheetOpen: false,
 
     setTheme: (theme) => {
       set({ theme })
@@ -159,6 +163,8 @@ export const useUIStore = create<UIState>()(
     },
     openCreateWizard: () => set({ isCreateWizardOpen: true }),
     closeCreateWizard: () => set({ isCreateWizardOpen: false }),
+    openSettingsSheet: () => set({ isSettingsSheetOpen: true }),
+    closeSettingsSheet: () => set({ isSettingsSheetOpen: false }),
 
     activeProject: () => {
       const { projects, activeProjectId } = get()
