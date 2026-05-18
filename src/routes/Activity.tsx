@@ -5,6 +5,7 @@ import { useAbout, useWorkers, qk } from '../lib/query';
 import { api } from '../lib/api';
 import { EntryRow } from '../components/peer/EntryRow';
 import type { PeerEntry } from '../types/api';
+import { usePeerName } from '../hooks/usePeerName';
 
 interface ActivityEntry {
   subject: string;
@@ -113,9 +114,10 @@ export default function Activity() {
                   >
                     <button
                       onClick={() => navigate(`/peer/${subject}`)}
-                      className="block w-full text-left text-[11px] text-text-2 px-1 pt-2.5 hover:text-accent"
+                      className="block w-full text-left text-2xs text-text-2 px-1 pt-2.5 hover:text-accent"
                     >
-                      about peer <span className="font-mono">{subject.slice(0, 12)}…</span>
+                      about <span className="text-text-0 font-medium"><PeerName peerId={subject} /></span>
+                      <span className="ml-2 font-mono text-text-3">{subject.slice(0, 12)}…</span>
                     </button>
                     <EntryRow entry={entry} peerId={subject} />
                   </div>
@@ -127,4 +129,8 @@ export default function Activity() {
       )}
     </div>
   );
+}
+
+function PeerName({ peerId }: { peerId: string }) {
+  return <>{usePeerName(peerId)}</>;
 }
