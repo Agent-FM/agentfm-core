@@ -91,6 +91,14 @@ func bossOptionsFromFlags(
 	slog.Info("boss bootstrap: ledger opened",
 		slog.String("path", dbPath))
 
+	// Hourly aggregate outcome rater (P2 / Task 2.1).
+	// RunTicker must be started after the boss is constructed; the
+	// bootstrap caller is responsible for: go opts.CompletionRater.RunTicker(ctx).
+	// We store the ticker in opts so the caller has a reference.
+	opts.CompletionRater = boss.NewCompletionRatingWriter(l, node.Host)
+	// Start the ticker in the background; cancel via the top-level ctx.
+	go opts.CompletionRater.RunTicker(ctx)
+
 	// Open a SECOND store handle on the same DB file for the
 	// reputation engine's read-only walks. SQLite under WAL mode
 	// supports concurrent open handles cleanly; the engine never

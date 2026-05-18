@@ -128,6 +128,7 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 		metrics.TasksTotal.WithLabelValues(status).Inc()
 	}()
 
+
 	var req ExecuteRequest
 	limitedReader := io.LimitReader(r.Body, 1*1024*1024)
 	if err := json.NewDecoder(limitedReader).Decode(&req); err != nil {
@@ -163,6 +164,9 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 	// StreamDialTimeout.
 	s := b.dialOmni(r.Context(), peerID)
 	if s == nil {
+		if b.completionRater != nil {
+			b.completionRater.RecordOutcome(peerID, OutcomeFailure)
+		}
 		http.Error(w, "Failed to connect to worker via DHT or Relay", http.StatusInternalServerError)
 		return
 	}
@@ -176,6 +180,20 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 			_ = s.Close()
 		} else {
 			_ = s.Reset()
+		}
+	}()
+
+	// Record exactly one outcome per dispatch attempt after the stream is
+	// established. streamSuccess is false on every failure path; the
+	// deferred recorder below fires unconditionally.
+	defer func() {
+		if b.completionRater == nil {
+			return
+		}
+		if streamSuccess {
+			b.completionRater.RecordOutcome(peerID, OutcomeSuccess)
+		} else {
+			b.completionRater.RecordOutcome(peerID, OutcomeFailure)
 		}
 	}()
 

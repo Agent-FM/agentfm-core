@@ -125,6 +125,11 @@ type Boss struct {
 	// Nil when the comments subsystem is not wired (e.g. in tests that
 	// don't use comments).
 	commentsStore *comments.Store
+
+	// completionRater writes hourly aggregate outcome ratings into the
+	// ledger. Nil when not wired (e.g. in tests that don't exercise
+	// dispatch). RecordOutcome is guarded by nil-checks in dispatch handlers.
+	completionRater *CompletionRatingWriter
 }
 
 // Options configures a new Boss. All fields are optional; New
@@ -160,6 +165,12 @@ type Options struct {
 	// CommentsStore, when non-nil, is the body store for comment CIDs.
 	// Used by GET /v1/peers/{id}/comments/{cid} to hydrate comment text.
 	CommentsStore *comments.Store
+
+	// CompletionRater, when non-nil, receives RecordOutcome calls from
+	// dispatch handlers after each attempt resolves. Bootstrap wires this
+	// and calls go opts.CompletionRater.RunTicker(ctx) to emit ratings
+	// every hour.
+	CompletionRater *CompletionRatingWriter
 }
 
 func New(node *network.MeshNode) *Boss {
@@ -194,6 +205,7 @@ func NewWithOptions(node *network.MeshNode, opts Options) *Boss {
 		reputationEngine:         opts.ReputationEngine,
 		readStore:                opts.ReadStore,
 		commentsStore:            opts.CommentsStore,
+		completionRater:          opts.CompletionRater,
 	}
 }
 
