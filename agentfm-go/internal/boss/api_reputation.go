@@ -203,8 +203,11 @@ func (b *Boss) handleLog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	limit := int(parseUintQuery(r, "limit", 50))
-	if limit <= 0 || limit > 500 {
+	if limit <= 0 {
 		limit = 50
+	}
+	if limit > 500 {
+		limit = 500
 	}
 	offset := int(parseUintQuery(r, "offset", 0))
 

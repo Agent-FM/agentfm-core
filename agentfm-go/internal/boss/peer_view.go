@@ -41,9 +41,6 @@ type PeerEntry struct {
 // cmd/agentfm/reputation.go. Both can co-exist — the CLI version returns a
 // richer reputationView struct; this one returns []PeerEntry for HTTP use.
 func GatherPeerEntries(ctx context.Context, s *store.Store, subject peer.ID, limit int) ([]PeerEntry, error) {
-	if limit <= 0 {
-		limit = 50
-	}
 	subjectBytes := []byte(subject)
 
 	var entries []PeerEntry
