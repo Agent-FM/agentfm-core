@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWorkers } from '../../lib/query';
 import { shortenPeerID } from '../../lib/peer';
+import { displayName } from '../../lib/displayName';
 
 interface Props {
   pinnedPeerId: string | null;
@@ -16,7 +17,7 @@ export function AgentPicker({ pinnedPeerId, preferredModel, onPin }: Props) {
 
   const pinnedWorker = online.find((w) => w.peer_id === pinnedPeerId);
   const label = pinnedWorker
-    ? `pinned: ${pinnedWorker.name}`
+    ? `pinned: ${displayName(pinnedWorker)}`
     : preferredModel && preferredModel !== 'auto'
       ? `${preferredModel} (auto-route)`
       : 'Auto-route';
@@ -68,7 +69,7 @@ export function AgentPicker({ pinnedPeerId, preferredModel, onPin }: Props) {
                   pinnedPeerId === w.peer_id ? 'text-accent' : 'text-text-1'
                 }`}
               >
-                <div className="font-medium">{w.name}</div>
+                <div className="font-medium">{displayName(w)}</div>
                 <div className="text-text-2 text-[11px] font-mono">
                   {shortenPeerID(w.peer_id, 12, 5)} · honesty{' '}
                   {w.honesty_score.toFixed(2)}

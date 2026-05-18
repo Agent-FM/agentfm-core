@@ -9,6 +9,7 @@ import { HonestyBadge } from './HonestyBadge';
 import { DispatchBadge } from './DispatchBadge';
 import { StreamingView } from './StreamingView';
 import { shortenPeerID } from '../lib/peer';
+import { displayName } from '../lib/displayName';
 
 export function DispatchDrawer() {
   const isOpen = useUIStore((s) => s.isDispatchOpen);
@@ -86,7 +87,7 @@ export function DispatchDrawer() {
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-base font-semibold text-text-0">
-                  {worker.name}
+                  {displayName(worker)}
                   {worker.model ? ` · ${worker.model}` : ''}
                 </h2>
                 <div className="font-mono text-[11px] text-text-2 mt-0.5">

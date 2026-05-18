@@ -5,6 +5,7 @@ import { HonestyBadge } from './HonestyBadge';
 import { DispatchBadge } from './DispatchBadge';
 import { EquivocatorBadge } from './EquivocatorBadge';
 import { CapabilityBadge } from './CapabilityBadge';
+import { displayName } from '../lib/displayName';
 import type { WorkerProfile } from '../types/api';
 
 interface Props {
@@ -38,7 +39,7 @@ export function AgentCard({ worker, onHistory, onDispatch }: Props) {
 
       <div>
         <div className="flex items-center gap-2.5 flex-wrap">
-          <h4 className="text-sm font-semibold text-text-0">{worker.name || '(unknown)'}</h4>
+          <h4 className="text-sm font-semibold text-text-0">{displayName(worker)}</h4>
           {worker.agent_capability && <CapabilityBadge name={worker.agent_capability} />}
           {busy && (
             <span className="text-[10px] text-amber-400 uppercase tracking-wider">
@@ -49,7 +50,7 @@ export function AgentCard({ worker, onHistory, onDispatch }: Props) {
         <div className="text-[11px] text-text-2 font-mono mt-1">
           {shortenPeerID(worker.peer_id, 12, 5)}
           {worker.agent_image_ref && (
-            <> · {worker.model || extractModel(worker.agent_image_ref) || 'unknown'}</>
+            <> · {worker.model || 'unknown'}</>
           )}
           {worker.agent_image_digest && (
             <> · {shortenDigest(worker.agent_image_digest, 8)}</>
@@ -80,10 +81,4 @@ export function AgentCard({ worker, onHistory, onDispatch }: Props) {
       </div>
     </motion.div>
   );
-}
-
-function extractModel(_imageRef: string): string {
-  // Model is extracted from the explicit model field on WorkerProfile.
-  // This fallback is intentionally empty for v1.
-  return '';
 }

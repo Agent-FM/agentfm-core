@@ -6,6 +6,7 @@ import { SummaryCard } from '../components/peer/SummaryCard';
 import { Tabs } from '../components/peer/Tabs';
 import { EntryRow } from '../components/peer/EntryRow';
 import { Button } from '../components/primitives/Button';
+import { displayName } from '../lib/displayName';
 
 type TabKind = 'all' | 'ratings' | 'comments';
 
@@ -46,7 +47,7 @@ export default function PeerView() {
       <div className="flex justify-between items-start mb-2">
         <div>
           <h1 className="text-2xl font-semibold text-text-0">
-            {summary.agent_name || '(unknown agent)'}
+            {displayName({ ...summary, name: summary.agent_name, peer_id: summary.peer_id })}
           </h1>
           <div className="font-mono text-[11px] text-text-2 mt-1 break-all">{summary.peer_id}</div>
         </div>
