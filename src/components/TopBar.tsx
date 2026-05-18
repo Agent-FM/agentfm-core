@@ -1,28 +1,32 @@
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useWorkers } from '../lib/query'
 import { useBackend } from '../hooks/useBackend'
+import { ProjectPill } from './projects/ProjectPill'
 
 export function TopBar() {
-  const { data } = useWorkers(true)
+  const navigate = useNavigate()
+  const { data } = useWorkers(false)
   const backend = useBackend()
-
-  const onlineCount = data?.online_count ?? 0
-  const offlineCount = data?.offline_count ?? 0
-  const relayStatus = backend.ok ? '✓ stable' : '✗ offline'
+  const online = data?.online_count ?? 0
+  const offline = data?.offline_count ?? 0
+  const relayOk = backend.ok
 
   return (
-    <header className="h-10 bg-bg-1 border-b border-border-0 px-4 flex items-center text-xs text-text-2">
-      <div className="flex items-center gap-2 font-semibold text-text-0">
-        <span className="w-2 h-2 rounded-full bg-accent shadow-[0_0_6px_var(--accent)] animate-pulse" />
+    <header className="h-10 border-b border-border-0 bg-bg-0 grid grid-cols-3 items-center px-3 select-none">
+      <div className="justify-self-start">
+        <ProjectPill />
+      </div>
+      <div className="justify-self-center text-sm font-semibold tracking-tight text-text-0">
         AgentFM
       </div>
-      <div className="flex-1" />
-      <Link
-        to="/status"
-        className="px-3 py-1 rounded-full bg-bg-2 border border-border-0 text-text-1 hover:border-border-1 transition-colors"
-      >
-        {onlineCount} online · {offlineCount} offline · relay {relayStatus}
-      </Link>
+      <div className="justify-self-end">
+        <button
+          onClick={() => navigate('/status')}
+          className="text-2xs text-text-2 hover:text-text-0 transition-colors"
+        >
+          {online} online · {offline} offline · relay {relayOk ? '✓ stable' : '⚠ down'}
+        </button>
+      </div>
     </header>
   )
 }
