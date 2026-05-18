@@ -42,6 +42,10 @@ func setupHelpMenu() {
 			{pterm.Cyan("-maxcpu"), pterm.LightMagenta("float"), "Max CPU usage % before rejecting tasks (0-99)", pterm.Gray(`"80.0"`)},
 			{pterm.Cyan("-maxgpu"), pterm.LightMagenta("float"), "Max GPU VRAM usage % before rejecting tasks (0-99)", pterm.Gray(`"80.0"`)},
 			{pterm.Cyan("-author"), pterm.LightMagenta("string"), "Name of the agent author/creator (max 50 chars)", pterm.Gray(`"Anonymous"`)},
+			// v1.3 verifiable agent mesh flags.
+			{pterm.Cyan("-witness"), pterm.LightMagenta("bool"), "v1.3 — serve the witness co-sign role on this peer", pterm.Gray("false")},
+			{pterm.Cyan("-capability"), pterm.LightMagenta("string"), "v1.3 — kebab-case capability tag (defaults to kebab(-agent))", pterm.Gray(`""`)},
+			{pterm.Cyan("-reputation-floor"), pterm.LightMagenta("float"), "v1.3.1 — refuse dispatch to peers with honesty score below this floor (-1.0 to disable)", pterm.Gray(`"-0.5"`)},
 		}
 
 		pterm.DefaultTable.WithHasHeader().WithHeaderStyle(pterm.NewStyle(pterm.FgLightGreen, pterm.Bold)).WithData(tableData).Render()
@@ -84,6 +88,13 @@ func setupHelpMenu() {
 		pterm.Println(pterm.Yellow("8. Start an API Gateway exposed off-host (requires API keys)"))
 		pterm.Println(pterm.White("   AGENTFM_API_KEYS=\"key1,key2\" \\"))
 		pterm.Println(pterm.White("     ./agentfm -mode api -api-bind 0.0.0.0 -apiport 8080\n"))
+
+		pterm.Println(pterm.Yellow("9. v1.3 — inspect a peer's reputation (verifiable agent mesh)"))
+		pterm.Println(pterm.White("   ./agentfm reputation show <peer_id>"))
+		pterm.Println(pterm.White("   ./agentfm reputation show -db /path/to/api_ledger.db <peer_id>\n"))
+
+		pterm.Println(pterm.Yellow("10. v1.3.1 — Boss with strict reputation floor (refuse low-trust peers)"))
+		pterm.Println(pterm.White("    ./agentfm -mode api -apiport 8080 -reputation-floor -0.3\n"))
 
 		pterm.DefaultSection.Println("Environment variables")
 		envTable := pterm.TableData{

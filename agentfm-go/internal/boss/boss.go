@@ -17,58 +17,11 @@ import (
 	"agentfm/internal/network"
 	"agentfm/internal/obs"
 	"agentfm/internal/reputation"
-	"agentfm/internal/trustedagents"
 	"agentfm/internal/types"
 
 	netcore "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
-
-// AttestationMode controls how the Boss handles L1 image-digest
-// verification on dispatch (P3-3). Three modes:
-//
-//   - AttestOff:    no checking; dispatch every worker that advertises
-//                   the requested model/agent.
-//   - AttestWarn:   look up worker's (image_ref, digest) in the trusted
-//                   registry; log mismatches but still dispatch.
-//   - AttestStrict: refuse dispatch on mismatch or (with
-//                   RejectUnknownImages) on absent registry entries.
-//                   The default in production builds.
-type AttestationMode int
-
-const (
-	AttestOff AttestationMode = iota
-	AttestWarn
-	AttestStrict
-)
-
-// String renders the mode for log messages.
-func (m AttestationMode) String() string {
-	switch m {
-	case AttestOff:
-		return "off"
-	case AttestWarn:
-		return "warn"
-	case AttestStrict:
-		return "strict"
-	default:
-		return "?"
-	}
-}
-
-// ParseAttestationMode parses the --attestation-mode flag value. An
-// unknown string falls back to AttestWarn with a log entry — better
-// than crashing a boss on a typo.
-func ParseAttestationMode(s string) AttestationMode {
-	switch s {
-	case "off":
-		return AttestOff
-	case "strict":
-		return AttestStrict
-	default:
-		return AttestWarn
-	}
-}
 
 // MaxInflightAsyncTasks caps how many async submissions can be in flight
 // simultaneously. Without a cap a flood of /api/execute/async POSTs would
@@ -98,13 +51,6 @@ type Boss struct {
 	// /api/execute/async. Buffered to MaxInflightAsyncTasks; non-blocking
 	// send returns 503 to the client when full.
 	asyncSlots chan struct{}
-
-	// P3-3: L1 verification configuration. Resolved at boss startup
-	// from --attestation-mode + --trusted-agents flags. trusted is
-	// always non-nil (falls back to bundled default if no flag).
-	attestation         AttestationMode
-	rejectUnknownImages bool
-	trusted             *trustedagents.Registry
 
 	// Ledger handle (P1+ wiring). Used by:
 	//  - P3-3 to write L1-mismatch ratings into the ledger
@@ -157,10 +103,7 @@ type Boss struct {
 // Options configures a new Boss. All fields are optional; New
 // preserves defaults for anything left at zero.
 type Options struct {
-	AttestationMode     AttestationMode
-	RejectUnknownImages bool
-	TrustedAgents       *trustedagents.Registry
-	Ledger              ledger.Ledger
+	Ledger ledger.Ledger
 
 	// CommentSubmissionHandler, when non-nil, replaces the default
 	// 501 stub for POST /v1/peers/{id}/comments (P4-3). Production
@@ -204,29 +147,16 @@ func New(node *network.MeshNode) *Boss {
 	return NewWithOptions(node, Options{})
 }
 
-// NewWithOptions is the production constructor that wires the L1
-// verification layer + ledger access. Existing call sites that
-// don't care about either continue using New.
+// NewWithOptions is the production constructor. Wires ledger access,
+// reputation engine, comments store, and completion rater from opts.
+// Existing call sites that don't need any optional components can
+// continue using New.
 func NewWithOptions(node *network.MeshNode, opts Options) *Boss {
-	trusted := opts.TrustedAgents
-	if trusted == nil {
-		// Fall back to bundled default so a fresh install always has
-		// a working registry. Errors here are non-fatal — the boss
-		// runs with an empty registry (everything is "unknown").
-		if reg, err := trustedagents.LoadDefault(); err == nil {
-			trusted = reg
-		} else {
-			slog.Warn("boss: bundled trusted-agents manifest failed to load; running with empty registry", slog.Any(obs.FieldErr, err))
-		}
-	}
 	b := &Boss{
 		node:                     node,
 		activeWorkers:            make(map[string]types.WorkerProfile),
 		lastSeen:                 make(map[string]time.Time),
 		asyncSlots:               make(chan struct{}, MaxInflightAsyncTasks),
-		attestation:              opts.AttestationMode,
-		rejectUnknownImages:      opts.RejectUnknownImages,
-		trusted:                  trusted,
 		ledger:                   opts.Ledger,
 		commentSubmissionHandler: opts.CommentSubmissionHandler,
 		readStore:                opts.ReadStore,

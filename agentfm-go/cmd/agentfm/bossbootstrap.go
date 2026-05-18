@@ -16,16 +16,14 @@ import (
 	"agentfm/internal/network"
 	"agentfm/internal/obs"
 	"agentfm/internal/reputation"
-	"agentfm/internal/trustedagents"
 
 	netcore "github.com/libp2p/go-libp2p/core/network"
 )
 
 // bossOptionsFromFlags assembles the v1.3 boss.Options bundle that
-// wires the ledger, trusted-agents registry, comments store,
-// reputation engine, and attestation policy. Used by runBossMode +
-// runAPIMode so the v1.3 HTTP / ledger surfaces are LIVE in the
-// running binary (rather than returning 503 ledger_unavailable).
+// wires the ledger, comments store, reputation engine, and floor policy.
+// Used by runBossMode + runAPIMode so the v1.3 HTTP / ledger surfaces are
+// LIVE in the running binary (rather than returning 503 ledger_unavailable).
 //
 // The function is best-effort: every component is optional. A
 // failure to open the ledger (e.g. permission denied on the SQLite
@@ -37,14 +35,11 @@ func bossOptionsFromFlags(
 	ctx context.Context,
 	mode string,
 	node *network.MeshNode,
-	attestModeFlag string,
-	rejectUnknownImages bool,
-	trustedAgentsPath string,
+	reputationFloor float64,
 	genesisSeedsPath string,
 ) (boss.Options, func()) {
 	opts := boss.Options{
-		AttestationMode:     boss.ParseAttestationMode(attestModeFlag),
-		RejectUnknownImages: rejectUnknownImages,
+		ReputationFloor: reputationFloor,
 	}
 	cleanups := []func(){}
 	cleanup := func() {
@@ -52,14 +47,6 @@ func bossOptionsFromFlags(
 		for i := len(cleanups) - 1; i >= 0; i-- {
 			cleanups[i]()
 		}
-	}
-
-	// --- trusted-agents registry --------------------------------------
-	if reg, err := trustedagents.LoadFile(trustedAgentsPath); err == nil {
-		opts.TrustedAgents = reg
-	} else {
-		slog.Warn("boss bootstrap: trusted-agents load failed; running with empty registry",
-			slog.Any(obs.FieldErr, err))
 	}
 
 	// --- ledger -------------------------------------------------------
