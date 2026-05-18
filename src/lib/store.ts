@@ -1,12 +1,16 @@
 import { create } from 'zustand'
 import { subscribeWithSelector } from 'zustand/middleware'
+import type { Project } from '../types/project'
+import {
+  newProjectId,
+  validateProjectInput,
+  ProjectInput,
+} from './projectStore'
 
 export interface UIState {
   theme: 'dark' | 'light' | 'auto'
   accent: 'emerald' | 'violet' | 'rose'
   apiPort: number
-  reputationFloor: number
-  relayMultiaddr: string | null
   searchTerm: string
   filterTrustedOnly: boolean
   dispatchTarget: string | null
@@ -14,32 +18,55 @@ export interface UIState {
   isFeedbackOpen: boolean
   feedbackContext: { peerId: string; taskId: string } | null
 
+  projects: Project[]
+  activeProjectId: string | null
+  isProjectSwitching: boolean
+  isProjectSettingsOpen: boolean
+  isCreateWizardOpen: boolean
+
   setTheme: (t: UIState['theme']) => void
   setAccent: (a: UIState['accent']) => void
   setApiPort: (p: number) => void
-  setReputationFloor: (f: number) => void
-  setRelayMultiaddr: (m: string | null) => void
   setSearchTerm: (s: string) => void
   setFilterTrustedOnly: (v: boolean) => void
   openDispatch: (peerId: string) => void
   closeDispatch: () => void
   openFeedback: (peerId: string, taskId: string) => void
   closeFeedback: () => void
+
+  hydrateProjects: (
+    projects: Project[],
+    activeId: string | null,
+  ) => void
+  addProject: (input: ProjectInput) => Project
+  updateProject: (id: string, patch: Partial<ProjectInput>) => void
+  deleteProject: (id: string) => void
+  setProjectSwitching: (v: boolean) => void
+  openProjectSettings: () => void
+  closeProjectSettings: () => void
+  openCreateWizard: () => void
+  closeCreateWizard: () => void
+
+  activeProject: () => Project | undefined
 }
 
 export const useUIStore = create<UIState>()(
-  subscribeWithSelector((set) => ({
+  subscribeWithSelector((set, get) => ({
     theme: 'dark',
     accent: 'emerald',
     apiPort: 8080,
-    reputationFloor: -0.5,
-    relayMultiaddr: null,
     searchTerm: '',
     filterTrustedOnly: false,
     dispatchTarget: null,
     isDispatchOpen: false,
     isFeedbackOpen: false,
     feedbackContext: null,
+
+    projects: [],
+    activeProjectId: null,
+    isProjectSwitching: false,
+    isProjectSettingsOpen: false,
+    isCreateWizardOpen: false,
 
     setTheme: (theme) => {
       set({ theme })
@@ -52,8 +79,6 @@ export const useUIStore = create<UIState>()(
       window.api?.settings.set('accent', accent).catch(() => {})
     },
     setApiPort: (apiPort) => set({ apiPort }),
-    setReputationFloor: (reputationFloor) => set({ reputationFloor }),
-    setRelayMultiaddr: (relayMultiaddr) => set({ relayMultiaddr }),
     setSearchTerm: (searchTerm) => set({ searchTerm }),
     setFilterTrustedOnly: (filterTrustedOnly) => set({ filterTrustedOnly }),
     openDispatch: (dispatchTarget) => set({ isDispatchOpen: true, dispatchTarget }),
@@ -61,5 +86,72 @@ export const useUIStore = create<UIState>()(
     openFeedback: (peerId, taskId) =>
       set({ isFeedbackOpen: true, feedbackContext: { peerId, taskId } }),
     closeFeedback: () => set({ isFeedbackOpen: false, feedbackContext: null }),
+
+    hydrateProjects: (projects, activeId) => set({ projects, activeProjectId: activeId }),
+
+    addProject: (input) => {
+      const projects = get().projects
+      validateProjectInput(projects, input)
+      const project: Project = {
+        id: newProjectId(),
+        name: input.name.trim(),
+        icon: input.icon ?? '🌐',
+        color: input.color ?? 'emerald',
+        relayMultiaddr: input.relayMultiaddr,
+        reputationFloor: input.reputationFloor ?? -0.5,
+        createdAt: Date.now(),
+      }
+      const nextProjects = [...projects, project]
+      set({ projects: nextProjects })
+      window.api?.settings.set('projects', nextProjects).catch(() => {})
+      return project
+    },
+
+    updateProject: (id, patch) => {
+      const projects = get().projects
+      const current = projects.find((p) => p.id === id)
+      if (!current) return
+      const merged: ProjectInput = {
+        name: patch.name ?? current.name,
+        relayMultiaddr:
+          patch.relayMultiaddr === undefined ? current.relayMultiaddr : patch.relayMultiaddr,
+        reputationFloor: patch.reputationFloor ?? current.reputationFloor,
+        icon: patch.icon ?? current.icon,
+        color: patch.color ?? current.color,
+      }
+      validateProjectInput(projects, merged, id)
+      const next = projects.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              ...merged,
+              name: merged.name.trim(),
+            }
+          : p,
+      )
+      set({ projects: next })
+      window.api?.settings.set('projects', next).catch(() => {})
+    },
+
+    deleteProject: (id) => {
+      const projects = get().projects.filter((p) => p.id !== id)
+      const activeId =
+        get().activeProjectId === id ? (projects[0]?.id ?? null) : get().activeProjectId
+      set({ projects, activeProjectId: activeId })
+      window.api?.settings.set('projects', projects).catch(() => {})
+      window.api?.settings.set('activeProjectId', activeId).catch(() => {})
+      window.api?.settings.delete(`chat:sessions:${id}`).catch(() => {})
+    },
+
+    setProjectSwitching: (v) => set({ isProjectSwitching: v }),
+    openProjectSettings: () => set({ isProjectSettingsOpen: true }),
+    closeProjectSettings: () => set({ isProjectSettingsOpen: false }),
+    openCreateWizard: () => set({ isCreateWizardOpen: true }),
+    closeCreateWizard: () => set({ isCreateWizardOpen: false }),
+
+    activeProject: () => {
+      const { projects, activeProjectId } = get()
+      return projects.find((p) => p.id === activeProjectId)
+    },
   })),
 )
