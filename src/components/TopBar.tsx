@@ -1,32 +1,40 @@
-import { useNavigate } from 'react-router-dom'
-import { useWorkers } from '../lib/query'
-import { useBackend } from '../hooks/useBackend'
-import { ProjectPill } from './projects/ProjectPill'
+import { toast } from 'sonner'
+import { useUIStore } from '../lib/store'
+import { ProjectDropdown } from './projects/ProjectDropdown'
+
+function truncateMultiaddr(m: string): string {
+  if (m.length <= 32) return m
+  return m.slice(0, 14) + '…' + m.slice(-14)
+}
 
 export function TopBar() {
-  const navigate = useNavigate()
-  const { data } = useWorkers(false)
-  const backend = useBackend()
-  const online = data?.online_count ?? 0
-  const offline = data?.offline_count ?? 0
-  const relayOk = backend.ok
+  const active = useUIStore((s) => s.activeProject())
+
+  async function copyRelay() {
+    if (!active) return
+    const value = active.relayMultiaddr ?? '(bundled public lighthouse)'
+    try {
+      await navigator.clipboard.writeText(value)
+      toast.success('Relay copied')
+    } catch {
+      toast.error('Could not copy')
+    }
+  }
 
   return (
-    <header className="h-10 border-b border-border-0 bg-bg-0 grid grid-cols-3 items-center px-3 select-none">
-      <div className="justify-self-start">
-        <ProjectPill />
-      </div>
-      <div className="justify-self-center text-sm font-semibold tracking-tight text-text-0">
-        AgentFM
-      </div>
-      <div className="justify-self-end">
+    <header className="h-11 border-b border-border-0 bg-bg-0 flex items-center gap-4 px-3 select-none">
+      <div className="text-sm font-semibold tracking-tight text-text-0">AgentFM</div>
+      {active && <ProjectDropdown />}
+      <div className="flex-1" />
+      {active && (
         <button
-          onClick={() => navigate('/status')}
-          className="text-2xs text-text-2 hover:text-text-0 transition-colors"
+          onClick={copyRelay}
+          className="text-2xs text-text-2 hover:text-text-0 font-mono transition-colors"
+          title={active.relayMultiaddr ?? 'bundled public lighthouse'}
         >
-          {online} online · {offline} offline · relay {relayOk ? '✓ stable' : '⚠ down'}
+          relay: {active.relayMultiaddr ? truncateMultiaddr(active.relayMultiaddr) : 'bundled'}
         </button>
-      </div>
+      )}
     </header>
   )
 }
