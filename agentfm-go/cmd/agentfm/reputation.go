@@ -123,11 +123,19 @@ type reputationRow struct {
 	Kind       string // "Rating" or "Comment"
 }
 
-// gatherReputationView scans every accepted inbox entry and keeps the
-// ones whose subject matches the requested peer. The in-Go filter is
-// acceptable for v1.3 demo scale (≤ ~100k entries); a column index
-// lands with P3-7 when scoring needs hot subject lookups (the comment
-// on IterateAllInboxEntries explains the tradeoff).
+// gatherReputationView scans BOTH the boss's own log (entries table)
+// AND the inbox (entries table populated by gossip from other peers),
+// keeping the rows whose subject matches the requested peer.
+//
+// Why both: when this CLI runs against a Boss's ledger DB, the
+// attestation ratings the Boss issued live in `entries`. When the
+// CLI runs against a Worker's ledger (or anyone else's), the
+// remote-peer ratings live in `inbox_entries`. Reading both means
+// the CLI shows the complete picture regardless of which ledger
+// it's pointed at.
+//
+// The in-Go filter is acceptable for v1.3 demo scale (≤ ~100k
+// entries); a column index can be added later if needed.
 func gatherReputationView(ctx context.Context, s *store.Store, subjectID []byte, limit int) (*reputationView, error) {
 	if limit < 0 {
 		limit = 0
@@ -135,35 +143,41 @@ func gatherReputationView(ctx context.Context, s *store.Store, subjectID []byte,
 
 	view := &reputationView{Subject: peer.ID(subjectID)}
 
-	err := s.IterateAllInboxEntries(ctx, func(e *store.InboxEntry) error {
+	collect := func(payload []byte, receivedAtNs int64) {
 		var signed pb.SignedEntry
-		if err := proto.Unmarshal(e.Payload, &signed); err != nil {
-			// Skip malformed rows; the inbox accepted them at some
-			// point so this would indicate corruption in transit. We
-			// don't want one bad row to hide all the others.
-			return nil
+		if err := proto.Unmarshal(payload, &signed); err != nil {
+			return // skip malformed
 		}
-		row, ok := rowFromEntry(&signed, e.ReceivedAt)
+		row, ok := rowFromEntry(&signed, receivedAtNs)
 		if !ok {
-			return nil
+			return
 		}
 		if !bytesEqual(row.subjectPeerID, subjectID) {
-			return nil
+			return
 		}
 		view.EntryCount++
 		if row.ReceivedAt.After(view.LastSeen) {
 			view.LastSeen = row.ReceivedAt
 		}
 		view.LatestEntries = append(view.LatestEntries, row.reputationRow)
+	}
+
+	// Own log first.
+	if err := s.IterateAllOwnEntries(ctx, func(e *store.Entry) error {
+		collect(e.Payload, e.InsertedAt)
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
+		return nil, err
+	}
+	// Then inbox (gossip from other peers).
+	if err := s.IterateAllInboxEntries(ctx, func(e *store.InboxEntry) error {
+		collect(e.Payload, e.ReceivedAt)
+		return nil
+	}); err != nil {
 		return nil, err
 	}
 
-	// Sort newest-first, then truncate to the configured limit. We
-	// over-collect intentionally so the renderer can show "showing N of
-	// M" if the caller wants that later.
+	// Sort newest-first, then truncate to the configured limit.
 	sort.Slice(view.LatestEntries, func(i, j int) bool {
 		return view.LatestEntries[i].ReceivedAt.After(view.LatestEntries[j].ReceivedAt)
 	})
@@ -231,7 +245,11 @@ func renderReputationView(w io.Writer, v *reputationView) {
 		return
 	}
 	fmt.Fprintf(w, "Entries:    %d (last: %s)\n", v.EntryCount, v.LastSeen.UTC().Format(time.RFC3339))
-	fmt.Fprintln(w, "Honesty:    [pending P3-7 reputation derivation]")
+	// Note: the CLI shows raw rating history. For the live
+	// EigenTrust-aggregated honesty score (with seed weighting +
+	// age decay), hit the HTTP API instead:
+	//   curl http://<gateway>/v1/peers/<peer_id>/reputation
+	fmt.Fprintln(w, "Honesty:    (raw rating list below; aggregated score via /v1/peers/{id}/reputation)")
 	fmt.Fprintln(w)
 
 	fmt.Fprintln(w, "Latest:")

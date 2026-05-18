@@ -165,3 +165,80 @@ func signingDigest(entry *pb.SignedEntry) ([32]byte, error) {
 	}
 	return sha256.Sum256(canonical), nil
 }
+
+// VerifyInclusionProof validates an InclusionProof against the
+// LogHead it's anchored to. The check has three parts:
+//
+//  1. Ed25519 signature on the inner Rating/Comment is valid for its
+//     RaterPeerID (same check VerifyEntry runs).
+//  2. EntryHash of the entry matches the audit-path / position / root
+//     in the proof's LogHead (RFC 6962 inclusion).
+//  3. The peer-own signature on the LogHead is valid for head.PeerId.
+//
+// Returns (true, nil) only when all three pass. Witness signatures
+// inside head.WitnessSigs are NOT validated here — callers that care
+// about quorum should additionally call IsHeadValid(head, M).
+func VerifyInclusionProof(proof *pb.InclusionProof) (bool, error) {
+	if proof == nil {
+		return false, errors.New("ledger: nil InclusionProof")
+	}
+	if proof.LogHead == nil {
+		return false, errors.New("ledger: InclusionProof has no LogHead")
+	}
+
+	// InclusionProof carries the full SignedEntry wrapper (see Fix-6
+	// audit-finding), so the verifier hashes the exact bytes the
+	// prover signed — any future SignedEntry-level fields survive
+	// the round-trip without silent verification failures.
+	signed := proof.Entry
+	if signed == nil || signed.GetBody() == nil {
+		return false, errors.New("ledger: InclusionProof entry unset")
+	}
+
+	// 1. Entry-level signature.
+	ok, err := VerifyEntry(signed)
+	if err != nil {
+		return false, fmt.Errorf("entry sig: %w", err)
+	}
+	if !ok {
+		return false, nil
+	}
+
+	// 2. RFC 6962 inclusion.
+	leafHash := EntryHash(signed)
+	auditPath := make([][32]byte, len(proof.AuditPath))
+	for i, bs := range proof.AuditPath {
+		if len(bs) != 32 {
+			return false, fmt.Errorf("ledger: audit_path[%d] not 32 bytes (got %d)", i, len(bs))
+		}
+		copy(auditPath[i][:], bs)
+	}
+	if len(proof.LogHead.RootHash) != 32 {
+		return false, errors.New("ledger: log_head.root_hash not 32 bytes")
+	}
+	var root [32]byte
+	copy(root[:], proof.LogHead.RootHash)
+	if !merkle.VerifyInclusion(leafHash, proof.Position, proof.LogHead.TreeSize, root, auditPath) {
+		return false, nil
+	}
+
+	// 3. Peer-own LogHead signature.
+	headerPeer, err := peer.IDFromBytes(proof.LogHead.PeerId)
+	if err != nil {
+		return false, fmt.Errorf("log_head.peer_id: %w", err)
+	}
+	headerPub, err := headerPeer.ExtractPublicKey()
+	if err != nil {
+		return false, fmt.Errorf("log_head pubkey: %w", err)
+	}
+	canonical, err := pb.CanonicalLogHead(proof.LogHead)
+	if err != nil {
+		return false, fmt.Errorf("canonical log_head: %w", err)
+	}
+	digest := sha256.Sum256(canonical)
+	headOK, err := headerPub.Verify(digest[:], proof.LogHead.Signature)
+	if err != nil {
+		return false, fmt.Errorf("verify log_head sig: %w", err)
+	}
+	return headOK, nil
+}

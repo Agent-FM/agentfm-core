@@ -134,10 +134,10 @@ func TestRoundTrip_EquivocationAlert(t *testing.T) {
 	}
 }
 
-func TestRoundTrip_InclusionProof_BothOneofVariants(t *testing.T) {
-	// Inclusion proof with Rating inside.
+func TestRoundTrip_InclusionProof_BothSignedEntryVariants(t *testing.T) {
+	// Inclusion proof with Rating inside the SignedEntry wrapper.
 	withRating := &pb.InclusionProof{
-		Entry:     &pb.InclusionProof_Rating{Rating: newRating()},
+		Entry:     &pb.SignedEntry{Body: &pb.SignedEntry_Rating{Rating: newRating()}},
 		Position:  17,
 		AuditPath: [][]byte{bytes.Repeat([]byte{0x01}, 32), bytes.Repeat([]byte{0x02}, 32)},
 		LogHead:   newLogHead(),
@@ -154,9 +154,9 @@ func TestRoundTrip_InclusionProof_BothOneofVariants(t *testing.T) {
 		t.Fatalf("round-trip mismatch (rating variant)")
 	}
 
-	// Inclusion proof with Comment inside.
+	// Inclusion proof with Comment inside the SignedEntry wrapper.
 	withComment := &pb.InclusionProof{
-		Entry:    &pb.InclusionProof_Comment{Comment: newComment()},
+		Entry:    &pb.SignedEntry{Body: &pb.SignedEntry_Comment{Comment: newComment()}},
 		Position: 33,
 		LogHead:  newLogHead(),
 	}

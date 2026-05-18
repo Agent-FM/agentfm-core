@@ -11,6 +11,82 @@ For non-Python clients (Next.js, n8n, curl, Slack bots). The OpenAI-compatible `
 | `POST /api/execute/async` | POST | Fire-and-forget. Returns `202 {"task_id":...}` immediately. POSTs to `webhook_url` on completion (signed if `AGENTFM_WEBHOOK_SECRET` is set). The background task spawns *before* the 202 ack is written: a 202 means the task is being executed, even if the client hangs up before reading the body. |
 | `GET /health` | GET | Unauthenticated liveness probe. Returns `{"status":"ok","online_workers":N}`. |
 | `GET /metrics` | GET | Prometheus scrape endpoint (see [Observability](observability.md)). |
+| `GET /ui/peer/{peer_id}` | GET | v1.3 — single-page reputation viewer. Unauthenticated; reads via the routes below. |
+| `GET /v1/peers/{peer_id}/reputation` | GET | v1.3 — fetch scores + equivocator status + agent info for a peer. |
+| `GET /v1/peers/{peer_id}/log?from=N&limit=M` | GET | v1.3 — paginated entries + signed head from this Boss's local ledger. |
+| `GET /v1/peers/{peer_id}/proof?entry={hex_hash}` | GET | v1.3 — RFC 6962 inclusion proof for an entry. |
+| `POST /v1/peers/{peer_id}/comments` | POST | v1.3 — signed free-text comment submission. Self-submission only (rater_peer_id must match this gateway's identity). |
+
+## v1.3 Verifiable agent mesh endpoints
+
+See [Trust & Verification](trust.md) for the underlying threat model and CLI / SDK equivalents.
+
+### `GET /v1/peers/{peer_id}/reputation`
+
+```bash
+curl http://127.0.0.1:8080/v1/peers/12D3KooW.../reputation \
+  -H 'Authorization: Bearer YOUR_KEY'
+```
+
+Response:
+```json
+{
+  "peer_id": "12D3KooW...",
+  "scores": {"honesty": 0.42},
+  "rating_count": 7,
+  "last_updated": "2026-05-16T08:12:33Z",
+  "is_equivocator": false,
+  "agent_image_ref": "ghcr.io/agentfm/sick-leave-generator:v1",
+  "agent_image_digest": "sha256:abc...",
+  "agent_capability": "hr-specialist"
+}
+```
+
+Equivocators always have `is_equivocator: true` and `scores.honesty: -1.0` regardless of other ratings — the marker is permanent (manual rehab via CLI / private API in v1.4).
+
+### `GET /v1/peers/{peer_id}/log`
+
+Returns ledger entries plus the current signed head. Query params:
+
+- `from=N` (default `1`, 1-based, inclusive)
+- `limit=M` (default `100`, max `1000`)
+
+### `GET /v1/peers/{peer_id}/proof?entry={hex}`
+
+Returns an RFC 6962 inclusion proof. Caller verifies offline by:
+1. Hashing the entry with `HashLeaf` (`SHA-256(0x00 || canonical_bytes)`).
+2. Walking the `audit_path`, combining with `HashChildren` (`SHA-256(0x01 || left || right)`) at each level.
+3. Comparing the derived root to `head.root_hash`.
+
+### `POST /v1/peers/{peer_id}/comments`
+
+Submits a signed free-text comment about `peer_id`. v1.3 only supports SELF-submission (the rater must be the Boss's own libp2p identity). External-submitter delegation lands in v1.4.
+
+Body:
+```json
+{
+  "rater_peer_id": "12D3KooW...",
+  "text": "Worked great for our use case",
+  "language": "en",
+  "attached_rating_hash": "ff...",
+  "signature": "<base64 Ed25519 signature over the canonical comment digest>"
+}
+```
+
+Response (201 Created):
+```json
+{
+  "cid": "1220abc...",
+  "ledger_hash": "deadbeef..."
+}
+```
+
+Errors:
+- `400 bad_request` — missing/invalid field, malformed peer ID
+- `400 body_too_large` — text exceeds 10 KiB
+- `401 bad_signature` — signature didn't verify against rater's libp2p key
+- `403 non_self_submitter` — rater isn't this gateway's own identity
+- `503 ledger_unavailable` — the boss wasn't constructed with a ledger handle
 
 ## `GET /api/workers`
 

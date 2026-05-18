@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"math"
 	"path/filepath"
 	"testing"
 	"time"
@@ -302,5 +303,114 @@ func TestAcceptOrQueue_EmptyBody_ReturnsErrInvalidEntry(t *testing.T) {
 	err := in.AcceptOrQueue(ctxBg(), &pb.SignedEntry{})
 	if !errors.Is(err, inbox.ErrInvalidEntry) {
 		t.Fatalf("want ErrInvalidEntry, got %v", err)
+	}
+}
+
+// Fix-3 acceptance: payload-level invariants are enforced AFTER
+// signature verification so authenticated-but-out-of-range entries
+// are still rejected.
+
+func TestAcceptOrQueue_ScoreOutOfRange_ReturnsErrInvalidPayload(t *testing.T) {
+	owner := newIdentity(t)
+	rater := newIdentity(t)
+	in, _ := openInboxFor(t, owner)
+
+	e := &pb.SignedEntry{Body: &pb.SignedEntry_Rating{Rating: &pb.Rating{
+		RaterPeerId:     []byte(rater.id),
+		SubjectPeerId:   bytes.Repeat([]byte{0xee}, 32),
+		Dimension:       "honesty",
+		Score:           42.0, // out of [-1, +1]
+		TimestampUnixNs: time.Now().UnixNano(),
+	}}}
+	if err := ledger.SignEntry(rater.priv, e, [32]byte{}); err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	err := in.AcceptOrQueue(ctxBg(), e)
+	if !errors.Is(err, inbox.ErrInvalidPayload) {
+		t.Fatalf("want ErrInvalidPayload, got %v", err)
+	}
+}
+
+func TestAcceptOrQueue_NaNScore_ReturnsErrInvalidPayload(t *testing.T) {
+	owner := newIdentity(t)
+	rater := newIdentity(t)
+	in, _ := openInboxFor(t, owner)
+
+	e := &pb.SignedEntry{Body: &pb.SignedEntry_Rating{Rating: &pb.Rating{
+		RaterPeerId:     []byte(rater.id),
+		SubjectPeerId:   bytes.Repeat([]byte{0xee}, 32),
+		Dimension:       "honesty",
+		Score:           math.NaN(),
+		TimestampUnixNs: time.Now().UnixNano(),
+	}}}
+	if err := ledger.SignEntry(rater.priv, e, [32]byte{}); err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	err := in.AcceptOrQueue(ctxBg(), e)
+	if !errors.Is(err, inbox.ErrInvalidPayload) {
+		t.Fatalf("want ErrInvalidPayload for NaN, got %v", err)
+	}
+}
+
+func TestAcceptOrQueue_EmptyDimension_ReturnsErrInvalidPayload(t *testing.T) {
+	owner := newIdentity(t)
+	rater := newIdentity(t)
+	in, _ := openInboxFor(t, owner)
+
+	e := &pb.SignedEntry{Body: &pb.SignedEntry_Rating{Rating: &pb.Rating{
+		RaterPeerId:     []byte(rater.id),
+		SubjectPeerId:   bytes.Repeat([]byte{0xee}, 32),
+		Dimension:       "", // empty
+		Score:           0.5,
+		TimestampUnixNs: time.Now().UnixNano(),
+	}}}
+	if err := ledger.SignEntry(rater.priv, e, [32]byte{}); err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	err := in.AcceptOrQueue(ctxBg(), e)
+	if !errors.Is(err, inbox.ErrInvalidPayload) {
+		t.Fatalf("want ErrInvalidPayload for empty dimension, got %v", err)
+	}
+}
+
+func TestAcceptOrQueue_BadTimestamp_ReturnsErrInvalidPayload(t *testing.T) {
+	owner := newIdentity(t)
+	rater := newIdentity(t)
+	in, _ := openInboxFor(t, owner)
+
+	e := &pb.SignedEntry{Body: &pb.SignedEntry_Rating{Rating: &pb.Rating{
+		RaterPeerId:     []byte(rater.id),
+		SubjectPeerId:   bytes.Repeat([]byte{0xee}, 32),
+		Dimension:       "honesty",
+		Score:           0,
+		TimestampUnixNs: 0, // not positive
+	}}}
+	if err := ledger.SignEntry(rater.priv, e, [32]byte{}); err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	err := in.AcceptOrQueue(ctxBg(), e)
+	if !errors.Is(err, inbox.ErrInvalidPayload) {
+		t.Fatalf("want ErrInvalidPayload for zero timestamp, got %v", err)
+	}
+}
+
+func TestAcceptOrQueue_CommentMissingTextCID_ReturnsErrInvalidPayload(t *testing.T) {
+	owner := newIdentity(t)
+	rater := newIdentity(t)
+	in, _ := openInboxFor(t, owner)
+
+	e := &pb.SignedEntry{Body: &pb.SignedEntry_Comment{Comment: &pb.Comment{
+		RaterPeerId:     []byte(rater.id),
+		SubjectPeerId:   bytes.Repeat([]byte{0xee}, 32),
+		TextCid:         nil, // missing
+		Language:        "en",
+		TimestampUnixNs: time.Now().UnixNano(),
+	}}}
+	if err := ledger.SignEntry(rater.priv, e, [32]byte{}); err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	err := in.AcceptOrQueue(ctxBg(), e)
+	if !errors.Is(err, inbox.ErrInvalidPayload) {
+		t.Fatalf("want ErrInvalidPayload for empty text_cid, got %v", err)
 	}
 }

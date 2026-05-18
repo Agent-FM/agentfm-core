@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "updated_at": "2026-05-17T00:00:00Z",
+  "_comment": "Genesis seeds for the v1.3 EigenTrust-lite scorer. Without at least one seed, the algorithm converges to zero everywhere. The PUBLIC mesh ships with exactly ONE seed — the maintainer-run lighthouse relay — to provide a starting trust gradient without claiming any other peer is pre-trusted. Private swarms override this with their own --genesis-seeds.json. See docs/trust.md.",
+  "seeds": [
+    {
+      "peer_id": "12D3KooWQHw8mVQkx17kLTNiRTbYckU2cAGcAwFFLzVJhhmBs5zL",
+      "score": 1.0,
+      "operator": "agentfm-maintainers",
+      "note": "Maintainer-run public lighthouse / relay. Same peer_id as PublicLighthouse in internal/network/constants.go."
+    }
+  ]
+}

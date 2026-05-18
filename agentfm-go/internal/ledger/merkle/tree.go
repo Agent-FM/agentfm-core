@@ -1,6 +1,9 @@
 package merkle
 
-import "crypto/sha256"
+import (
+	"crypto/sha256"
+	"fmt"
+)
 
 // Tree is an in-memory, append-only RFC 6962 Merkle tree over SHA-256.
 //
@@ -95,9 +98,12 @@ func computeRoot(leaves [][32]byte) [32]byte {
 //	n=9  -> 8
 func largestPowerOfTwoLessThan(n uint64) uint64 {
 	if n < 2 {
-		// Caller never invokes this with n < 2; computeRoot handles the
-		// single-leaf case directly. Return 1 defensively.
-		return 1
+		// Programming error — callers (computeRoot, path,
+		// rebuildRoot, foldConsistency, consistencyProof) all guard
+		// with explicit n==1 or m==n base cases. A silent return
+		// would mask a refactor bug; panic instead so the test suite
+		// catches it loudly. Fix-12 audit finding.
+		panic(fmt.Sprintf("merkle.largestPowerOfTwoLessThan: n=%d (must be >= 2)", n))
 	}
 	k := uint64(1)
 	for k<<1 < n {

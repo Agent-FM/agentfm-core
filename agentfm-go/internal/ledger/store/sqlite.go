@@ -164,6 +164,35 @@ func (s *Store) AppendEntry(
 	return uint64(id), nil
 }
 
+// GetEntryByHash returns the entry whose RFC 6962 leaf hash matches.
+// Backed by the `entries_hash_idx` SQLite index — O(log n) lookup.
+// Returns ErrEntryNotFound when the hash is not present.
+func (s *Store) GetEntryByHash(ctx context.Context, hash [32]byte) (*Entry, error) {
+	row := s.db.QueryRowContext(ctx,
+		`SELECT idx, hash, prev_hash, kind, payload, sig, inserted_at
+		 FROM entries WHERE hash = ?`, hash[:],
+	)
+	out := &Entry{}
+	var (
+		hashBytes, prev []byte
+		kindInt         int
+	)
+	err := row.Scan(&out.Idx, &hashBytes, &prev, &kindInt, &out.Payload, &out.Sig, &out.InsertedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("%w: hash=%x", ErrEntryNotFound, hash)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("scan entry by hash: %w", err)
+	}
+	if len(hashBytes) != 32 || len(prev) != 32 {
+		return nil, fmt.Errorf("malformed row: hash=%d prev=%d", len(hashBytes), len(prev))
+	}
+	copy(out.Hash[:], hashBytes)
+	copy(out.PrevHash[:], prev)
+	out.Kind = Kind(kindInt)
+	return out, nil
+}
+
 // GetEntry returns the entry at idx. Returns ErrEntryNotFound (wrapped)
 // when the row does not exist.
 func (s *Store) GetEntry(ctx context.Context, idx uint64) (*Entry, error) {

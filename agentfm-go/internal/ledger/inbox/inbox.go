@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 
 	pb "agentfm/internal/ledger/pb"
 	"agentfm/internal/ledger/store"
@@ -69,6 +70,13 @@ var ErrOrphanCapExceeded = errors.New("inbox: orphan cap exceeded")
 // whose RaterPeerID cannot be parsed. Programming / wire-format
 // errors; not adversarial in the cryptographic sense.
 var ErrInvalidEntry = errors.New("inbox: invalid entry shape")
+
+// ErrInvalidPayload is returned when an entry's payload fields are
+// out of the bounds declared in proto/agentfm/ledger/v1/ledger.proto
+// (e.g. score outside [-1, +1], empty dimension, wrong-length
+// prev_hash, non-positive timestamp). Fix-3 audit finding —
+// receivers MUST reject these per the proto contract.
+var ErrInvalidPayload = errors.New("inbox: invalid payload")
 
 // Inbox coordinates accept / queue / promote for one local peer.
 // Goroutine-safe: all writes go through Store's mutex; reads scale.
@@ -122,6 +130,13 @@ func (i *Inbox) AcceptOrQueue(ctx context.Context, entry *pb.SignedEntry) error 
 	}
 	if !ok {
 		return ErrSignatureInvalid
+	}
+
+	// Fix-3: enforce the proto-level "receivers MUST reject" rules
+	// AFTER signature verification (so the cost of validation only
+	// applies to authenticated content).
+	if err := validatePayload(entry); err != nil {
+		return err
 	}
 
 	hash := i.hash(entry)
@@ -291,4 +306,60 @@ func prevHashOf(entry *pb.SignedEntry) [32]byte {
 		}
 	}
 	return out
+}
+
+// validatePayload enforces the proto-level invariants the wire
+// contract demands receivers reject (Fix-3 audit finding):
+//
+//   - prev_hash MUST be exactly 32 bytes (SHA-256)
+//   - timestamp_unix_ns MUST be > 0
+//   - Rating.score MUST be in [-1.0, +1.0] AND not NaN/Inf
+//   - Rating.dimension MUST be non-empty
+//   - Comment.text_cid MUST be non-empty (the body is content-addressed)
+//
+// Returns ErrInvalidPayload-wrapped error on the first violation.
+func validatePayload(entry *pb.SignedEntry) error {
+	switch body := entry.GetBody().(type) {
+	case *pb.SignedEntry_Rating:
+		r := body.Rating
+		if r == nil {
+			return fmt.Errorf("%w: nil Rating", ErrInvalidPayload)
+		}
+		if len(r.PrevHash) != 32 {
+			return fmt.Errorf("%w: prev_hash len=%d, want 32", ErrInvalidPayload, len(r.PrevHash))
+		}
+		if r.TimestampUnixNs <= 0 {
+			return fmt.Errorf("%w: timestamp_unix_ns=%d", ErrInvalidPayload, r.TimestampUnixNs)
+		}
+		// Strict bounds + NaN/Inf rejection. Use math.IsNaN/IsInf
+		// rather than direct comparison so the score field can't
+		// poison downstream aggregation.
+		if math.IsNaN(r.Score) || math.IsInf(r.Score, 0) {
+			return fmt.Errorf("%w: score=NaN/Inf", ErrInvalidPayload)
+		}
+		if r.Score < -1.0 || r.Score > 1.0 {
+			return fmt.Errorf("%w: score=%v out of [-1,+1]", ErrInvalidPayload, r.Score)
+		}
+		if r.Dimension == "" {
+			return fmt.Errorf("%w: empty dimension", ErrInvalidPayload)
+		}
+		return nil
+	case *pb.SignedEntry_Comment:
+		c := body.Comment
+		if c == nil {
+			return fmt.Errorf("%w: nil Comment", ErrInvalidPayload)
+		}
+		if len(c.PrevHash) != 32 {
+			return fmt.Errorf("%w: prev_hash len=%d, want 32", ErrInvalidPayload, len(c.PrevHash))
+		}
+		if c.TimestampUnixNs <= 0 {
+			return fmt.Errorf("%w: timestamp_unix_ns=%d", ErrInvalidPayload, c.TimestampUnixNs)
+		}
+		if len(c.TextCid) == 0 {
+			return fmt.Errorf("%w: empty text_cid", ErrInvalidPayload)
+		}
+		return nil
+	default:
+		return fmt.Errorf("%w: oneof body unset", ErrInvalidEntry)
+	}
 }

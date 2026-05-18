@@ -57,7 +57,7 @@ func TestRenderReputationView_PopulatedView(t *testing.T) {
 	wants := []string{
 		subj.String(),
 		"Entries:    3 (last:",
-		"Honesty:    [pending P3-7",
+		"Honesty:    (raw rating list below",
 		"+0.10 honesty",
 		"-0.70 honesty",
 		"comment by",
@@ -267,7 +267,7 @@ func TestReputationShow_EndToEnd_PrintsExpectedSections(t *testing.T) {
 	for _, w := range []string{
 		"Peer:       " + subject.String(),
 		"Entries:    1",
-		"Honesty:    [pending P3-7",
+		"Honesty:    (raw rating list below",
 		"+0.42 honesty",
 	} {
 		if !strings.Contains(got, w) {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -20,6 +21,24 @@ func NewHost(t testing.TB) host.Host {
 	h, err := libp2p.New(libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/0"))
 	if err != nil {
 		t.Fatalf("libp2p.New: %v", err)
+	}
+	t.Cleanup(func() { _ = h.Close() })
+	return h
+}
+
+// NewHostWithKey returns a libp2p host bound to 127.0.0.1 whose
+// identity is derived from the provided private key. Used by tests
+// that need the host's PeerID to match a key already in use elsewhere
+// (e.g. a witness signing co-sigs whose PeerID embeds the witness's
+// own public key).
+func NewHostWithKey(t testing.TB, priv crypto.PrivKey) host.Host {
+	t.Helper()
+	h, err := libp2p.New(
+		libp2p.Identity(priv),
+		libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/0"),
+	)
+	if err != nil {
+		t.Fatalf("libp2p.New with key: %v", err)
 	}
 	t.Cleanup(func() { _ = h.Close() })
 	return h

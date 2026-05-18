@@ -148,6 +148,34 @@ func TestGetEntry_NotFoundReturnsErrEntryNotFound(t *testing.T) {
 	}
 }
 
+// Fix-5 acceptance: GetEntryByHash uses the entries_hash_idx index
+// for O(log n) lookups. Verify round-trip + ErrEntryNotFound.
+func TestGetEntryByHash_RoundTrip(t *testing.T) {
+	s := openFresh(t)
+	hash := h32(0xab)
+	if _, err := s.AppendEntry(ctx(), hash, h32(0), store.KindRating, []byte("p"), []byte("s")); err != nil {
+		t.Fatalf("AppendEntry: %v", err)
+	}
+	got, err := s.GetEntryByHash(ctx(), hash)
+	if err != nil {
+		t.Fatalf("GetEntryByHash: %v", err)
+	}
+	if got.Idx != 1 {
+		t.Errorf("Idx = %d, want 1", got.Idx)
+	}
+	if got.Hash != hash {
+		t.Errorf("Hash mismatch")
+	}
+}
+
+func TestGetEntryByHash_NotFound(t *testing.T) {
+	s := openFresh(t)
+	_, err := s.GetEntryByHash(ctx(), h32(0xff))
+	if !errors.Is(err, store.ErrEntryNotFound) {
+		t.Fatalf("want ErrEntryNotFound, got %v", err)
+	}
+}
+
 func TestGetEntry_RoundTrip_AllFields(t *testing.T) {
 	s := openFresh(t)
 	hash := h32(0xab)
@@ -206,6 +234,47 @@ func TestAppendOnly_DeleteOnEntries_Refused(t *testing.T) {
 	err := s.RawExecForTest(ctx(), `DELETE FROM entries WHERE idx = 1`)
 	if err == nil {
 		t.Fatal("expected DELETE to be refused by trigger, got nil")
+	}
+}
+
+// Schema v4 (migration 004): DELETE on equivocators must be refused
+// too, matching the entries-table pattern. Without this trigger a
+// local sqlite3 user could DELETE FROM equivocators WHERE peer_id=X
+// and silently un-mark someone for THIS node only — locally
+// inconsistent with the mesh-wide marker that other peers still
+// hold.
+func TestAppendOnly_DeleteOnEquivocators_Refused(t *testing.T) {
+	s := openFresh(t)
+	if err := s.MarkEquivocator(ctx(), []byte("offender"), []byte("alert-blob")); err != nil {
+		t.Fatalf("MarkEquivocator: %v", err)
+	}
+	// Confirm row exists first — sanity check that MarkEquivocator
+	// actually wrote, so the DELETE we attempt has a target.
+	marked, err := s.IsEquivocator(ctx(), []byte("offender"))
+	if err != nil || !marked {
+		t.Fatalf("MarkEquivocator did not stick (marked=%v err=%v)", marked, err)
+	}
+	err = s.RawExecForTest(ctx(), `DELETE FROM equivocators WHERE peer_id = X'6f6666656e646572'`) // hex of "offender"
+	if err == nil {
+		t.Fatal("expected DELETE on equivocators to be refused by trigger")
+	}
+	// Sanity: row is still there.
+	stillMarked, _ := s.IsEquivocator(ctx(), []byte("offender"))
+	if !stillMarked {
+		t.Fatal("equivocator was deleted despite trigger error")
+	}
+}
+
+// Symmetric guard for the existing UPDATE trigger on equivocators —
+// covered by trigger 003 but not previously tested.
+func TestAppendOnly_UpdateOnEquivocators_Refused(t *testing.T) {
+	s := openFresh(t)
+	if err := s.MarkEquivocator(ctx(), []byte("p"), []byte("alert")); err != nil {
+		t.Fatalf("MarkEquivocator: %v", err)
+	}
+	err := s.RawExecForTest(ctx(), `UPDATE equivocators SET alert_blob = X'00'`)
+	if err == nil {
+		t.Fatal("expected UPDATE on equivocators to be refused by trigger")
 	}
 }
 
