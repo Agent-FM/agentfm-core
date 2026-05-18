@@ -33,10 +33,11 @@ test.beforeAll(async () => {
     { timeout: 30000, polling: 500 },
   );
 
-  // First-launch Welcome modal can appear; dismiss it for stable test runs.
-  const skip = page.locator('button:has-text("Skip")');
-  if (await skip.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await skip.click();
+  const wizard = page.locator('h2:has-text("New project")');
+  if (await wizard.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await page.locator('input[placeholder*="Team Mesh"]').fill('E2E Default');
+    await page.locator('button:has-text("Create project")').click();
+    await wizard.waitFor({ state: 'hidden', timeout: 15000 });
   }
 
   // The ErrorBoundary or per-route loading state may show on initial mount
@@ -72,28 +73,24 @@ test('app boots and renders the Radar shell', async () => {
   }).toPass({ timeout: 15000 });
 });
 
-test('settings route renders all sections + reset button', async () => {
+test('settings route renders app-level sections + reset button', async () => {
   await page.keyboard.press('Meta+5');
-  await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 });
-  await expect(page.locator('text=Mesh').first()).toBeVisible();
-  await expect(page.locator('text=Trust').first()).toBeVisible();
+  await expect(page.locator('h1:has-text("App settings")')).toBeVisible({ timeout: 5000 });
   await expect(page.locator('text=Appearance').first()).toBeVisible();
   await expect(page.locator('text=Advanced').first()).toBeVisible();
-  // Reset button must be wired (no longer shows the legacy toast)
-  await expect(page.locator('button:has-text("Reset all to defaults")')).toBeVisible();
+  await expect(page.locator('button:has-text("Reset to defaults")')).toBeVisible();
 });
 
 test('settings reset shows confirm and cancels cleanly', async () => {
   await page.keyboard.press('Meta+5');
-  await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('h1:has-text("App settings")')).toBeVisible({ timeout: 5000 });
 
-  // The reset path uses window.confirm — intercept and dismiss.
   page.once('dialog', async (d) => {
     expect(d.type()).toBe('confirm');
-    expect(d.message()).toMatch(/Reset all settings to defaults/i);
+    expect(d.message()).toMatch(/Reset appearance/i);
     await d.dismiss();
   });
-  await page.locator('button:has-text("Reset all to defaults")').click();
+  await page.locator('button:has-text("Reset to defaults")').click();
 
   // No toast for "not implemented yet" should appear.
   await expect(page.locator('text=is not implemented yet')).toHaveCount(0);
