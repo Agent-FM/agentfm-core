@@ -10,6 +10,7 @@ import (
 
 	"agentfm/internal/ledger"
 	pb "agentfm/internal/ledger/pb"
+	"agentfm/internal/ledger/store"
 )
 
 // stubLedger is a minimal Ledger implementation that satisfies the
@@ -33,6 +34,7 @@ func (stubLedger) InboxHas(ctx context.Context, raterID []byte, entryHash [32]by
 func (stubLedger) IsEquivocator(ctx context.Context, peerID []byte) (bool, error) { return false, nil }
 func (stubLedger) AcceptEntry(ctx context.Context, payload []byte) error          { return nil }
 func (stubLedger) LastInboxIdx(ctx context.Context) (uint64, error)               { return 0, nil }
+func (stubLedger) Store() *store.Store                                            { return nil }
 func (stubLedger) Close() error                                                   { return nil }
 
 // compile-time check

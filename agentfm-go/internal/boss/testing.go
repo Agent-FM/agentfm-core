@@ -88,6 +88,13 @@ func (b *Boss) SetLedger(l ledger.Ledger) {
 	b.ledger = l
 }
 
+// SetReadStoreForTest injects a store handle that ListKnownPeers uses to
+// enumerate DistinctSubjects from ledger entries. In production this is
+// wired via Options.ReadStore; in integration tests inject via this helper.
+func (b *Boss) SetReadStoreForTest(s *store.Store) {
+	b.readStore = s
+}
+
 // mockReputationEngine is a minimal engine for test use. Scores are injected
 // via SetReputationScoreForTest; Score() returns the injected value or 0.
 type mockReputationEngine struct {

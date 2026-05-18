@@ -5,6 +5,7 @@ import (
 	"time"
 
 	pb "agentfm/internal/ledger/pb"
+	"agentfm/internal/ledger/store"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -148,6 +149,11 @@ type Ledger interface {
 	// ordering — callers MUST treat this as a best-effort hint; the
 	// inbox deduplicates so starting from a lower idx is always safe.
 	LastInboxIdx(ctx context.Context) (uint64, error)
+
+	// Store returns the underlying SQLite store for direct access by
+	// test helpers and the reputation engine's read-only walks. Production
+	// code should prefer the higher-level Ledger methods.
+	Store() *store.Store
 
 	// Close flushes any pending state and releases the underlying
 	// SQLite handle and gossip subscriptions. Safe to call multiple

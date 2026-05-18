@@ -247,9 +247,9 @@ func TestWorker_NoLongerHandlesFeedbackProtocol(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := clientHost.NewStream(ctx, workerHost.ID(), network.FeedbackProtocol)
+	_, err := clientHost.NewStream(ctx, workerHost.ID(), "/agentfm/feedback/1.0.0")
 	if err == nil {
-		t.Fatal("expected stream to fail: FeedbackProtocol should not be registered on worker")
+		t.Fatal("expected stream to fail: feedback protocol should not be registered on worker")
 	}
 }
 

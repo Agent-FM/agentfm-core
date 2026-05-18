@@ -208,9 +208,11 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 
 	// Tie the dial to the inbound HTTP request's context so a client
 	// hanging up aborts the libp2p dial instead of waiting out the full
-	// StreamDialTimeout.
-	s := b.dialOmni(r.Context(), peerID)
-	if s == nil {
+	// StreamDialTimeout. Use dialWorkerStream (spinner-free) here — the
+	// HTTP path must not spawn a TUI spinner, which carries a known
+	// concurrent-state race inside pterm's SpinnerPrinter goroutine.
+	s, dialErr := b.dialWorkerStream(r.Context(), peerID)
+	if dialErr != nil {
 		if b.completionRater != nil {
 			b.completionRater.RecordOutcome(peerID, OutcomeFailure)
 		}

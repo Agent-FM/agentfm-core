@@ -555,6 +555,12 @@ func (l *ledgerImpl) IsEquivocator(ctx context.Context, peerID []byte) (bool, er
 	return l.store.IsEquivocator(ctx, peerID)
 }
 
+// Store returns the underlying SQLite store. Use for test helpers and
+// read-only reputation engine walks only — do not write via this handle.
+func (l *ledgerImpl) Store() *store.Store {
+	return l.store
+}
+
 // VerifyEntry routes an entry through the inbox accept/orphan/promote
 // path. knownHead is reserved for stricter inclusion-proof validation
 // in P2-5; ignored in P1-5.
