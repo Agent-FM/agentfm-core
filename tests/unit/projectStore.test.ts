@@ -9,8 +9,6 @@ import type { Project } from '../../src/types/project'
 const base = (overrides: Partial<Project> = {}): Project => ({
   id: 'prj_test',
   name: 'Default',
-  icon: '🌐',
-  color: 'emerald',
   relayMultiaddr: null,
   reputationFloor: -0.5,
   createdAt: 0,

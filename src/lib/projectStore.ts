@@ -20,8 +20,6 @@ export interface ProjectInput {
   name: string
   relayMultiaddr: string | null
   reputationFloor?: number
-  icon?: string
-  color?: Project['color']
 }
 
 export function validateProjectInput(
