@@ -48,12 +48,14 @@ export function FeedbackModal() {
       : text.trim();
     try {
       const res = await api.submitSelfComment(ctx.peerId, { text: body, language: 'en' });
-      // Invalidate caches so the new entry appears in Activity + PeerView
-      // immediately, without waiting for the SSE entry_appended round trip.
       await Promise.all([
         qc.invalidateQueries({ queryKey: qk.peer(ctx.peerId) }),
-        qc.invalidateQueries({ queryKey: ['peer-log', ctx.peerId] }),
-        qc.invalidateQueries({ queryKey: ['peer-log'] }),
+        qc.invalidateQueries({
+          predicate: (q) =>
+            Array.isArray(q.queryKey) &&
+            q.queryKey[0] === 'peer-log' &&
+            q.queryKey[1] === ctx.peerId,
+        }),
       ]);
       toast.success(`Feedback signed and gossipped 💌 cid ${res.cid.slice(0, 10)}…`);
       close();
