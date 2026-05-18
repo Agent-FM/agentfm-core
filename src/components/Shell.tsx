@@ -1,20 +1,26 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Sidebar } from './Sidebar'
+import { useUIStore } from '../lib/store'
 import { TopBar } from './TopBar'
+import { TabStrip } from './TabStrip'
+import { EmptyState } from './EmptyState'
+import { SettingsFooter } from './SettingsFooter'
 import { RouteErrorBoundary } from './RouteErrorBoundary'
 import { useGlobalShortcuts } from '../hooks/useGlobalShortcuts'
 
 export function Shell() {
   useGlobalShortcuts()
   const loc = useLocation()
+  const active = useUIStore((s) => s.activeProject())
 
   return (
     <div className="h-screen flex flex-col bg-bg-0 text-text-0 font-sans">
       <TopBar />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
-        <main className="flex-1 overflow-auto">
+      <TabStrip />
+      <main className="flex-1 overflow-hidden flex flex-col">
+        {!active ? (
+          <EmptyState />
+        ) : (
           <AnimatePresence mode="wait">
             <motion.div
               key={loc.pathname}
@@ -22,15 +28,16 @@ export function Shell() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.18 }}
-              className="h-full"
+              className="h-full overflow-auto"
             >
               <RouteErrorBoundary>
                 <Outlet />
               </RouteErrorBoundary>
             </motion.div>
           </AnimatePresence>
-        </main>
-      </div>
+        )}
+      </main>
+      <SettingsFooter />
     </div>
   )
 }
