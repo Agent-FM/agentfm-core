@@ -5,7 +5,7 @@
 APP_NAME := agentfm
 RELAY_NAME := relay
 RELAY_INSTALL_NAME := agentfm-relay
-VERSION := 1.2.0
+VERSION := 1.3.0-rc.1
 RELEASE_TAG := AgentFM
 MAIN_FILE := ./cmd/agentfm
 RELAY_MAIN_FILE := ./cmd/relay
@@ -88,13 +88,13 @@ endif
 build-agentfm:
 	@echo "🔨 Building native $(APP_NAME) binary for $(OS_NAME) ($(HOST_ARCH))..."
 	@go mod tidy
-	@go build -ldflags "-s -w -X main.Version=$(VERSION)" -o $(APP_NAME) $(MAIN_FILE)
+	@go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(APP_NAME) $(MAIN_FILE)
 	@echo "✅ $(APP_NAME) build complete! Run ./$(APP_NAME) --help"
 
 build-relay:
 	@echo "🔨 Building native $(RELAY_NAME) binary for $(OS_NAME) ($(HOST_ARCH))..."
 	@go mod tidy
-	@go build -ldflags "-s -w -X main.Version=$(VERSION)" -o $(RELAY_NAME) $(RELAY_MAIN_FILE)
+	@go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(RELAY_NAME) $(RELAY_MAIN_FILE)
 	@echo "✅ $(RELAY_NAME) build complete! Run ./$(RELAY_NAME) --help"
 
 build: build-agentfm build-relay

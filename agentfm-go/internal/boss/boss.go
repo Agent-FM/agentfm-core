@@ -8,9 +8,15 @@ import (
 	"sync"
 	"time"
 
+	"net/http"
+
+	"agentfm/internal/ledger"
+	"agentfm/internal/ledger/comments"
+	"agentfm/internal/ledger/store"
 	"agentfm/internal/metrics"
 	"agentfm/internal/network"
 	"agentfm/internal/obs"
+	"agentfm/internal/reputation"
 	"agentfm/internal/types"
 
 	netcore "github.com/libp2p/go-libp2p/core/network"
@@ -22,6 +28,15 @@ import (
 // commit one libp2p dial + Podman slot + goroutine each, with no ability
 // to back-pressure (the client gets 202 immediately).
 const MaxInflightAsyncTasks = 256
+
+// reputationEngineIface is the minimal interface Boss requires from the
+// reputation engine. Using an interface rather than *reputation.Engine
+// allows tests to inject a lightweight mock without the full store
+// dependency that Recompute carries.
+type reputationEngineIface interface {
+	Score(peerID string) float64
+	Recompute(ctx context.Context, s *store.Store) (float64, error)
+}
 
 type Boss struct {
 	node          *network.MeshNode
@@ -36,15 +51,137 @@ type Boss struct {
 	// /api/execute/async. Buffered to MaxInflightAsyncTasks; non-blocking
 	// send returns 503 to the client when full.
 	asyncSlots chan struct{}
+
+	// Ledger handle (P1+ wiring). Used by:
+	//  - P3-3 to write L1-mismatch ratings into the ledger
+	//  - P3-3 to consult IsEquivocator on dispatch
+	//  - P4-2 HTTP API to expose reputation / log / proof
+	// nil-safe: dispatch helpers fall back to "no-op" when unset
+	// (e.g. tests that wire a Boss without the ledger).
+	ledger ledger.Ledger
+
+	// commentSubmissionHandler is populated in P4-3 when the
+	// comments package is wired. Until then, the umbrella router
+	// returns 501 from this hook.
+	commentSubmissionHandler http.HandlerFunc
+
+	// reputationEngine, when non-nil, is consulted by
+	// buildReputationView for live EigenTrust scores. Wired by the
+	// bootstrap path; tests can set it directly via the unexported
+	// field for HTTP handler testing.
+	reputationEngine reputationEngineIface
+
+	// readStore is the secondary store handle for fresh-on-read
+	// reputation recomputes (see Options.ReadStore).
+	readStore *store.Store
+
+	// commentsStore is the body store for comment CIDs (P4-1).
+	// Used by GET /v1/peers/{id}/comments/{cid} to hydrate comment bodies.
+	// Nil when the comments subsystem is not wired (e.g. in tests that
+	// don't use comments).
+	commentsStore *comments.Store
+
+	// completionRater writes hourly aggregate outcome ratings into the
+	// ledger. Nil when not wired (e.g. in tests that don't exercise
+	// dispatch). RecordOutcome is guarded by nil-checks in dispatch handlers.
+	completionRater *CompletionRatingWriter
+
+	// reputationFloor is the minimum honesty score required to dispatch a
+	// task to a worker. Always populated by NewWithOptions (default -1.0 =
+	// allow all when Options.ReputationFloor is nil). Call sites read this
+	// field directly with no sentinel logic — see Options.ReputationFloor
+	// for the construction-time semantics.
+	reputationFloor float64
+
+	// menuPickerForTest overrides the pterm interactive-select in
+	// showPeerMenu. Set via SetMenuPickerForTest; nil in production.
+	menuPickerForTest func([]string) (string, error)
+
+	// peerViewHookForTest overrides the viewPeerHistory call inside
+	// executeFlow. Set via SetPeerViewHookForTest; nil in production.
+	peerViewHookForTest func(ctx context.Context, peerIDStr string)
+}
+
+// Options configures a new Boss. All fields are optional; New
+// preserves defaults for anything left at zero.
+type Options struct {
+	Ledger ledger.Ledger
+
+	// CommentSubmissionHandler, when non-nil, replaces the default
+	// 501 stub for POST /v1/peers/{id}/comments (P4-3). Production
+	// wiring builds this via NewCommentSubmissionHandler(store,
+	// host) and passes its HandleHTTP-bound closure here.
+	CommentSubmissionHandler http.HandlerFunc
+
+	// ReputationEngine, when non-nil, is consulted by
+	// /v1/peers/{id}/reputation to source scores. Bootstrap
+	// typically wires this together with a background ticker that
+	// calls engine.Recompute(ctx, store) every 60s.
+	ReputationEngine *reputation.Engine
+
+	// ReadStore is a store handle the boss uses to trigger
+	// fresh-on-read reputation recomputes. Bootstrap opens a
+	// secondary handle on the same SQLite file (WAL mode allows
+	// concurrent handles) and passes it here. Without this, the
+	// engine's score table only refreshes on the 60s ticker —
+	// which is too coarse for demos and feels broken when a
+	// strict-mode dispatch rejection doesn't immediately reflect
+	// in /v1/peers/.../reputation.
+	ReadStore *store.Store
+
+	// CommentsStore, when non-nil, is the body store for comment CIDs.
+	// Used by GET /v1/peers/{id}/comments/{cid} to hydrate comment text.
+	CommentsStore *comments.Store
+
+	// CompletionRater, when non-nil, receives RecordOutcome calls from
+	// dispatch handlers after each attempt resolves. Bootstrap wires this
+	// and calls go opts.CompletionRater.RunTicker(ctx) to emit ratings
+	// every hour.
+	CompletionRater *CompletionRatingWriter
+
+	// ReputationFloor is the minimum honesty score required for dispatch.
+	// Peers scoring strictly below this floor are refused. Nil means "not
+	// configured" — NewWithOptions defaults to -1.0 (allow all). A non-nil
+	// pointer is used as-is, including *ReputationFloor == 0 which means
+	// "refuse anyone with a negative score." Use a pointer so the
+	// legitimate value 0 is distinguishable from "operator did not set it."
+	ReputationFloor *float64
 }
 
 func New(node *network.MeshNode) *Boss {
-	return &Boss{
-		node:          node,
-		activeWorkers: make(map[string]types.WorkerProfile),
-		lastSeen:      make(map[string]time.Time),
-		asyncSlots:    make(chan struct{}, MaxInflightAsyncTasks),
+	return NewWithOptions(node, Options{})
+}
+
+// NewWithOptions is the production constructor. Wires ledger access,
+// reputation engine, comments store, and completion rater from opts.
+// Existing call sites that don't need any optional components can
+// continue using New.
+func NewWithOptions(node *network.MeshNode, opts Options) *Boss {
+	b := &Boss{
+		node:                     node,
+		activeWorkers:            make(map[string]types.WorkerProfile),
+		lastSeen:                 make(map[string]time.Time),
+		asyncSlots:               make(chan struct{}, MaxInflightAsyncTasks),
+		ledger:                   opts.Ledger,
+		commentSubmissionHandler: opts.CommentSubmissionHandler,
+		readStore:                opts.ReadStore,
+		commentsStore:            opts.CommentsStore,
+		completionRater:          opts.CompletionRater,
+		// Resolve ReputationFloor once at construction. Nil = unconfigured →
+		// -1.0 (allow all). Non-nil pointer is used as-is, so an explicit
+		// --reputation-floor=0 cleanly means "refuse anyone with negative score."
+		reputationFloor: -1.0,
 	}
+	if opts.ReputationFloor != nil {
+		b.reputationFloor = *opts.ReputationFloor
+	}
+	// Assign via explicit nil-check to avoid the classic Go interface/nil gotcha:
+	// a nil *reputation.Engine stored in a reputationEngineIface is a non-nil
+	// interface value, causing nil-pointer panics inside Score/Recompute.
+	if opts.ReputationEngine != nil {
+		b.reputationEngine = opts.ReputationEngine
+	}
+	return b
 }
 
 func (b *Boss) Run(ctx context.Context) {

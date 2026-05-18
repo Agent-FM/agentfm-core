@@ -157,8 +157,12 @@ func (w *Worker) startTelemetry(ctx context.Context) {
 				GPUUsedGB:    gpuUsed,
 				GPUTotalGB:   gpuTotal,
 				GPUUsagePct:  gpuPct,
-				CurrentTasks: activeTasks,
-				MaxTasks:     maxTasks,
+				CurrentTasks:     activeTasks,
+				MaxTasks:         maxTasks,
+				IsWitness:        w.config.IsWitness,
+				AgentImageDigest: w.imageDigest,    // resolved once at Start
+				AgentImageRef:    w.config.ImageName,
+				AgentCapability:  w.capability,    // resolved once at Start
 			}
 
 			payloadBytes, marshalErr := json.Marshal(profile)

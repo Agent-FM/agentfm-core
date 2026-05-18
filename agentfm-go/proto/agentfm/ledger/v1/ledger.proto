@@ -132,23 +132,23 @@ message LogHead {
 // Proof that a specific entry sits at a known position in a peer's log
 // under a specific signed head.
 message InclusionProof {
-  // The entry being proven. Exactly one of `rating` or `comment` is set.
-  oneof entry {
-    Rating rating = 1;
-    Comment comment = 2;
-  }
+  // The full SignedEntry being proven. Carrying the wrapper (rather
+  // than the inner Rating/Comment directly) means the verifier hashes
+  // exactly the same bytes the prover signed — any future
+  // SignedEntry-level fields survive the proof round-trip.
+  SignedEntry entry = 1;
 
   // Zero-based index of this entry in the log.
-  uint64 position = 3;
+  uint64 position = 2;
 
   // RFC 6962 audit path: sibling hashes from the leaf up to the root.
-  repeated bytes audit_path = 4;
+  repeated bytes audit_path = 3;
 
   // The signed head this proof is verified against. Verifier MUST
   // re-derive the root from leaf + audit_path and compare to log_head.root_hash.
-  LogHead log_head = 5;
+  LogHead log_head = 4;
 
-  reserved 6 to 15;
+  reserved 5 to 15;
 }
 
 // Public alert raised when a witness sees two LogHeads at the same or

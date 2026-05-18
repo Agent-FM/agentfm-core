@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"agentfm/internal/network"
 	"agentfm/test/testutil"
 
 	netcore "github.com/libp2p/go-libp2p/core/network"
@@ -33,7 +32,7 @@ func TestFeedbackPayload_PinsTaskField(t *testing.T) {
 
 	got := make(chan wirePayload, 1)
 
-	worker.SetStreamHandler(network.FeedbackProtocol, func(s netcore.Stream) {
+	worker.SetStreamHandler("/agentfm/feedback/1.0.0", func(s netcore.Stream) {
 		defer s.Close()
 		_ = s.SetDeadline(time.Now().Add(5 * time.Second))
 		var p wirePayload
@@ -47,7 +46,7 @@ func TestFeedbackPayload_PinsTaskField(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	stream, err := boss.NewStream(ctx, worker.ID(), network.FeedbackProtocol)
+	stream, err := boss.NewStream(ctx, worker.ID(), "/agentfm/feedback/1.0.0")
 	if err != nil {
 		t.Fatalf("NewStream: %v", err)
 	}

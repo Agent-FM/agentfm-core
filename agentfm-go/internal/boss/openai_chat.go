@@ -57,9 +57,21 @@ func (b *Boss) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	ts := b.openTaskStream(r.Context(), w, peerID, prompt, taskID)
 	if ts == nil {
+		if b.completionRater != nil {
+			b.completionRater.RecordOutcome(peerID, OutcomeFailure)
+		}
 		return
 	}
-	defer ts.close()
+	defer func() {
+		ts.close()
+		if b.completionRater != nil {
+			if ts.success {
+				b.completionRater.RecordOutcome(peerID, OutcomeSuccess)
+			} else {
+				b.completionRater.RecordOutcome(peerID, OutcomeFailure)
+			}
+		}
+	}()
 
 	content, err := drainTaskStream(ts.s)
 	if err != nil {
@@ -90,9 +102,21 @@ func (b *Boss) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 func (b *Boss) streamChatCompletion(ctx context.Context, w http.ResponseWriter, peerID peer.ID, model, prompt, taskID string) {
 	ts := b.openTaskStream(ctx, w, peerID, prompt, taskID)
 	if ts == nil {
+		if b.completionRater != nil {
+			b.completionRater.RecordOutcome(peerID, OutcomeFailure)
+		}
 		return
 	}
-	defer ts.close()
+	defer func() {
+		ts.close()
+		if b.completionRater != nil {
+			if ts.success {
+				b.completionRater.RecordOutcome(peerID, OutcomeSuccess)
+			} else {
+				b.completionRater.RecordOutcome(peerID, OutcomeFailure)
+			}
+		}
+	}()
 
 	flush := setSSEHeaders(w)
 	id := newCompletionID("chatcmpl-")

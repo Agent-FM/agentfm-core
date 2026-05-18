@@ -3,6 +3,7 @@ package boss
 import (
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -215,3 +216,65 @@ func (b *Boss) selectWorkerInteractive(parentCtx context.Context) (types.WorkerP
 	})
 	return selected, confirmed, quit
 }
+
+// ---------------------------------------------------------------------------
+// Phase 7: two-section radar render (ONLINE + OFFLINE)
+// ---------------------------------------------------------------------------
+
+// renderRadar writes the ONLINE and OFFLINE sections to w. Used by
+// RenderRadarForTest (testing.go) so unit tests can assert on section headers
+// without starting the interactive keyboard listener.
+func (b *Boss) renderRadar(ctx context.Context, w io.Writer) {
+	peers, err := b.ListKnownPeers(ctx)
+	if err != nil {
+		fmt.Fprintf(w, "error listing peers: %v\n", err)
+		return
+	}
+
+	var online, offline []KnownPeer
+	for _, kp := range peers {
+		if kp.IsOnline {
+			online = append(online, kp)
+		} else {
+			offline = append(offline, kp)
+		}
+	}
+
+	fmt.Fprintf(w, "ONLINE (%d)\n", len(online))
+	if len(online) == 0 {
+		fmt.Fprintf(w, "  (none)\n")
+	} else {
+		for _, kp := range online {
+			sid := shortID(kp.PeerIDStr, 12)
+			name := nonEmpty(kp.AgentName, "(unknown)")
+			honestyStr := fmt.Sprintf("%+.2f", kp.HonestyScore)
+			fmt.Fprintf(w, "  %-14s  %-22s  %-12s  %s\n",
+				sid, name, pterm.Green("✓ online"), honestyStr)
+		}
+	}
+
+	fmt.Fprintf(w, "OFFLINE (%d)\n", len(offline))
+	if len(offline) == 0 {
+		fmt.Fprintf(w, "  (none)\n")
+	} else {
+		for _, kp := range offline {
+			sid := shortID(kp.PeerIDStr, 12)
+			name := nonEmpty(kp.AgentName, "(unknown)")
+			honestyStr := fmt.Sprintf("%+.2f", kp.HonestyScore)
+			statusLabel := "offline"
+			b.mu.RLock()
+			ls := b.lastSeen[kp.PeerIDStr]
+			b.mu.RUnlock()
+			if !ls.IsZero() {
+				statusLabel = "offline " + compactAge(time.Since(ls))
+			}
+			equivTag := ""
+			if kp.IsEquivocator {
+				equivTag = "  " + pterm.Red("⚠ equivocator")
+			}
+			fmt.Fprintf(w, "  %-14s  %-22s  %-14s  %s%s\n",
+				sid, name, statusLabel, honestyStr, equivTag)
+		}
+	}
+}
+

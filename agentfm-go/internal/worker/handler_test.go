@@ -225,86 +225,31 @@ func TestHandleTaskStream_PayloadTooLarge(t *testing.T) {
 	}
 }
 
-// --- Feedback stream -------------------------------------------------------
+// --- Feedback protocol: removed --------------------------------------------
 
-// TestHandleFeedbackStream_WritesLog verifies the happy path: valid JSON
-// feedback arrives and gets persisted to feedback.log in the agent dir.
-func TestHandleFeedbackStream_WritesLog(t *testing.T) {
-	agentDir := t.TempDir()
-	w, workerHost := newTestWorker(t, Config{
+// TestWorker_NoLongerHandlesFeedbackProtocol asserts that the Worker does NOT
+// register a handler for FeedbackProtocol. Feedback is now persisted via the
+// Merkle ledger by the Boss (sub-task 3.1); the old plaintext stream path was
+// removed. Opening a stream to the worker on FeedbackProtocol must fail.
+func TestWorker_NoLongerHandlesFeedbackProtocol(t *testing.T) {
+	_, workerHost := newTestWorker(t, Config{
 		MaxConcurrentTasks: 1,
-		AgentDir:           agentDir,
-		AgentName:          "Test Agent",
+		AgentName:          "test",
 	})
+	// NOTE: we intentionally do NOT call w.Start (that would spin up a Podman
+	// build). Only the handlers registered BEFORE Start (there are none) would
+	// affect this test. The TaskProtocol is registered inside Start(); we
+	// intentionally do not register anything for FeedbackProtocol.
 
-	done := make(chan struct{})
-	workerHost.SetStreamHandler(network.FeedbackProtocol, func(s netcore.Stream) {
-		w.handleFeedbackStream(context.Background(), s)
-		close(done)
-	})
-
-	client := testutil.NewHost(t)
-	testutil.ConnectHosts(t, client, workerHost)
+	clientHost := testutil.NewHost(t)
+	testutil.ConnectHosts(t, clientHost, workerHost)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	s, err := client.NewStream(ctx, workerHost.ID(), network.FeedbackProtocol)
-	if err != nil {
-		t.Fatalf("NewStream: %v", err)
-	}
-	payload := map[string]string{
-		"task":      "t1",
-		"feedback":  "great work",
-		"timestamp": time.Now().Format(time.RFC3339),
-	}
-	_ = json.NewEncoder(s).Encode(payload)
-	_ = s.CloseWrite()
-	_, _ = io.ReadAll(s) // drain remote close
-	_ = s.Close()
-	<-done
 
-	logPath := filepath.Join(agentDir, "feedback.log")
-	data, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("read feedback.log: %v", err)
-	}
-	if !strings.Contains(string(data), "great work") {
-		t.Errorf("feedback.log missing body, got: %q", data)
-	}
-	if !strings.Contains(string(data), "t1") {
-		t.Errorf("feedback.log missing task id, got: %q", data)
-	}
-}
-
-// TestHandleFeedbackStream_InvalidJSON: malformed payload is silently
-// dropped (stream Reset). Importantly, no feedback.log should be created.
-func TestHandleFeedbackStream_InvalidJSON(t *testing.T) {
-	agentDir := t.TempDir()
-	w, workerHost := newTestWorker(t, Config{AgentDir: agentDir})
-
-	done := make(chan struct{})
-	workerHost.SetStreamHandler(network.FeedbackProtocol, func(s netcore.Stream) {
-		w.handleFeedbackStream(context.Background(), s)
-		close(done)
-	})
-
-	client := testutil.NewHost(t)
-	testutil.ConnectHosts(t, client, workerHost)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	s, err := client.NewStream(ctx, workerHost.ID(), network.FeedbackProtocol)
-	if err != nil {
-		t.Fatalf("NewStream: %v", err)
-	}
-	_, _ = s.Write([]byte("{not json"))
-	_ = s.CloseWrite()
-	_, _ = io.ReadAll(s)
-	_ = s.Close()
-	<-done
-
-	if _, err := os.Stat(filepath.Join(agentDir, "feedback.log")); !os.IsNotExist(err) {
-		t.Errorf("feedback.log should not exist on decode failure, err=%v", err)
+	_, err := clientHost.NewStream(ctx, workerHost.ID(), "/agentfm/feedback/1.0.0")
+	if err == nil {
+		t.Fatal("expected stream to fail: feedback protocol should not be registered on worker")
 	}
 }
 

@@ -4,9 +4,48 @@ import (
 	"context"
 
 	pb "agentfm/internal/ledger/pb"
+	"agentfm/internal/ledger/store"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/host"
 )
+
+// Options bundles the optional dependencies for constructing a Ledger.
+type Options struct {
+	// Host is the libp2p host used to register the LedgerFetchProtocol
+	// and HeadFetchProtocol stream handlers (P2-5, P5-1). nil disables
+	// both handlers (local-only / test mode).
+	Host host.Host
+}
+
+// IsHeadValid reports whether head carries at least threshold
+// witness signatures. Callers that consume reputation (P3-7) should
+// gate on this to ignore "advisory" heads — heads with too few
+// witness sigs to be considered confirmed by the local trust
+// configuration.
+//
+// Threshold 0 always returns true (no quorum required).
+//
+// CAVEAT (Fix-9 audit finding): this function does NOT verify the
+// signatures themselves — it only COUNTS them. A peer with control
+// of its own LogHead bytes can pad WitnessSigs with garbage to
+// clear the threshold. For strict admission control, callers should
+// additionally validate each WitnessSig against the witness's
+// expected PeerID + the canonical LogHead bytes via
+// pb.CanonicalLogHead + crypto.PubKey.Verify. Sig-counting is the
+// fast path for routing decisions where the cost of full Verify per
+// dispatch would be prohibitive; do the full verification on the
+// audit / disputed path.
+func IsHeadValid(head *pb.LogHead, threshold int) bool {
+	if head == nil {
+		return false
+	}
+	if threshold <= 0 {
+		return true
+	}
+	return len(head.WitnessSigs) >= threshold
+}
 
 // Entry is the materialised view of a SignedEntry once it has been
 // written to (or read from) a ledger. Callers receive Entry values from
@@ -55,6 +94,40 @@ type Ledger interface {
 	// validation in P2-5). Returns ErrNotImplemented until P1-5.
 	VerifyEntry(ctx context.Context, entry *pb.SignedEntry, knownHead *pb.LogHead) error
 
+	// InboxHas reports whether an entry (raterID, entryHash) has been
+	// ingested into the local inbox from gossip (or via VerifyEntry).
+	// Used by P2-5 inclusion-proof handling and by tests that need to
+	// observe gossip-driven ingestion deterministically.
+	InboxHas(ctx context.Context, raterID []byte, entryHash [32]byte) (bool, error)
+
+	// IsEquivocator reports whether peerID has been marked as a
+	// permanent equivocator by some witness alert this node has
+	// processed. P3-7 uses this to floor the peer's reputation score
+	// at -1.0 regardless of any positive ratings.
+	IsEquivocator(ctx context.Context, peerID []byte) (bool, error)
+
+	// AcceptEntry decodes payload as a pb.SignedEntry proto and routes
+	// it through the inbox accept/orphan/promote path — equivalent to
+	// VerifyEntry(ctx, entry, nil) but accepts raw proto bytes so
+	// callers that obtained the bytes from a network fetch (e.g.
+	// CatchUp) do not need to unmarshal themselves. Returns the same
+	// typed errors as VerifyEntry.
+	AcceptEntry(ctx context.Context, payload []byte) error
+
+	// LastInboxIdx returns the idx of the last relay entry the boss
+	// has already ingested so CatchUp can start paginating from
+	// lastIdx+1 instead of from 1. Returns 0 on a fresh / empty
+	// inbox (catch-up then starts from 1). The idx space is the
+	// relay's own entries table sequence, not the inbox's internal
+	// ordering — callers MUST treat this as a best-effort hint; the
+	// inbox deduplicates so starting from a lower idx is always safe.
+	LastInboxIdx(ctx context.Context) (uint64, error)
+
+	// Store returns the underlying SQLite store for direct access by
+	// test helpers and the reputation engine's read-only walks. Production
+	// code should prefer the higher-level Ledger methods.
+	Store() *store.Store
+
 	// Close flushes any pending state and releases the underlying
 	// SQLite handle and gossip subscriptions. Safe to call multiple
 	// times; only the first call has effect.
@@ -67,11 +140,21 @@ type Ledger interface {
 // otherwise verifiers on other peers will reject every entry this
 // ledger emits.
 //
-// Until P1-1..P1-4 land, New returns (nil, ErrNotImplemented). Callers
-// SHOULD still construct one at boot so the unwired state is detected
-// immediately rather than at first Append.
-func New(path string, key crypto.PrivKey) (Ledger, error) {
-	_ = path
-	_ = key
-	return nil, ErrNotImplemented
+// ps is the GossipSub instance the ledger publishes appended entries
+// on (topic network.FeedbackTopic). Pass nil to run in local-only
+// mode: writes still persist and pass through the Merkle tree, but
+// nothing is disseminated. Production bootstrap always supplies a
+// real *pubsub.PubSub; tests that don't care about gossip may omit it.
+//
+// The implementation rebuilds the in-memory Merkle tree from the
+// on-disk store at Open, so a process restart resumes the chain at
+// the correct prev_hash without losing any entries.
+func New(path string, key crypto.PrivKey, ps *pubsub.PubSub) (Ledger, error) {
+	return newImpl(path, key, ps, Options{})
+}
+
+// NewWithOptions is the extended constructor for callers that need to
+// supply a libp2p host for fetch protocol handlers. Otherwise identical to New.
+func NewWithOptions(path string, key crypto.PrivKey, ps *pubsub.PubSub, opts Options) (Ledger, error) {
+	return newImpl(path, key, ps, opts)
 }

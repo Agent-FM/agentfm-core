@@ -22,7 +22,7 @@ func (b *Boss) handleModels(w http.ResponseWriter, r *http.Request) {
 		if p.PeerID == "" {
 			continue
 		}
-		data = append(data, profileToModelEntry(p, now))
+		data = append(data, b.profileToModelEntry(p, now))
 	}
 	b.mu.RUnlock()
 

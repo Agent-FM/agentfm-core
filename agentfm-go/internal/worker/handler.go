@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"time"
 
 	"agentfm/internal/metrics"
@@ -194,55 +193,3 @@ func (w *Worker) handleTaskStream(rootCtx context.Context, s netcore.Stream) {
 	status = metrics.StatusOK
 }
 
-func (w *Worker) handleFeedbackStream(ctx context.Context, s netcore.Stream) {
-	reset := true
-	defer func() {
-		if reset {
-			_ = s.Reset()
-		} else {
-			_ = s.Close()
-		}
-	}()
-
-	if err := s.SetDeadline(time.Now().Add(network.FeedbackStreamTimeout)); err != nil {
-		metrics.StreamErrorsTotal.WithLabelValues(metrics.ProtocolFeedback, metrics.ReasonDeadline).Inc()
-		slog.Error("arm feedback stream deadline", slog.Any(obs.FieldErr, err), slog.String(obs.FieldProtocol, "feedback"))
-		return
-	}
-
-	if err := ctx.Err(); err != nil {
-		// Worker shutting down — refuse the write rather than touch disk.
-		return
-	}
-
-	var payload struct {
-		Task      string `json:"task"`
-		Feedback  string `json:"feedback"`
-		Timestamp string `json:"timestamp"`
-	}
-
-	limitedReader := io.LimitReader(s, 1024*1024)
-	if err := json.NewDecoder(limitedReader).Decode(&payload); err != nil {
-		metrics.StreamErrorsTotal.WithLabelValues(metrics.ProtocolFeedback, metrics.ReasonDecode).Inc()
-		slog.Error("decode feedback payload", slog.Any(obs.FieldErr, err), slog.String(obs.FieldProtocol, "feedback"))
-		return
-	}
-
-	fmt.Println()
-	pterm.DefaultBox.WithTitle(pterm.LightYellow("💌 NEW FEEDBACK RECEIVED")).Printfln("Agent: %s\nTask: %s\nFeedback: %s", pterm.Magenta(w.config.AgentName), pterm.Cyan(payload.Task), pterm.White(payload.Feedback))
-
-	// Feedback may contain user-private prose. 0600 instead of 0644.
-	logPath := filepath.Join(w.config.AgentDir, "feedback.log")
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		slog.Error("open feedback log", slog.Any(obs.FieldErr, err), slog.String("path", logPath))
-		return
-	}
-	defer f.Close()
-	if _, err := fmt.Fprintf(f, "[%s] Task: %s | Feedback: %s\n", payload.Timestamp, payload.Task, payload.Feedback); err != nil {
-		slog.Error("write feedback log", slog.Any(obs.FieldErr, err), slog.String("path", logPath))
-		return
-	}
-
-	reset = false
-}

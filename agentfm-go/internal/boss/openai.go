@@ -124,32 +124,52 @@ type modelEntry struct {
 	GPUUsedGB    float64 `json:"agentfm_gpu_used_gb"`
 	GPUTotalGB   float64 `json:"agentfm_gpu_total_gb"`
 	GPUUsagePct  float64 `json:"agentfm_gpu_usage_pct"`
+
+	// Visibility fields (Phase 1 / v1.3.1)
+	AgentImageRef        string     `json:"agentfm_image_ref,omitempty"`
+	AgentImageDigest     string     `json:"agentfm_image_digest,omitempty"`
+	AgentCapability      string     `json:"agentfm_capability,omitempty"`
+	HonestyScore         float64    `json:"agentfm_honesty_score"`
+	IsEquivocator        bool       `json:"agentfm_is_equivocator"`
+	DispatchAllowed      bool       `json:"agentfm_dispatch_allowed"`
+	DispatchRefuseReason string     `json:"agentfm_dispatch_refuse_reason,omitempty"`
+	Online               bool       `json:"agentfm_online"`
+	LastSeen             *time.Time `json:"agentfm_last_seen,omitempty"`
 }
 
-func profileToModelEntry(p types.WorkerProfile, created int64) modelEntry {
-	aw := profileToAPIWorker(p)
+func (b *Boss) profileToModelEntry(p types.WorkerProfile, created int64) modelEntry {
+	aw := b.profileToAPIWorker(p)
 	owner := p.Author
 	if owner == "" {
 		owner = "agentfm"
 	}
 	return modelEntry{
-		ID:           p.PeerID,
-		Object:       "model",
-		Created:      created,
-		OwnedBy:      owner,
-		Description:  composeModelDescription(p),
-		AgentName:    p.AgentName,
-		Engine:       p.Model,
-		Status:       p.Status,
-		Hardware:     aw.Hardware,
-		CurrentTasks: p.CurrentTasks,
-		MaxTasks:     p.MaxTasks,
-		CPUUsagePct:  p.CPUUsagePct,
-		RAMFreeGB:    p.RAMFreeGB,
-		HasGPU:       p.HasGPU,
-		GPUUsedGB:    p.GPUUsedGB,
-		GPUTotalGB:   p.GPUTotalGB,
-		GPUUsagePct:  p.GPUUsagePct,
+		ID:                   p.PeerID,
+		Object:               "model",
+		Created:              created,
+		OwnedBy:              owner,
+		Description:          composeModelDescription(p),
+		AgentName:            p.AgentName,
+		Engine:               p.Model,
+		Status:               p.Status,
+		Hardware:             aw.Hardware,
+		CurrentTasks:         p.CurrentTasks,
+		MaxTasks:             p.MaxTasks,
+		CPUUsagePct:          p.CPUUsagePct,
+		RAMFreeGB:            p.RAMFreeGB,
+		HasGPU:               p.HasGPU,
+		GPUUsedGB:            p.GPUUsedGB,
+		GPUTotalGB:           p.GPUTotalGB,
+		GPUUsagePct:          p.GPUUsagePct,
+		AgentImageRef:        p.AgentImageRef,
+		AgentImageDigest:     p.AgentImageDigest,
+		AgentCapability:      p.AgentCapability,
+		HonestyScore:         aw.HonestyScore,
+		IsEquivocator:        aw.IsEquivocator,
+		DispatchAllowed:      aw.DispatchAllowed,
+		DispatchRefuseReason: aw.DispatchRefuseReason,
+		Online:               true, // all activeWorkers are live peers
+		LastSeen:             nil,  // populated in Phase 6
 	}
 }
 
@@ -290,8 +310,19 @@ func loadRatio(p types.WorkerProfile) float64 {
 
 func (b *Boss) pickWorker(model string) (types.WorkerProfile, error) {
 	b.mu.RLock()
-	defer b.mu.RUnlock()
-	return selectWorkerForModel(model, b.activeWorkers)
+	candidates := make(map[string]types.WorkerProfile, len(b.activeWorkers))
+	for k, v := range b.activeWorkers {
+		candidates[k] = v
+	}
+	b.mu.RUnlock()
+
+	filtered := make(map[string]types.WorkerProfile, len(candidates))
+	for k, w := range candidates {
+		if b.checkTrust(context.Background(), w).Allowed {
+			filtered[k] = w
+		}
+	}
+	return selectWorkerForModel(model, filtered)
 }
 
 func renderChatPrompt(messages []ChatMessage) string {

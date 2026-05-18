@@ -24,6 +24,18 @@ type Config struct {
 	MaxCPU             float64 // dynamic CPU limit
 	MaxGPU             float64 // dynamic GPU limit
 	Author             string
+
+	// IsWitness reports whether this worker process should advertise
+	// the P2-2 witness role and (in P2-2) register the WitnessProtocol
+	// stream handler. Set from the --witness flag on cmd/agentfm.
+	// Plain workers default false; relay nodes default true.
+	IsWitness bool
+
+	// Capability is the operator-supplied capability tag (P3-1) —
+	// kebab-case, e.g. "hr-specialist". Defaults to a kebabbed
+	// version of AgentName when empty. Stored on every telemetry
+	// envelope so Boss / probe coordinators can match agents.
+	Capability string
 }
 
 type Worker struct {
@@ -37,6 +49,12 @@ type Worker struct {
 	// in flight cannot hit a torn-down libp2p host (race surfaced as
 	// "use of closed connection" panics in pubsub send paths).
 	wg sync.WaitGroup
+
+	// P3-1: resolved once during Start. Empty when podman isn't on
+	// the system or the image isn't present locally — worker still
+	// runs but is "unattested" on the verification side.
+	imageDigest string
+	capability  string
 }
 
 func New(node *network.MeshNode, cfg Config) *Worker {
@@ -94,6 +112,20 @@ func (w *Worker) Start(ctx context.Context) {
 		os.Exit(1)
 	}
 
+	// P3-1: resolve the OCI image digest now (post-build, so the
+	// freshly-built image is present locally and inspectable). Cap
+	// is just empty on failure — boss in strict-mode will reject.
+	resolver := NewImageDigestResolver()
+	if digest, err := resolver.ResolveDigest(ctx, w.config.ImageName); err == nil {
+		w.imageDigest = digest
+	} else {
+		pterm.Warning.Printfln("⚠️  image digest resolve failed; running unattested: %v", err)
+	}
+	w.capability = w.config.Capability
+	if w.capability == "" {
+		w.capability = KebabCapability(w.config.AgentName)
+	}
+
 	printHostNetworkWarning()
 
 	w.printMetadata()
@@ -102,9 +134,6 @@ func (w *Worker) Start(ctx context.Context) {
 
 	w.node.Host.SetStreamHandler(network.TaskProtocol, func(s netcore.Stream) {
 		w.handleTaskStream(ctx, s)
-	})
-	w.node.Host.SetStreamHandler(network.FeedbackProtocol, func(s netcore.Stream) {
-		w.handleFeedbackStream(ctx, s)
 	})
 
 	w.waitForShutdown(ctx)

@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "updated_at": "2026-05-17T00:00:00Z",
+  "_comment": "The PUBLIC mesh runs with attestation-mode=warn and an EMPTY curated registry. Workers self-attest via their advertised OCI image digest; reputation does the actual routing gate over time (see docs/trust.md). Private swarms that want strict curation override this file via --trusted-agents pointing at their own manifest. Adoption-first: new agents join freely and earn trust through behaviour rather than maintainer PR review.",
+  "entries": []
+}

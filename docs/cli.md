@@ -25,6 +25,9 @@ The `agentfm` binary is multi-mode; the `agentfm-relay` binary is a dedicated li
 | `-bootstrap` | *public lighthouse* | Custom relay multiaddr |
 | `-port` | `0` | Listen port (0 = random; relays should use 4001) |
 | `-prompt` | (none) | One-shot prompt for `-mode test` |
+| `-witness` | `false` (worker), `true` (relay) | Advertise + serve the witness co-sign role (equivocation detection) |
+| `-capability` | kebab(`-agent`) | Kebab-case capability tag for this agent |
+| `-reputation-floor` | `-0.5` | Refuse dispatch to peers with honesty score below this value. Set to `-1.0` to disable. |
 
 ### Modes
 
@@ -36,6 +39,44 @@ The `agentfm` binary is multi-mode; the `agentfm-relay` binary is a dedicated li
 | `relay` | Persistent lighthouse + circuit-relay; same role as the dedicated `agentfm-relay` binary. |
 | `test` | Local Podman-only sandbox dry-run; bypasses libp2p entirely. |
 | `genkey` | Generate a 256-bit `swarm.key` for private-mesh PSK. |
+
+### Subcommands
+
+In addition to the flag-driven modes above, `agentfm` exposes verb-style
+subcommands that operate on local state without needing a libp2p stack.
+
+#### `agentfm reputation show <peer_id>`
+
+Reads the local ledger inbox and prints every rating about the given
+peer. Read-only — safe to run alongside a live worker / boss that
+shares the same database file.
+
+```bash
+agentfm reputation show 12D3KooW...        # default DB: .agentfm_ledger.db
+agentfm reputation show -limit 50 12D3K... # show 50 most-recent entries
+agentfm reputation show -db /var/run/agentfm/ledger.db 12D3K...
+```
+
+| Flag | Default | Description |
+|---|:---:|---|
+| `-db` | `.agentfm_ledger.db` | Path to the ledger SQLite database |
+| `-limit` | `20` | Number of most-recent entries to print |
+
+Output (illustrative; real peer IDs are longer):
+
+```
+Peer:       12D3KooW...
+Entries:    1240 (last: 2026-05-16T08:12:33Z)
+Honesty:    -0.20 (EigenTrust-lite, 12 raters)
+
+Latest:
+            +0.10 honesty by 12D3Ko...8s5zL (probe_ok) 2m ago
+            -0.70 honesty by 12D3Ko...kBs5z (probe_fail) 14m ago
+            ...
+```
+
+The `Honesty:` row reflects the EigenTrust-lite derived score, updated
+after each hourly aggregate window. Raw ratings are listed below it.
 
 ## `agentfm-relay`
 

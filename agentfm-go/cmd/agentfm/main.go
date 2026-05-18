@@ -20,6 +20,16 @@ import (
 )
 
 func main() {
+	// Subcommand interception: `agentfm reputation <action> [args...]`
+	// is shaped like a git/kubectl subcommand rather than `-mode X`, so
+	// we peel it off before the main flag parse touches os.Args. Any
+	// other future verb-style subcommands (e.g. `agentfm trust verify`)
+	// should slot in here.
+	if len(os.Args) >= 2 && os.Args[1] == "reputation" {
+		runReputationSubcommand(os.Args[2:])
+		return
+	}
+
 	mode := flag.String("mode", "", "Node mode: 'boss', 'worker', 'relay', 'api', 'test', or 'genkey'")
 
 	// Private Swarm & Network Flags
@@ -61,6 +71,16 @@ func main() {
 	flag.IntVar(&cfg.MaxConcurrentTasks, "maxtasks", 1, "Maximum concurrent tasks this worker can handle")
 	flag.Float64Var(&cfg.MaxCPU, "maxcpu", 80.0, "Max CPU usage percentage before rejecting tasks")
 	flag.Float64Var(&cfg.MaxGPU, "maxgpu", 80.0, "Max GPU VRAM usage percentage before rejecting tasks")
+
+	// Verifiable-mesh roles (v1.3). Plain workers default off; the
+	// flag is wired here so an operator can opt a worker into the
+	// witness role explicitly. The actual handler registration lives
+	// in P2-2.
+	flag.BoolVar(&cfg.IsWitness, "witness", false, "Advertise + serve the witness co-sign role (v1.3 verifiable mesh)")
+	flag.StringVar(&cfg.Capability, "capability", "", "Kebab-case capability tag for this agent (v1.3; defaults to kebab(--agent))")
+	// v1.3.1: reputation floor (Phase 8). Peers scoring below this value
+	// are refused dispatch. Set to -1.0 to disable the floor entirely.
+	reputationFloor := flag.Float64("reputation-floor", -0.5, "Refuse dispatch to peers with honesty score below this value (-1.0 to disable)")
 
 	setupHelpMenu()
 	flag.Parse()
@@ -114,9 +134,9 @@ func main() {
 	case "worker":
 		runWorkerMode(ctx, netCfg, cfg, defaultPromListen(*promListen, "127.0.0.1:9090"))
 	case "boss":
-		runBossMode(ctx, netCfg)
+		runBossMode(ctx, netCfg, *reputationFloor)
 	case "api":
-		runAPIMode(ctx, netCfg, *apiBind, *apiPort)
+		runAPIMode(ctx, netCfg, *apiBind, *apiPort, *reputationFloor)
 	default:
 		pterm.Error.Println("Invalid mode. Use 'boss', 'worker', 'relay', 'api', 'test', or 'genkey'.")
 		os.Exit(1)
@@ -248,7 +268,7 @@ func defaultPromListen(flagValue, modeDefault string) string {
 }
 
 // runBossMode opens the interactive TUI for a human operator.
-func runBossMode(ctx context.Context, netCfg network.Config) {
+func runBossMode(ctx context.Context, netCfg network.Config, reputationFloor float64) {
 	// Bind SIGINT/SIGTERM to the root ctx so Ctrl+C unwinds cleanly when
 	// the user is mid-task (NOT inside selectWorkerInteractive's
 	// keyboard.Listen, which catches Ctrl+C separately). Without this the
@@ -261,7 +281,10 @@ func runBossMode(ctx context.Context, netCfg network.Config) {
 	if err != nil {
 		pterm.Fatal.Println(err)
 	}
-	b := boss.New(node)
+	bossOpts, cleanup := bossOptionsFromFlags(ctx, "boss", node, reputationFloor, "")
+	defer cleanup()
+	b := boss.NewWithOptions(node, bossOpts)
+	AttachBoss(b)
 	b.Run(ctx)
 }
 
@@ -270,12 +293,15 @@ func runBossMode(ctx context.Context, netCfg network.Config) {
 // exit code reflects whether the server came up cleanly. Errors include
 // startup-refusal (public bind without API keys) so a misconfigured
 // deployment fails loudly instead of silently exposing compute.
-func runAPIMode(ctx context.Context, netCfg network.Config, apiBind, apiPort string) {
+func runAPIMode(ctx context.Context, netCfg network.Config, apiBind, apiPort string, reputationFloor float64) {
 	node, err := network.Setup(ctx, netCfg)
 	if err != nil {
 		pterm.Fatal.Println(err)
 	}
-	b := boss.New(node)
+	bossOpts, cleanup := bossOptionsFromFlags(ctx, "api", node, reputationFloor, "")
+	defer cleanup()
+	b := boss.NewWithOptions(node, bossOpts)
+	AttachBoss(b)
 	if err := b.StartAPIServer(apiBind, apiPort); err != nil {
 		pterm.Fatal.Printfln("❌ API Gateway exited with error: %v", err)
 	}

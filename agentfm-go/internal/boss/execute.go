@@ -3,14 +3,18 @@ package boss
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"agentfm/internal/metrics"
 	"agentfm/internal/network"
+	pb "agentfm/internal/ledger/pb"
 	"agentfm/internal/types"
 	"agentfm/internal/version"
 
@@ -20,16 +24,82 @@ import (
 	"github.com/pterm/pterm"
 )
 
+// menuPickerForTest, when non-nil, overrides the pterm interactive select in
+// showPeerMenu. Tests inject a deterministic picker via SetMenuPickerForTest.
+// peerViewHookForTest, when non-nil, overrides the real viewPeerHistory call
+// in executeFlow. Tests inject a hook via SetPeerViewHookForTest.
+//
+// Both are unexported fields intentionally — test code reaches them via the
+// exported Set* methods; production code never touches them.
+
 func (b *Boss) executeFlow(ctx context.Context, worker types.WorkerProfile) {
+	for {
+		choice, err := b.showPeerMenu(worker)
+		if err != nil || choice == "Back to radar" {
+			return
+		}
+		switch choice {
+		case "Execute task":
+			b.executeTaskFlow(ctx, worker)
+			return
+		case "View ratings & feedback":
+			if b.peerViewHookForTest != nil {
+				b.peerViewHookForTest(ctx, worker.PeerID)
+			} else {
+				b.viewPeerHistory(ctx, worker.PeerID)
+			}
+			// Loop back to the menu after viewing history.
+		}
+	}
+}
+
+// showPeerMenu renders the agent-info box and an interactive three-option
+// menu. Returns the chosen option string or an error. Uses
+// menuPickerForTest if set (for unit tests), otherwise falls back to pterm.
+func (b *Boss) showPeerMenu(worker types.WorkerProfile) (string, error) {
+	options := []string{"Execute task", "View ratings & feedback", "Back to radar"}
+
+	if b.menuPickerForTest != nil {
+		return b.menuPickerForTest(options)
+	}
+
 	fmt.Print("\033[H\033[2J")
 
-	boxContent := pterm.LightMagenta("Name: ") + pterm.White(worker.AgentName) + "\n" +
-		pterm.LightMagenta("Capabilities: ") + pterm.White(worker.AgentDesc) + "\n" +
-		pterm.LightMagenta("Model: ") + pterm.White(worker.Model)
+	honesty := 0.0
+	if b.reputationEngine != nil {
+		honesty = b.reputationEngine.Score(worker.PeerID)
+	}
+	dispatchBadge := pterm.Green("✓ allowed")
+	if honesty < b.reputationFloor {
+		dispatchBadge = pterm.Red(fmt.Sprintf("✗ rejected (below floor %.2f)", b.reputationFloor))
+	}
 
-	pterm.DefaultBox.WithTitle(pterm.LightGreen("🕵️ AGENT SECURED")).WithTitleTopLeft().Println(boxContent)
+	header := pterm.LightMagenta("Name: ") + pterm.White(worker.AgentName) + "\n" +
+		pterm.LightMagenta("Model: ") + pterm.White(worker.Model) + "\n" +
+		pterm.LightMagenta("Image: ") + pterm.White(shortDigest(worker.AgentImageDigest)) + "\n" +
+		pterm.LightMagenta("Honesty: ") + pterm.White(fmt.Sprintf("%+.2f", honesty)) + "\n" +
+		pterm.LightMagenta("Dispatch: ") + dispatchBadge
+
+	pterm.DefaultBox.WithTitle(pterm.LightGreen("🕵️  AGENT SELECTED")).WithTitleTopLeft().Println(header)
 	fmt.Println()
 
+	return pterm.DefaultInteractiveSelect.
+		WithOptions(options).
+		Show()
+}
+
+// shortDigest abbreviates a digest like "sha256:abc12345..." to 16 chars + "...".
+func shortDigest(d string) string {
+	if len(d) <= 16 {
+		return d
+	}
+	return d[:16] + "..."
+}
+
+// executeTaskFlow contains the original executeFlow body: prompt → dispatch →
+// stream → handleFeedbackLoop. Factored out so executeFlow can branch between
+// task execution and peer-history viewing without duplicating the task path.
+func (b *Boss) executeTaskFlow(ctx context.Context, worker types.WorkerProfile) {
 	prompt, _ := pterm.DefaultInteractiveTextInput.Show("📝 Enter task prompt (or type 'back' to return to radar)")
 	prompt = strings.TrimSpace(prompt)
 
@@ -145,6 +215,26 @@ func (b *Boss) dialOmni(ctx context.Context, target peer.ID) netcore.Stream {
 // don't drag a TUI spinner — and its known concurrent-state race — into
 // goroutine-rich code paths.
 func (b *Boss) dialWorkerStream(ctx context.Context, target peer.ID) (netcore.Stream, error) {
+	// Fast path: we already have a live libp2p connection to this peer.
+	// NewStream multiplexes onto it without needing peerstore addrs or
+	// a DHT lookup. Required when the worker dialed the boss first
+	// (the common shape in NAT'd public-mesh deployments — workers
+	// punch out to the lighthouse, bosses see them inbound). In that
+	// case the boss's peerstore knows only the worker's ephemeral
+	// source-port from the inbound connection, which isn't dialable,
+	// but the underlying tunnel is fully usable.
+	if b.node.Host.Network().Connectedness(target) == netcore.Connected {
+		dialCtx, cancel := context.WithTimeout(ctx, network.StreamDialTimeout)
+		s, err := b.node.Host.NewStream(dialCtx, target, network.TaskProtocol)
+		cancel()
+		if err == nil {
+			return s, nil
+		}
+		// Connection went away mid-call (rare). Fall through to the
+		// peerstore / DHT address-book path so a fresh dial can be
+		// attempted.
+	}
+
 	var addrs []multiaddr.Multiaddr
 
 	if peerInfo := b.node.Host.Peerstore().PeerInfo(target); len(peerInfo.Addrs) > 0 {
@@ -189,50 +279,79 @@ func (b *Boss) handleFeedbackLoop(ctx context.Context, target peer.ID, taskID st
 	if !leave {
 		return
 	}
-	feedback, _ := pterm.DefaultInteractiveTextInput.Show("Type your feedback")
-	if strings.TrimSpace(feedback) == "" {
+
+	text, _ := pterm.DefaultInteractiveTextInput.Show("Type your feedback")
+	text = strings.TrimSpace(text)
+	if text == "" {
 		return
 	}
 
-	pterm.Info.Println("Opening secure feedback tunnel...")
+	ratingStr, _ := pterm.DefaultInteractiveTextInput.Show("Leave a numeric rating too? [-1.0 to +1.0, blank to skip]")
+	ratingStr = strings.TrimSpace(ratingStr)
 
-	dialCtx, cancel := context.WithTimeout(ctx, network.StreamDialTimeout)
-	defer cancel()
-
-	fs, err := b.node.Host.NewStream(dialCtx, target, network.FeedbackProtocol)
-	if err != nil {
-		pterm.Error.Printfln("Failed to deliver feedback: %v", err)
-		return
-	}
-
-	reset := true
-	defer func() {
-		if reset {
-			_ = fs.Reset()
+	var parsedRating *float64
+	if ratingStr != "" {
+		v, err := strconv.ParseFloat(ratingStr, 64)
+		if err != nil || math.IsNaN(v) || math.IsInf(v, 0) || v < -1.0 || v > 1.0 {
+			pterm.Warning.Println("Invalid rating value — saving comment without a rating.")
 		} else {
-			_ = fs.Close()
+			parsedRating = &v
 		}
-	}()
-
-	if err := fs.SetWriteDeadline(time.Now().Add(network.FeedbackStreamTimeout)); err != nil {
-		pterm.Error.Printfln("Failed to set feedback deadline: %v", err)
-		return
 	}
 
-	payload := map[string]string{
-		"task":      taskID,
-		"feedback":  feedback,
-		"timestamp": time.Now().Format(time.RFC3339),
-	}
-	if err := json.NewEncoder(fs).Encode(payload); err != nil {
-		pterm.Error.Printfln("Failed to deliver feedback: %v", err)
+	if err := b.appendFeedbackComment(ctx, target, taskID, text, parsedRating); err != nil {
+		pterm.Error.Printfln("Failed to persist feedback: %v", err)
 		return
 	}
-	if err := fs.CloseWrite(); err != nil {
-		pterm.Error.Printfln("Failed to half-close feedback tunnel: %v", err)
-		return
-	}
-
-	reset = false
-	pterm.Success.Println("Feedback delivered directly to the worker! 💌")
+	pterm.Success.Println("Feedback signed, persisted, and gossipped to the mesh. 💌")
 }
+
+// appendFeedbackComment writes a signed Comment to the ledger and, if
+// optionalRatingScore is non-nil, also writes a linked Rating with
+// dimension "honesty". Both are auto-gossiped via the ledger's subscribe
+// loop. Returns the underlying ledger error on failure; the caller is
+// responsible for user-facing reporting.
+func (b *Boss) appendFeedbackComment(ctx context.Context, target peer.ID, taskID, text string, optionalRatingScore *float64) error {
+	if b.ledger == nil {
+		return errors.New("ledger disabled")
+	}
+	if b.commentsStore == nil {
+		return errors.New("comments store disabled")
+	}
+
+	cid, err := b.commentsStore.Put([]byte(text))
+	if err != nil {
+		return fmt.Errorf("comments store: %w", err)
+	}
+
+	now := time.Now().UnixNano()
+	myPID := []byte(b.node.Host.ID())
+	subjectBytes := []byte(target)
+
+	commentEntry := &pb.SignedEntry{Body: &pb.SignedEntry_Comment{Comment: &pb.Comment{
+		RaterPeerId:     myPID,
+		SubjectPeerId:   subjectBytes,
+		TextCid:         cid,
+		Language:        "en",
+		TimestampUnixNs: now,
+	}}}
+	if _, err := b.ledger.Append(ctx, commentEntry); err != nil {
+		return fmt.Errorf("append comment: %w", err)
+	}
+
+	if optionalRatingScore != nil {
+		ratingEntry := &pb.SignedEntry{Body: &pb.SignedEntry_Rating{Rating: &pb.Rating{
+			RaterPeerId:     myPID,
+			SubjectPeerId:   subjectBytes,
+			Dimension:       "honesty",
+			Score:           *optionalRatingScore,
+			Context:         "interactive",
+			TimestampUnixNs: now + 1,
+		}}}
+		if _, err := b.ledger.Append(ctx, ratingEntry); err != nil {
+			return fmt.Errorf("append rating: %w", err)
+		}
+	}
+	return nil
+}
+

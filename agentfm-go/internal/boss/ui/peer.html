@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AgentFM — Peer Reputation</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --fg: #e8e9ea;
+      --muted: #888;
+      --good: #36c281;
+      --bad: #d54541;
+      --bar-bg: #1f232a;
+      --card-bg: #16191f;
+      --border: #2a2f37;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 2rem; min-height: 100vh;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      background: var(--bg); color: var(--fg);
+    }
+    h1 { font-size: 1rem; margin: 0 0 1rem; font-weight: 600; letter-spacing: 0.5px; }
+    .card {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem;
+    }
+    .label { color: var(--muted); display: inline-block; min-width: 14ch; }
+    .badge {
+      display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px;
+      font-size: 0.75rem; font-weight: 600; letter-spacing: 0.5px;
+    }
+    .badge.ok { background: rgba(54, 194, 129, 0.2); color: var(--good); }
+    .badge.bad { background: rgba(213, 69, 65, 0.2); color: var(--bad); }
+    .badge.warn { background: rgba(232, 168, 56, 0.2); color: #e8a838; }
+    .bar { position: relative; height: 1rem; background: var(--bar-bg); border-radius: 4px; margin: 0.3rem 0; }
+    .bar-fill { position: absolute; top: 0; left: 50%; height: 100%; border-radius: 4px; }
+    .bar-fill.pos { background: var(--good); }
+    .bar-fill.neg { background: var(--bad); }
+    .bar-mid { position: absolute; top: 0; left: 50%; width: 1px; height: 100%; background: var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 500; }
+    .mono { word-break: break-all; }
+    .score-pos { color: var(--good); }
+    .score-neg { color: var(--bad); }
+    #err { color: var(--bad); padding: 1rem; display: none; }
+    #last-refresh { font-size: 0.75rem; color: var(--muted); margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>AGENTFM // VERIFIABLE AGENT MESH</h1>
+
+  <div id="err"></div>
+
+  <div class="card">
+    <div><span class="label">Peer:</span><span class="mono" id="peer-id">—</span></div>
+    <div><span class="label">Agent:</span><span id="agent-ref">—</span></div>
+    <div><span class="label">Capability:</span><span id="agent-cap">—</span></div>
+    <div><span class="label">Equivocator:</span><span id="eq-badge">—</span></div>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size: 0.85rem; color: var(--muted); margin: 0 0 0.75rem; letter-spacing: 0.5px;">SCORES</h2>
+    <div id="scores">No data yet.</div>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size: 0.85rem; color: var(--muted); margin: 0 0 0.75rem; letter-spacing: 0.5px;">LEDGER HEAD</h2>
+    <div id="head">No head data.</div>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size: 0.85rem; color: var(--muted); margin: 0 0 0.75rem; letter-spacing: 0.5px;">RECENT RATINGS</h2>
+    <table id="ratings">
+      <thead>
+        <tr><th>When</th><th>Score</th><th>Dimension</th><th>By</th><th>Context</th></tr>
+      </thead>
+      <tbody><tr><td colspan="5" style="color: var(--muted)">No entries.</td></tr></tbody>
+    </table>
+  </div>
+
+  <div id="last-refresh">—</div>
+
+<script>
+(function () {
+  // Peer ID comes from the URL: /ui/peer/<id>
+  const pathParts = window.location.pathname.split('/').filter(Boolean);
+  const peerID = pathParts[pathParts.length - 1] || '';
+  document.getElementById('peer-id').textContent = peerID || '(no peer id in URL)';
+  if (!peerID) { showError('URL is missing a peer ID. Use /ui/peer/<peer_id>.'); return; }
+
+  function showError(msg) {
+    const el = document.getElementById('err');
+    el.textContent = msg; el.style.display = 'block';
+  }
+  function fmtScore(v) {
+    if (typeof v !== 'number') return '—';
+    const c = v >= 0 ? 'score-pos' : 'score-neg';
+    return '<span class="' + c + '">' + (v >= 0 ? '+' : '') + v.toFixed(2) + '</span>';
+  }
+  function fmtBar(v) {
+    if (typeof v !== 'number') return '<div class="bar"></div>';
+    const pct = Math.min(100, Math.abs(v) * 50);
+    const cls = v >= 0 ? 'pos' : 'neg';
+    const left = v >= 0 ? 50 : (50 - pct);
+    return '<div class="bar"><div class="bar-mid"></div><div class="bar-fill ' + cls +
+      '" style="left:' + left + '%; width:' + pct + '%;"></div></div>';
+  }
+  function ago(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    const s = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (s < 60) return s + 's ago';
+    if (s < 3600) return Math.floor(s / 60) + 'm ago';
+    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+    return Math.floor(s / 86400) + 'd ago';
+  }
+  function shortPeer(id) {
+    if (!id) return '—';
+    if (id.length <= 16) return id;
+    return id.slice(0, 6) + '...' + id.slice(-5);
+  }
+
+  async function refresh() {
+    try {
+      const repResp = await fetch('/v1/peers/' + encodeURIComponent(peerID) + '/reputation');
+      if (!repResp.ok) throw new Error('reputation: HTTP ' + repResp.status);
+      const rep = await repResp.json();
+
+      document.getElementById('agent-ref').textContent = rep.agent_image_ref || '(unattested)';
+      document.getElementById('agent-cap').textContent = rep.agent_capability || '(none)';
+
+      const eq = document.getElementById('eq-badge');
+      if (rep.is_equivocator) {
+        eq.innerHTML = '<span class="badge bad">⚠ EQUIVOCATOR — permanently floored at -1.0</span>';
+      } else {
+        eq.innerHTML = '<span class="badge ok">none</span>';
+      }
+
+      const scores = document.getElementById('scores');
+      const scoreKeys = Object.keys(rep.scores || {});
+      if (scoreKeys.length === 0) {
+        scores.innerHTML = '<div style="color: var(--muted)">No scoring data yet (waiting for P5-1 EigenTrust convergence or first ratings).</div>';
+      } else {
+        scores.innerHTML = scoreKeys.map(function (k) {
+          const v = rep.scores[k];
+          return '<div><span class="label">' + k + ':</span>' + fmtScore(v) + '</div>' + fmtBar(v);
+        }).join('');
+      }
+
+      const logResp = await fetch('/v1/peers/' + encodeURIComponent(peerID) + '/log?limit=50');
+      if (logResp.ok) {
+        const log = await logResp.json();
+        const head = document.getElementById('head');
+        if (log.head) {
+          head.innerHTML =
+            '<div><span class="label">Tree size:</span>' + log.head.tree_size + '</div>' +
+            '<div><span class="label">Root:</span><span class="mono">' + log.head.root_hash + '</span></div>' +
+            '<div><span class="label">Witnesses:</span>' + log.head.witness_count + '</div>' +
+            '<div><span class="label">Signed at:</span>' + (log.head.signed_at || '—') + '</div>';
+        } else {
+          head.innerHTML = '<div style="color: var(--muted)">No head signed yet.</div>';
+        }
+
+        const tbody = document.querySelector('#ratings tbody');
+        if (log.entries && log.entries.length > 0) {
+          tbody.innerHTML = log.entries.map(function (e) {
+            return '<tr>' +
+              '<td>' + ago(e.received_at) + '</td>' +
+              '<td>' + fmtScore(e.score) + '</td>' +
+              '<td>' + (e.dimension || '—') + '</td>' +
+              '<td><span class="mono">' + shortPeer(e.rater) + '</span></td>' +
+              '<td>' + (e.context || '—') + '</td>' +
+              '</tr>';
+          }).join('');
+        } else {
+          tbody.innerHTML = '<tr><td colspan="5" style="color: var(--muted)">No entries yet.</td></tr>';
+        }
+      }
+
+      document.getElementById('last-refresh').textContent = 'Last refresh: ' + new Date().toLocaleTimeString();
+    } catch (err) {
+      showError(String(err));
+    }
+  }
+
+  refresh();
+  setInterval(refresh, 10000); // 10s
+})();
+</script>
+</body>
+</html>

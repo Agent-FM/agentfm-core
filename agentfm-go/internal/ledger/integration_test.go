@@ -1,10 +1,17 @@
 package ledger_test
 
-import "testing"
-
-// Placeholder for the end-to-end "append on A, gossip to B, restart B,
-// still has it" test that lands in P1-7. Kept here today so CI
-// discovers the file and the test ID is reserved.
-func TestLedger_IntegrationDissemination(t *testing.T) {
-	t.Skip("waiting on P1-7 (2-peer dissemination + restart)")
-}
+// The 2-peer dissemination + restart scenario this file used to stub
+// (TestLedger_IntegrationDissemination t.Skip) is now implemented at
+//
+//   test/integration/ledger_dissemination_test.go::TestLedger_TwoPeerDisseminationAndRestart
+//
+// It runs as part of the integration suite (`make test-integration`)
+// rather than the unit suite (`make test`), matching the convention
+// for tests that spin up real libp2p hosts. Two unit-scoped slices of
+// that scenario live alongside the impl in:
+//
+//   internal/ledger/impl_test.go::TestAppend_SurvivesRestart_ChainContinues
+//   internal/ledger/impl_test.go::TestTwoPeer_BInboxIngestsAEntry
+//
+// Kept this file present (empty package-level only) so Git history of
+// the stub's lineage stays grep-able.

@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"agentfm/internal/boss/ui"
 	"agentfm/internal/metrics"
 	"agentfm/internal/network"
 
@@ -21,10 +22,18 @@ import (
 // ExecuteRequest is the request body accepted by POST /api/execute. A
 // missing task_id is accepted and filled in by the handler so SDK clients
 // that only care about the streamed response don't have to synthesise one.
+//
+// Feedback and FeedbackRating are optional: when Feedback is non-empty the
+// handler appends a signed Comment to the ledger after the task completes
+// (best-effort — task success is not affected by feedback persistence
+// failures). FeedbackRating, when provided, must be in [-1.0, +1.0] and
+// results in a co-appended Rating with dimension="honesty".
 type ExecuteRequest struct {
-	WorkerID string `json:"worker_id"`
-	Prompt   string `json:"prompt"`
-	TaskID   string `json:"task_id"`
+	WorkerID       string   `json:"worker_id"`
+	Prompt         string   `json:"prompt"`
+	TaskID         string   `json:"task_id"`
+	Feedback       string   `json:"feedback,omitempty"`
+	FeedbackRating *float64 `json:"feedback_rating,omitempty"`
 }
 
 // AsyncExecuteRequest is the request body for POST /api/execute/async.
@@ -54,6 +63,17 @@ type apiWorker struct {
 	GPUUsedGB    float64 `json:"gpu_used_gb"`
 	GPUTotalGB   float64 `json:"gpu_total_gb"`
 	GPUUsagePct  float64 `json:"gpu_usage_pct"`
+
+	// Visibility fields (Phase 1 / v1.3.1)
+	AgentImageRef        string     `json:"agent_image_ref,omitempty"`
+	AgentImageDigest     string     `json:"agent_image_digest,omitempty"`
+	AgentCapability      string     `json:"agent_capability,omitempty"`
+	HonestyScore         float64    `json:"honesty_score"`
+	IsEquivocator        bool       `json:"is_equivocator"`
+	DispatchAllowed      bool       `json:"dispatch_allowed"`
+	DispatchRefuseReason string     `json:"dispatch_refuse_reason,omitempty"`
+	Online               bool       `json:"online"`
+	LastSeen             *time.Time `json:"last_seen,omitempty"`
 }
 
 // corsMiddleware wraps standard handlers to easily attach headers
@@ -124,11 +144,21 @@ func (b *Boss) StartAPIServer(bind, port string) error {
 	mux.HandleFunc("/v1/models", protected("/v1/models", b.handleModels))
 	mux.HandleFunc("/v1/chat/completions", protected("/v1/chat/completions", b.handleChatCompletions))
 	mux.HandleFunc("/v1/completions", protected("/v1/completions", b.handleCompletions))
+	// P4-2: ledger / reputation endpoints. The path is suffix-based
+	// so a single registration covers all sub-routes; the handlers
+	// branch on the suffix internally.
+	mux.HandleFunc("/v1/peers/", protected("/v1/peers/", b.handlePeers))
 	// /metrics and /health are intentionally not wrapped in CORS or auth —
 	// Prometheus scrapers and LB health probes need neither, and exposing
 	// CORS on /metrics would be misleading.
 	mux.Handle("/metrics", metrics.Handler())
 	mux.HandleFunc("/health", b.handleHealth)
+
+	// P4-5: peer reputation viewer. Unauthenticated — the same data
+	// is already exposed via /v1/peers/{id}/reputation under auth,
+	// so adding auth here would just be theatre. Static HTML, no
+	// inputs except the URL path, no API mutations.
+	mux.HandleFunc("/ui/peer/", ui.Handler())
 
 	srv := &http.Server{
 		Addr:    net.JoinHostPort(bind, port),

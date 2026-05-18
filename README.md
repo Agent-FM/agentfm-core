@@ -29,10 +29,11 @@ A peer-to-peer compute grid that turns idle hardware into a decentralized AI sup
 
 **Three roles:** a *Worker* runs your agent in a Podman sandbox; a *Boss* orchestrates and dispatches tasks (TUI or HTTP gateway); a *Relay* helps peers discover each other and punch through NAT. All you need to start is a laptop with Podman.
 
-**Two things make it interesting:**
+**Three things make it interesting:**
 
 1. **OpenAI-compatible** — point any OpenAI SDK at your local mesh and it just works.
 2. **Hardware-aware** — workers broadcast live CPU / GPU / queue state; the matcher picks the least-loaded peer for every request.
+3. **Reputation-driven trust mesh (v1.3.1)** — every rating is a signed receipt on a tamper-evident Merkle log; bosses earn worker reputation through hourly aggregate outcomes; equivocators are caught by witnesses and floored at `-1.0` permanently; bad actors auto-reject below `-0.5` honesty. No allow-lists, no central authority, no blockchain. See [Trust & Verification](docs/trust.md).
 
 ---
 
@@ -78,6 +79,35 @@ That's it. Files the agent drops into `/tmp/output` get zipped and shipped back 
 - **Observability built in.** Prometheus metrics on every node (`/metrics`), structured slog JSON logs ready for Loki / ELK / Datadog, `/health` endpoint for load balancers.
 - **Async + webhook callbacks.** Fire-and-forget submission with HMAC-signed webhook delivery on completion. SSRF-guarded against private network attacks.
 - **Cross-platform.** Single statically-linked binary for Linux, macOS, Windows, FreeBSD across amd64, arm64, armv7, 386, and RISC-V.
+
+---
+
+## Join the Public Mesh in 30 seconds (v1.3.1)
+
+The public mesh has **no allow-list**. Push your agent image anywhere, point a worker at the public lighthouse, and you're in. Reputation accumulates from honest behaviour over time.
+
+```bash
+# 1. Build + push your image to any registry.
+podman build -t ghcr.io/yourorg/myagent:v1 ./my-agent
+podman push ghcr.io/yourorg/myagent:v1
+
+# 2. Run a worker. It joins the mesh immediately —
+#    no PR, no maintainer review, no allow-list.
+agentfm -mode worker \
+  -agentdir ./my-agent \
+  -image ghcr.io/yourorg/myagent:v1 \
+  -agent "My Agent" \
+  -capability "research-assistant" \
+  -model "llama3.2"
+
+# 3. Watch your reputation accumulate via the boss-side TUI:
+#    arrow to your worker → ENTER → "View ratings & feedback"
+agentfm -mode boss
+```
+
+v1.3.1 uses reputation-driven trust by default. Operators can tighten the dispatch gate via `--reputation-floor=-0.3` (stricter than the default `-0.5`) or effectively disable it via `--reputation-floor=-1.0`. No allow-list file, no maintainer review required. See [Trust & Verification](docs/trust.md) for the full model.
+
+Want full network isolation? That's the [private-swarm](docs/private-swarms.md) path — same binary, `--swarmkey` plus your own `--genesis-seeds` files.
 
 ---
 
