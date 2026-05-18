@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
 import { SessionList } from '../components/chat/SessionList';
 import { AgentPicker } from '../components/chat/AgentPicker';
@@ -21,6 +22,7 @@ export default function Chat() {
     streaming,
     error,
   } = useChat();
+  const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom on new messages
@@ -62,8 +64,14 @@ export default function Chat() {
         onDelete={deleteSession}
       />
 
-      <div className="flex flex-col flex-1 bg-bg-0">
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-bg-0">
         <header className="border-b border-border-0 px-5 py-3 flex items-center gap-3">
+          <button
+            onClick={() => navigate('/radar')}
+            className="text-2xs text-text-2 hover:text-text-0"
+          >
+            ← Radar
+          </button>
           <AgentPicker
             pinnedPeerId={active.pinnedPeerId}
             preferredModel={active.preferredModel}
@@ -73,7 +81,7 @@ export default function Chat() {
 
         <div
           ref={scrollRef}
-          className="flex-1 overflow-auto px-5 py-5 flex flex-col gap-4"
+          className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-5 flex flex-col gap-4 min-w-0"
         >
           <AnimatePresence initial={false}>
             {active.messages.map((m, i) => {

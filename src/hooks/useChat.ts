@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { api, ApiError } from '../lib/api';
 import { loadSessions, saveSessions, newSession } from '../lib/sessions';
 import { useUIStore } from '../lib/store';
+import { stripAnsi } from '../lib/ansi';
 import type { ChatSession, ChatMessage } from '../types/chat';
 
 export function useChat() {
@@ -180,7 +181,7 @@ export function useChat() {
               const obj = JSON.parse(data);
               const delta = obj.choices?.[0]?.delta?.content;
               if (delta) {
-                assistantContent += delta;
+                assistantContent += stripAnsi(delta);
                 chunkChanged = true;
               }
               if (!raterPeerId && obj.agentfm_peer_id) {

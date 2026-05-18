@@ -16,7 +16,7 @@ export function MessageBubble({
     <motion.div
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`max-w-[75%] px-3.5 py-3 rounded-xl text-sm leading-relaxed ${
+      className={`max-w-[75%] min-w-0 overflow-hidden px-3.5 py-3 rounded-xl text-sm leading-relaxed ${
         isUser
           ? 'self-end bg-accent-bg border border-accent/30 text-text-0'
           : 'self-start bg-bg-1 border border-border-0 text-text-0'
@@ -38,7 +38,7 @@ export function MessageBubble({
             : compactAge(msg.timestamp) + ' ago'}
         </span>
       </div>
-      <div className="whitespace-pre-wrap break-words">
+      <div className="whitespace-pre-wrap" style={{ overflowWrap: 'anywhere' }}>
         {msg.content}
         {streaming && !isUser && (
           <span className="inline-block w-2 h-3.5 bg-accent ml-0.5 animate-blink align-middle" />
