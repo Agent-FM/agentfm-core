@@ -1,6 +1,8 @@
 package boss
 
 import (
+	"context"
+	"io"
 	"net/http"
 
 	"agentfm/internal/network"
@@ -46,4 +48,25 @@ func (b *Boss) HostForTest() host.Host {
 // API server (auth, bind, CORS, etc.).
 func (b *Boss) HandleGetWorkersForTest(w http.ResponseWriter, r *http.Request) {
 	b.handleGetWorkers(w, r)
+}
+
+// SetMenuPickerForTest installs a deterministic menu-choice function that
+// replaces the pterm interactive-select in showPeerMenu. Nil resets to the
+// real pterm picker. Only for use in tests.
+func (b *Boss) SetMenuPickerForTest(f func([]string) (string, error)) {
+	b.menuPickerForTest = f
+}
+
+// SetPeerViewHookForTest installs a hook that replaces the real
+// viewPeerHistory call inside executeFlow. Nil resets to the real
+// viewPeerHistory. Only for use in tests.
+func (b *Boss) SetPeerViewHookForTest(f func(ctx context.Context, peerIDStr string)) {
+	b.peerViewHookForTest = f
+}
+
+// RenderRadarForTest writes the radar output (ONLINE + OFFLINE sections) to w
+// without starting the interactive keyboard listener. Used by unit tests to
+// assert section headers and row content.
+func (b *Boss) RenderRadarForTest(w io.Writer) {
+	b.renderRadar(context.Background(), w)
 }

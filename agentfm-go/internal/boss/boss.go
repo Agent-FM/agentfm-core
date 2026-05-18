@@ -130,6 +130,19 @@ type Boss struct {
 	// ledger. Nil when not wired (e.g. in tests that don't exercise
 	// dispatch). RecordOutcome is guarded by nil-checks in dispatch handlers.
 	completionRater *CompletionRatingWriter
+
+	// reputationFloor is the minimum honesty score required to dispatch a
+	// task to a worker. Phase 8 wires the production value (-0.5 default);
+	// until then executeFlow uses a safe default of -1.0 (allow all).
+	reputationFloor float64
+
+	// menuPickerForTest overrides the pterm interactive-select in
+	// showPeerMenu. Set via SetMenuPickerForTest; nil in production.
+	menuPickerForTest func([]string) (string, error)
+
+	// peerViewHookForTest overrides the viewPeerHistory call inside
+	// executeFlow. Set via SetPeerViewHookForTest; nil in production.
+	peerViewHookForTest func(ctx context.Context, peerIDStr string)
 }
 
 // Options configures a new Boss. All fields are optional; New

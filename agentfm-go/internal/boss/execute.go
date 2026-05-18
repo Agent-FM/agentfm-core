@@ -24,16 +24,86 @@ import (
 	"github.com/pterm/pterm"
 )
 
+// menuPickerForTest, when non-nil, overrides the pterm interactive select in
+// showPeerMenu. Tests inject a deterministic picker via SetMenuPickerForTest.
+// peerViewHookForTest, when non-nil, overrides the real viewPeerHistory call
+// in executeFlow. Tests inject a hook via SetPeerViewHookForTest.
+//
+// Both are unexported fields intentionally — test code reaches them via the
+// exported Set* methods; production code never touches them.
+
 func (b *Boss) executeFlow(ctx context.Context, worker types.WorkerProfile) {
+	for {
+		choice, err := b.showPeerMenu(worker)
+		if err != nil || choice == "Back to radar" {
+			return
+		}
+		switch choice {
+		case "Execute task":
+			b.executeTaskFlow(ctx, worker)
+			return
+		case "View ratings & feedback":
+			if b.peerViewHookForTest != nil {
+				b.peerViewHookForTest(ctx, worker.PeerID)
+			} else {
+				b.viewPeerHistory(ctx, worker.PeerID)
+			}
+			// Loop back to the menu after viewing history.
+		}
+	}
+}
+
+// showPeerMenu renders the agent-info box and an interactive three-option
+// menu. Returns the chosen option string or an error. Uses
+// menuPickerForTest if set (for unit tests), otherwise falls back to pterm.
+func (b *Boss) showPeerMenu(worker types.WorkerProfile) (string, error) {
+	options := []string{"Execute task", "View ratings & feedback", "Back to radar"}
+
+	if b.menuPickerForTest != nil {
+		return b.menuPickerForTest(options)
+	}
+
 	fmt.Print("\033[H\033[2J")
 
-	boxContent := pterm.LightMagenta("Name: ") + pterm.White(worker.AgentName) + "\n" +
-		pterm.LightMagenta("Capabilities: ") + pterm.White(worker.AgentDesc) + "\n" +
-		pterm.LightMagenta("Model: ") + pterm.White(worker.Model)
+	honesty := 0.0
+	if b.reputationEngine != nil {
+		honesty = b.reputationEngine.Score(worker.PeerID)
+	}
+	dispatchBadge := pterm.Green("✓ allowed")
+	floor := b.reputationFloor
+	if floor == 0 {
+		floor = -1.0 // safe default until Phase 8
+	}
+	if honesty < floor {
+		dispatchBadge = pterm.Red(fmt.Sprintf("✗ rejected (below floor %.2f)", floor))
+	}
 
-	pterm.DefaultBox.WithTitle(pterm.LightGreen("🕵️ AGENT SECURED")).WithTitleTopLeft().Println(boxContent)
+	header := pterm.LightMagenta("Name: ") + pterm.White(worker.AgentName) + "\n" +
+		pterm.LightMagenta("Model: ") + pterm.White(worker.Model) + "\n" +
+		pterm.LightMagenta("Image: ") + pterm.White(shortDigest(worker.AgentImageDigest)) + "\n" +
+		pterm.LightMagenta("Honesty: ") + pterm.White(fmt.Sprintf("%+.2f", honesty)) + "\n" +
+		pterm.LightMagenta("Dispatch: ") + dispatchBadge
+
+	pterm.DefaultBox.WithTitle(pterm.LightGreen("🕵️  AGENT SELECTED")).WithTitleTopLeft().Println(header)
 	fmt.Println()
 
+	return pterm.DefaultInteractiveSelect.
+		WithOptions(options).
+		Show()
+}
+
+// shortDigest abbreviates a digest like "sha256:abc12345..." to 16 chars + "...".
+func shortDigest(d string) string {
+	if len(d) <= 16 {
+		return d
+	}
+	return d[:16] + "..."
+}
+
+// executeTaskFlow contains the original executeFlow body: prompt → dispatch →
+// stream → handleFeedbackLoop. Factored out so executeFlow can branch between
+// task execution and peer-history viewing without duplicating the task path.
+func (b *Boss) executeTaskFlow(ctx context.Context, worker types.WorkerProfile) {
 	prompt, _ := pterm.DefaultInteractiveTextInput.Show("📝 Enter task prompt (or type 'back' to return to radar)")
 	prompt = strings.TrimSpace(prompt)
 

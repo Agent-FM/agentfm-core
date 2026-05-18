@@ -11,7 +11,11 @@
 package boss
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"io"
+	"os"
 	"sort"
 	"time"
 
@@ -19,6 +23,7 @@ import (
 	"agentfm/internal/ledger/store"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pterm/pterm"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -126,6 +131,195 @@ func bytesEqualPB(a, b []byte) bool {
 		}
 	}
 	return true
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7: TUI peer-history view
+// ---------------------------------------------------------------------------
+
+// renderPeerView writes the peer-history view to out. Used by both the TUI
+// (out=os.Stdout) and tests (out=bytes.Buffer). Keeps the rendering logic in
+// one place.
+func (b *Boss) renderPeerView(out io.Writer, ctx context.Context, peerIDStr string) {
+	subjectPID, err := peer.Decode(peerIDStr)
+	if err != nil {
+		fmt.Fprintf(out, "Invalid peer ID %q: %v\n", peerIDStr, err)
+		return
+	}
+
+	shortPeer := shortID(peerIDStr, 12)
+	fmt.Fprintf(out, "📜 PEER HISTORY · %s\n\n", shortPeer)
+
+	// --- Summary box -------------------------------------------------------
+	agentName := "(unknown)"
+	statusStr := "offline"
+	isEquiv := false
+	honesty := 0.0
+	floor := b.reputationFloor
+	if floor == 0 {
+		floor = -1.0
+	}
+
+	b.mu.RLock()
+	if p, ok := b.activeWorkers[peerIDStr]; ok {
+		agentName = nonEmpty(p.AgentName, "(unknown)")
+		statusStr = pterm.Green("✓ online")
+	}
+	b.mu.RUnlock()
+
+	if b.reputationEngine != nil {
+		honesty = b.reputationEngine.Score(peerIDStr)
+	}
+	if b.ledger != nil {
+		isEquiv, _ = b.ledger.IsEquivocator(ctx, []byte(subjectPID))
+	}
+
+	var entriesList []PeerEntry
+	if b.readStore != nil {
+		entriesList, _ = GatherPeerEntries(ctx, b.readStore, subjectPID, 0)
+	}
+
+	// Determine last-seen age for offline status.
+	b.mu.RLock()
+	ls := b.lastSeen[peerIDStr]
+	b.mu.RUnlock()
+	if statusStr == "offline" && !ls.IsZero() {
+		statusStr = "offline " + compactAge(time.Since(ls))
+	}
+
+	honestyStr := formatScore(honesty, floor)
+	equivStr := formatEquiv(isEquiv)
+
+	fmt.Fprintf(out, "Agent: %s\n", agentName)
+	fmt.Fprintf(out, "Status: %s\n", statusStr)
+	fmt.Fprintf(out, "Honesty: %s\n", honestyStr)
+	fmt.Fprintf(out, "Entries: %d\n", len(entriesList))
+	fmt.Fprintf(out, "Equivocator: %s\n\n", equivStr)
+
+	if len(entriesList) == 0 {
+		fmt.Fprintf(out, "No ledger entries about this peer yet.\n")
+		return
+	}
+
+	// --- Entry table -------------------------------------------------------
+	// Build plain-text table: WHEN | KIND | RATER | DETAIL
+	fmt.Fprintf(out, "%-6s  %-7s  %-25s  %s\n", "WHEN", "KIND", "RATER", "DETAIL")
+	fmt.Fprintf(out, "%s\n", "------  -------  -------------------------  ------")
+
+	for _, e := range entriesList {
+		when := compactAge(time.Since(e.ReceivedAt))
+		raterStr := shortID(e.Rater.String(), 12)
+
+		// Mark rater as [unverified] when their honesty score is below 0.1.
+		// When there is no reputation engine, the score is effectively 0.0
+		// (no trust data), so all raters are unverified by default.
+		raterScore := 0.0
+		if b.reputationEngine != nil {
+			raterScore = b.reputationEngine.Score(e.Rater.String())
+		}
+		unverified := raterScore < 0.1
+		if unverified {
+			raterStr = "[unverified] " + raterStr
+		}
+
+		var detail string
+		switch e.Kind {
+		case "Rating":
+			ctx := e.Context
+			if ctx == "" {
+				ctx = "—"
+			}
+			detail = fmt.Sprintf("%+.2f %s · %s", e.Score, e.Dimension, ctx)
+		case "Comment":
+			lang := nonEmpty(e.Language, "?")
+			body := "(unavailable)"
+			if b.commentsStore != nil {
+				if text, err := b.commentsStore.Get(e.TextCID); err != nil {
+					body = "(missing body)"
+				} else {
+					body = truncateStr(string(text), 60)
+				}
+			}
+			detail = fmt.Sprintf("[%s] %s", lang, body)
+		}
+
+		fmt.Fprintf(out, "%-6s  %-7s  %-25s  %s\n", when, e.Kind, raterStr, detail)
+	}
+}
+
+// viewPeerHistory renders the peer-view screen to stdout via fmt and pterm.
+// Blocks on a "Press [ENTER] to return" prompt at the end.
+func (b *Boss) viewPeerHistory(ctx context.Context, peerIDStr string) {
+	fmt.Print("\033[H\033[2J")
+	b.renderPeerView(os.Stdout, ctx, peerIDStr)
+	fmt.Println()
+	pterm.DefaultInteractiveContinue.WithDefaultText("Press [ENTER] to return").Show()
+}
+
+// RenderPeerView returns the rendered peer-view as a string. Used by
+// integration tests and TestTrustEndToEnd to assert on rendered output.
+func (b *Boss) RenderPeerView(ctx context.Context, peerIDStr string) string {
+	var buf bytes.Buffer
+	b.renderPeerView(&buf, ctx, peerIDStr)
+	return buf.String()
+}
+
+// ---------------------------------------------------------------------------
+// Small formatting helpers
+// ---------------------------------------------------------------------------
+
+// compactAge returns a human-readable short duration string:
+// "30s", "5m", "2h", "3d".
+func compactAge(d time.Duration) string {
+	if d < 0 {
+		d = -d
+	}
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
+	}
+}
+
+// truncateStr returns s[:n]+"..." if len(s) > n, else s.
+func truncateStr(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
+}
+
+// nonEmpty returns s if non-empty, else fallback.
+func nonEmpty(s, fallback string) string {
+	if s != "" {
+		return s
+	}
+	return fallback
+}
+
+// formatScore returns a color-coded honesty score string.
+func formatScore(s, floor float64) string {
+	str := fmt.Sprintf("%+.2f", s)
+	if s <= floor {
+		return pterm.Red(str)
+	}
+	if s >= 0.5 {
+		return pterm.Green(str)
+	}
+	return str
+}
+
+// formatEquiv returns a short equivocator indicator.
+func formatEquiv(isEquiv bool) string {
+	if isEquiv {
+		return pterm.Red("⚠ YES — permanently floored at -1.00")
+	}
+	return "no"
 }
 
 // KnownPeer is the operator-facing view of a peer the boss has heard about,
