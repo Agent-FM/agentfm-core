@@ -23,7 +23,7 @@ function fakeStore(initial: Record<string, unknown>): Store {
 describe('migrateLegacySettings', () => {
   it('does nothing when projects already exist', async () => {
     const store = fakeStore({
-      projects: [{ id: 'prj_keep', name: 'X', icon: '🌐', color: 'emerald', relayMultiaddr: null, reputationFloor: -0.5, createdAt: 1 }],
+      projects: [{ id: 'prj_keep', name: 'X', relayMultiaddr: null, reputationFloor: -0.5, createdAt: 1 }],
     })
     await migrateLegacySettings(store)
     expect(await store.get('projects')).toHaveLength(1)

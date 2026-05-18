@@ -20,8 +20,6 @@ export async function migrateLegacySettings(store: MigrationStore): Promise<void
   const defaultProject: Project = {
     id: DEFAULT_PROJECT_ID,
     name: 'Default',
-    icon: '🌐',
-    color: 'emerald',
     relayMultiaddr: legacyRelay,
     reputationFloor: legacyFloor,
     createdAt: Date.now(),
