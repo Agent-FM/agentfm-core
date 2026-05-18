@@ -7,8 +7,10 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
+	"agentfm/internal/ledger"
 	"agentfm/internal/metrics"
 	"agentfm/internal/network"
 	"agentfm/internal/obs"
@@ -28,6 +30,15 @@ func fatalf(format string, args ...interface{}) {
 	pterm.Fatal.Printfln(format, args...)
 }
 
+// homeDir returns the current user's home directory, falling back to "."
+// if os.UserHomeDir fails (e.g. in a sandboxed or container environment).
+func homeDir() string {
+	if h, err := os.UserHomeDir(); err == nil && h != "" {
+		return h
+	}
+	return "."
+}
+
 // getStaticIdentity is a thin wrapper around network.LoadOrGenerateIdentity
 // kept for the cmd/relay binary's existing logging idiom. The shared helper
 // takes care of the corrupt-file warning, the 0600 perm, and the
@@ -43,7 +54,12 @@ func main() {
 	promListen := flag.String("prom-listen", "127.0.0.1:9091", "Prometheus /metrics listen address (loopback by default; pass - to disable)")
 	logFormat := flag.String("log-format", obs.FormatAuto, "Log format: json, console, auto")
 	logLevel := flag.String("log-level", "info", "Log level: debug, info, warn, error")
+	// Relays are the obvious place to host the witness co-sign service:
+	// long-lived, stable PeerID, low task load. Default on so a fresh
+	// relay deploy contributes to the v1.3 witness pool automatically.
+	witness := flag.Bool("witness", true, "Serve the witness co-sign role on this relay (v1.3 verifiable mesh)")
 	flag.Parse()
+	_ = witness // wired by P2-2's handler registration
 
 	obs.Init("relay", *logFormat, *logLevel)
 
@@ -122,6 +138,30 @@ func main() {
 			}
 		}
 	}()
+
+	// v1.3.1: open a full ledger archive. The constructor auto-subscribes to
+	// FeedbackTopic and EquivocationTopic, and auto-registers the
+	// LedgerFetchProtocol handler — so signed Rating + Comment + EquivocationAlert
+	// entries get archived in SQLite and served to peers catching up after restart.
+	ledgerPath := filepath.Join(homeDir(), ".agentfm", "relay_ledger.db")
+	if err := os.MkdirAll(filepath.Dir(ledgerPath), 0o700); err != nil {
+		slog.Warn("relay: could not create ledger directory",
+			slog.String("path", filepath.Dir(ledgerPath)),
+			slog.Any(obs.FieldErr, err))
+	} else {
+		arch, err := ledger.NewWithOptions(ledgerPath, privKey, ps, ledger.Options{Host: host})
+		if err != nil {
+			slog.Warn("relay: archive ledger failed to open; running as connectivity-only relay",
+				slog.Any(obs.FieldErr, err))
+		} else {
+			defer func() { _ = arch.Close() }()
+			if head, err := arch.Head(ctx); err == nil && head != nil {
+				fmt.Printf("📚 Relay archive ledger opened at %s (tree_size=%d)\n", ledgerPath, head.TreeSize)
+			} else {
+				fmt.Printf("📚 Relay archive ledger opened at %s (empty)\n", ledgerPath)
+			}
+		}
+	}
 
 	// Start the Kademlia DHT in Server Mode
 	kDHT, err := dht.New(ctx, host, dht.Mode(dht.ModeServer))
