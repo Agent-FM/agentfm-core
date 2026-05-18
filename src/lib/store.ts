@@ -21,7 +21,6 @@ export interface UIState {
   projects: Project[]
   activeProjectId: string | null
   isProjectSwitching: boolean
-  isProjectSettingsOpen: boolean
   isCreateWizardOpen: boolean
 
   setTheme: (t: UIState['theme']) => void
@@ -42,8 +41,7 @@ export interface UIState {
   updateProject: (id: string, patch: Partial<ProjectInput>) => void
   deleteProject: (id: string) => void
   setProjectSwitching: (v: boolean) => void
-  openProjectSettings: () => void
-  closeProjectSettings: () => void
+  switchProject: (id: string) => Promise<void>
   openCreateWizard: () => void
   closeCreateWizard: () => void
 
@@ -65,7 +63,6 @@ export const useUIStore = create<UIState>()(
     projects: [],
     activeProjectId: null,
     isProjectSwitching: false,
-    isProjectSettingsOpen: false,
     isCreateWizardOpen: false,
 
     setTheme: (theme) => {
@@ -95,8 +92,6 @@ export const useUIStore = create<UIState>()(
       const project: Project = {
         id: newProjectId(),
         name: input.name.trim(),
-        icon: input.icon ?? '🌐',
-        color: input.color ?? 'emerald',
         relayMultiaddr: input.relayMultiaddr,
         reputationFloor: input.reputationFloor ?? -0.5,
         createdAt: Date.now(),
@@ -116,8 +111,6 @@ export const useUIStore = create<UIState>()(
         relayMultiaddr:
           patch.relayMultiaddr === undefined ? current.relayMultiaddr : patch.relayMultiaddr,
         reputationFloor: patch.reputationFloor ?? current.reputationFloor,
-        icon: patch.icon ?? current.icon,
-        color: patch.color ?? current.color,
       }
       validateProjectInput(projects, merged, id)
       const next = projects.map((p) =>
@@ -144,8 +137,26 @@ export const useUIStore = create<UIState>()(
     },
 
     setProjectSwitching: (v) => set({ isProjectSwitching: v }),
-    openProjectSettings: () => set({ isProjectSettingsOpen: true }),
-    closeProjectSettings: () => set({ isProjectSettingsOpen: false }),
+    switchProject: async (id) => {
+      const state = get()
+      if (id === state.activeProjectId) return
+      const project = state.projects.find((p) => p.id === id)
+      if (!project) return
+      set({ isProjectSwitching: true })
+      try {
+        await window.api?.settings.set('activeProjectId', id)
+        set({ activeProjectId: id })
+        await window.api?.backend.restart({
+          apiPort: state.apiPort,
+          reputationFloor: project.reputationFloor,
+          relayMultiaddr: project.relayMultiaddr ?? undefined,
+        })
+      } catch (e) {
+        console.warn('switchProject: backend restart failed', e)
+      } finally {
+        set({ isProjectSwitching: false })
+      }
+    },
     openCreateWizard: () => set({ isCreateWizardOpen: true }),
     closeCreateWizard: () => set({ isCreateWizardOpen: false }),
 
