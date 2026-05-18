@@ -39,12 +39,7 @@ func (b *Boss) checkTrust(ctx context.Context, w types.WorkerProfile) TrustOutco
 	}
 	if b.reputationEngine != nil {
 		s := b.reputationEngine.Score(w.PeerID)
-		// Treat zero floor as "not configured; fall back to -1.0 = allow all"
-		floor := b.reputationFloor
-		if floor == 0 {
-			floor = -1.0
-		}
-		if s < floor {
+		if s < b.reputationFloor {
 			return TrustOutcome{Allowed: false, Reason: ErrReputationBelowFloor.Error(), Score: s}
 		}
 	}

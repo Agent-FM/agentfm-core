@@ -87,8 +87,10 @@ type Boss struct {
 	completionRater *CompletionRatingWriter
 
 	// reputationFloor is the minimum honesty score required to dispatch a
-	// task to a worker. Phase 8 wires the production value (-0.5 default);
-	// until then executeFlow uses a safe default of -1.0 (allow all).
+	// task to a worker. Always populated by NewWithOptions (default -1.0 =
+	// allow all when Options.ReputationFloor is nil). Call sites read this
+	// field directly with no sentinel logic — see Options.ReputationFloor
+	// for the construction-time semantics.
 	reputationFloor float64
 
 	// menuPickerForTest overrides the pterm interactive-select in
@@ -138,9 +140,12 @@ type Options struct {
 	CompletionRater *CompletionRatingWriter
 
 	// ReputationFloor is the minimum honesty score required for dispatch.
-	// Peers scoring below this floor are refused. Zero means "not configured"
-	// (treated as -1.0 = allow all). Use -0.5 as the production default.
-	ReputationFloor float64
+	// Peers scoring strictly below this floor are refused. Nil means "not
+	// configured" — NewWithOptions defaults to -1.0 (allow all). A non-nil
+	// pointer is used as-is, including *ReputationFloor == 0 which means
+	// "refuse anyone with a negative score." Use a pointer so the
+	// legitimate value 0 is distinguishable from "operator did not set it."
+	ReputationFloor *float64
 }
 
 func New(node *network.MeshNode) *Boss {
@@ -162,7 +167,13 @@ func NewWithOptions(node *network.MeshNode, opts Options) *Boss {
 		readStore:                opts.ReadStore,
 		commentsStore:            opts.CommentsStore,
 		completionRater:          opts.CompletionRater,
-		reputationFloor:          opts.ReputationFloor,
+		// Resolve ReputationFloor once at construction. Nil = unconfigured →
+		// -1.0 (allow all). Non-nil pointer is used as-is, so an explicit
+		// --reputation-floor=0 cleanly means "refuse anyone with negative score."
+		reputationFloor: -1.0,
+	}
+	if opts.ReputationFloor != nil {
+		b.reputationFloor = *opts.ReputationFloor
 	}
 	// Assign via explicit nil-check to avoid the classic Go interface/nil gotcha:
 	// a nil *reputation.Engine stored in a reputationEngineIface is a non-nil

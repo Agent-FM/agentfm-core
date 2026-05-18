@@ -156,9 +156,6 @@ func (b *Boss) renderPeerView(out io.Writer, ctx context.Context, peerIDStr stri
 	isEquiv := false
 	honesty := 0.0
 	floor := b.reputationFloor
-	if floor == 0 {
-		floor = -1.0
-	}
 
 	b.mu.RLock()
 	if p, ok := b.activeWorkers[peerIDStr]; ok {

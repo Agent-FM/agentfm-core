@@ -70,12 +70,8 @@ func (b *Boss) showPeerMenu(worker types.WorkerProfile) (string, error) {
 		honesty = b.reputationEngine.Score(worker.PeerID)
 	}
 	dispatchBadge := pterm.Green("✓ allowed")
-	floor := b.reputationFloor
-	if floor == 0 {
-		floor = -1.0 // safe default until Phase 8
-	}
-	if honesty < floor {
-		dispatchBadge = pterm.Red(fmt.Sprintf("✗ rejected (below floor %.2f)", floor))
+	if honesty < b.reputationFloor {
+		dispatchBadge = pterm.Red(fmt.Sprintf("✗ rejected (below floor %.2f)", b.reputationFloor))
 	}
 
 	header := pterm.LightMagenta("Name: ") + pterm.White(worker.AgentName) + "\n" +

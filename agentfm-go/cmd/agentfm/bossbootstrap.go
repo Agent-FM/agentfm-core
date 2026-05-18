@@ -39,7 +39,9 @@ func bossOptionsFromFlags(
 	genesisSeedsPath string,
 ) (boss.Options, func()) {
 	opts := boss.Options{
-		ReputationFloor: reputationFloor,
+		// Always pass a pointer so an explicit --reputation-floor=0 stays 0
+		// and does not collide with the "unconfigured" sentinel.
+		ReputationFloor: &reputationFloor,
 	}
 	cleanups := []func(){}
 	cleanup := func() {
