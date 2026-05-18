@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { ProjectList } from './projects/ProjectList'
 
 const items = [
   { to: '/radar', icon: '🛰', label: 'Radar' },
@@ -16,6 +17,7 @@ function navClass({ isActive }: { isActive: boolean }) {
 export function Sidebar() {
   return (
     <nav className="w-14 bg-bg-1 border-r border-border-0 flex flex-col items-center py-3 gap-1">
+      <ProjectList />
       <div className="flex flex-col gap-1">
         {items.map((it) => (
           <NavLink key={it.to} to={it.to} className={navClass} title={it.label}>

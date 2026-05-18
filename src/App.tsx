@@ -5,6 +5,9 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import { DispatchDrawer } from './components/DispatchDrawer'
 import { FeedbackModal } from './components/FeedbackModal'
 import { WelcomeModal } from './components/WelcomeModal'
+import { ProjectSwitchingOverlay } from './components/projects/ProjectSwitchingOverlay'
+import { ProjectSettingsSheet } from './components/projects/ProjectSettingsSheet'
+import { CreateProjectWizard } from './components/projects/CreateProjectWizard'
 import { useBackend } from './hooks/useBackend'
 import { useEventStream } from './hooks/useEventStream'
 import Settings from './routes/Settings'
@@ -41,6 +44,9 @@ export default function App() {
       <DispatchDrawer />
       <FeedbackModal />
       <WelcomeModal />
+      <ProjectSwitchingOverlay />
+      <ProjectSettingsSheet />
+      <CreateProjectWizard />
     </>
   )
 }
