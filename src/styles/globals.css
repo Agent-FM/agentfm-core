@@ -1,0 +1,28 @@
+@import './tokens.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; margin: 0; }
+body {
+  background: theme('colors.bg.0');
+  color: theme('colors.text.0');
+  font-family: theme('fontFamily.sans');
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Smooth scrolling for chat / lists */
+* { scroll-behavior: smooth; }
+
+/* Subtle scrollbar that fits the dark theme */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: theme('colors.border.1');
+  border-radius: 999px;
+  border: 2px solid theme('colors.bg.0');
+}
+::-webkit-scrollbar-thumb:hover { background: theme('colors.text.3'); }

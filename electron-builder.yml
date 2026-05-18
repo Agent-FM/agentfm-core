@@ -1,0 +1,51 @@
+appId: net.agentfm.desktop
+productName: AgentFM
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - out/**/*
+  - resources/**/*
+  - package.json
+
+extraResources:
+  - from: resources
+    to: bin
+    filter:
+      - "agentfm-*"
+
+asar: true
+asarUnpack:
+  - resources/**/*
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  icon: build/icon.icns
+  hardenedRuntime: false
+  identity: null      # no notarization for v1
+  gatekeeperAssess: false
+
+linux:
+  target:
+    - AppImage
+  category: Development
+  icon: build/icon.png
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+
+publish:
+  - provider: github
+    owner: yourorg
+    repo: agentfm-desktop
+    releaseType: draft
