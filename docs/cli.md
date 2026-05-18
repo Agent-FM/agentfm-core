@@ -25,6 +25,9 @@ The `agentfm` binary is multi-mode; the `agentfm-relay` binary is a dedicated li
 | `-bootstrap` | *public lighthouse* | Custom relay multiaddr |
 | `-port` | `0` | Listen port (0 = random; relays should use 4001) |
 | `-prompt` | (none) | One-shot prompt for `-mode test` |
+| `-witness` | `false` (worker), `true` (relay) | Advertise + serve the witness co-sign role (equivocation detection) |
+| `-capability` | kebab(`-agent`) | Kebab-case capability tag for this agent |
+| `-reputation-floor` | `-0.5` | Refuse dispatch to peers with honesty score below this value. Set to `-1.0` to disable. |
 
 ### Modes
 
@@ -45,8 +48,8 @@ subcommands that operate on local state without needing a libp2p stack.
 #### `agentfm reputation show <peer_id>`
 
 Reads the local ledger inbox and prints every rating about the given
-peer (v1.3 verifiable agent mesh, P1-6). Read-only — safe to run
-alongside a live worker / boss that shares the same database file.
+peer. Read-only — safe to run alongside a live worker / boss that
+shares the same database file.
 
 ```bash
 agentfm reputation show 12D3KooW...        # default DB: .agentfm_ledger.db
@@ -64,7 +67,7 @@ Output (illustrative; real peer IDs are longer):
 ```
 Peer:       12D3KooW...
 Entries:    1240 (last: 2026-05-16T08:12:33Z)
-Honesty:    [pending P3-7 reputation derivation]
+Honesty:    -0.20 (EigenTrust-lite, 12 raters)
 
 Latest:
             +0.10 honesty by 12D3Ko...8s5zL (probe_ok) 2m ago
@@ -72,9 +75,8 @@ Latest:
             ...
 ```
 
-The `Honesty:` row is a placeholder until the EigenTrust-lite scorer in
-P3-7 lands; for now you can read the raw ratings and infer the score
-yourself.
+The `Honesty:` row reflects the EigenTrust-lite derived score, updated
+after each hourly aggregate window. Raw ratings are listed below it.
 
 ## `agentfm-relay`
 
