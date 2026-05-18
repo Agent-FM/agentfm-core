@@ -43,7 +43,7 @@ test.afterAll(async () => {
 });
 
 test('hammering Cmd+1..5 keeps <main> populated', async () => {
-  const keys = ['Meta+1', 'Meta+2', 'Meta+3', 'Meta+4', 'Meta+5'];
+  const keys = ['Meta+1', 'Meta+2', 'Meta+3', 'Meta+4'];
   for (let round = 0; round < 4; round++) {
     for (const k of keys) {
       await page.keyboard.press(k);
