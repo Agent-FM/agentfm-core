@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import { X, Send, ExternalLink } from 'lucide-react';
 import { useUIStore } from '../lib/store';
 import { useWorkers } from '../lib/query';
 import { useDispatch } from '../hooks/useDispatch';
@@ -80,13 +81,14 @@ export function DispatchDrawer() {
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', stiffness: 280, damping: 30 }}
-            className="fixed right-0 top-10 bottom-0 w-[52%] min-w-[480px] bg-bg-1 border-l border-border-0 overflow-auto p-6 z-50"
+            className="fixed right-0 top-10 bottom-0 w-[52%] min-w-[480px] bg-bg-1 border-l border-accent/15 overflow-auto p-6 z-50"
+            style={{ boxShadow: '-24px 0 48px -16px rgba(34,211,238,.15)' }}
             onKeyDown={handleKey}
           >
             {/* Header */}
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h2 className="text-base font-semibold text-text-0">
+                <h2 className="text-xl font-semibold tracking-tight text-text-0">
                   {displayName(worker)}
                   {worker.model ? ` · ${worker.model}` : ''}
                 </h2>
@@ -102,7 +104,7 @@ export function DispatchDrawer() {
                 </div>
               </div>
               <button onClick={close} className="text-text-2 hover:text-text-0 text-lg">
-                ✕
+                <X size={18} />
               </button>
             </div>
 
@@ -137,11 +139,14 @@ export function DispatchDrawer() {
                   state.status === 'connecting'
                 }
               >
-                {state.status === 'streaming'
-                  ? 'Streaming…'
-                  : state.status === 'connecting'
-                    ? 'Sending…'
-                    : 'Send to agent'}
+                <Send size={12} />
+                <span>
+                  {state.status === 'streaming'
+                    ? 'Streaming…'
+                    : state.status === 'connecting'
+                      ? 'Sending…'
+                      : 'Send to agent'}
+                </span>
               </Button>
             </div>
 
@@ -175,6 +180,7 @@ export function DispatchDrawer() {
                   <span className="text-accent">📄</span>
                   <span className="flex-1 font-mono">{state.taskId}.zip</span>
                   <Button onClick={() => window.api.app.openArtifact(state.taskId!)}>
+                    <ExternalLink size={12} />
                     Show in Finder
                   </Button>
                 </div>

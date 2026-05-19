@@ -5,11 +5,12 @@ interface Props {
 
 export function StreamingView({ output, streaming }: Props) {
   return (
-    <pre className="bg-bg-0 border border-border-0 rounded-md p-3.5 font-mono text-xs text-text-1 leading-relaxed min-h-[120px] max-h-[400px] overflow-auto whitespace-pre-wrap break-words">
-      {output}
+    <div className="relative bg-bg-0 border border-border-0 rounded-xl p-4 max-h-[400px] overflow-auto font-mono text-xs">
       {streaming && (
-        <span className="inline-block w-2 h-3.5 bg-accent ml-0.5 animate-blink align-middle" />
+        <span className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-accent to-transparent animate-shimmer" />
       )}
-    </pre>
+      <pre className="whitespace-pre-wrap text-text-1">{output}</pre>
+      {streaming && <span className="inline-block w-[3px] h-3.5 bg-accent ml-0.5 align-middle animate-pulse-cyan" />}
+    </div>
   );
 }
