@@ -6,6 +6,7 @@ import { Button } from './primitives/Button';
 import { toast } from 'sonner';
 import { api, ApiError } from '../lib/api';
 import { qk } from '../lib/query';
+import { X, Send } from 'lucide-react'
 
 export function FeedbackModal() {
   const isOpen = useUIStore((s) => s.isFeedbackOpen);
@@ -76,7 +77,7 @@ export function FeedbackModal() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 bg-black/65 backdrop-blur-sm z-[60] flex items-center justify-center"
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[60] flex items-center justify-center"
           onClick={close}
         >
           <motion.div
@@ -85,17 +86,17 @@ export function FeedbackModal() {
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 380, damping: 28 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-[460px] bg-bg-1 border border-border-0 rounded-xl p-6 shadow-2xl"
+            className="w-[480px] bg-bg-1 border border-border-0 rounded-2xl p-7 shadow-2xl neon-glow-cyan"
           >
             <div className="flex justify-between items-start mb-4">
               <div>
-                <h3 className="text-base font-semibold text-text-0">Leave feedback</h3>
+                <h3 className="text-xl font-semibold tracking-tight text-text-0">Leave feedback</h3>
                 <div className="text-[11px] font-mono text-text-2 mt-1">
                   about peer {ctx.peerId.slice(0, 10)}… · task {ctx.taskId}
                 </div>
               </div>
               <button onClick={close} className="text-text-2 hover:text-text-0 text-lg">
-                ✕
+                <X size={18} />
               </button>
             </div>
 
@@ -150,7 +151,8 @@ export function FeedbackModal() {
             <div className="flex gap-2 justify-end mt-5">
               <Button onClick={close}>Skip</Button>
               <Button variant="primary" onClick={submit} disabled={!text.trim() || submitting}>
-                {submitting ? 'Signing…' : 'Sign & send 💌'}
+                <Send size={12} />
+                <span>{submitting ? 'Signing…' : 'Sign & send'}</span>
               </Button>
             </div>
           </motion.div>
