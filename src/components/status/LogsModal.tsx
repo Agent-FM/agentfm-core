@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { X, RefreshCw } from 'lucide-react';
 import { Button } from '../primitives/Button';
 
 interface Props { isOpen: boolean; onClose: () => void; }
@@ -35,20 +36,26 @@ export function LogsModal({ isOpen, onClose }: Props) {
       {isOpen && (
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-8"
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-end justify-center"
           onClick={onClose}
         >
           <motion.div
-            initial={{ scale: 0.97, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.97, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+            initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+            transition={{ type: 'spring', stiffness: 350, damping: 32 }}
             onClick={(e) => e.stopPropagation()}
-            className="bg-bg-1 border border-border-0 rounded-xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col"
+            className="fixed bottom-0 left-0 right-0 z-[70] bg-bg-1 border-t border-border-0 rounded-t-2xl overflow-hidden flex flex-col"
+            style={{ height: '60vh' }}
           >
+            <div className="w-12 h-1 rounded-full bg-text-3 mx-auto mt-2 mb-1" />
             <div className="flex justify-between items-center p-4 border-b border-border-0">
               <h3 className="text-base font-semibold text-text-0">Backend logs</h3>
               <div className="flex gap-2 items-center">
-                <Button onClick={refresh} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh'}</Button>
-                <button onClick={onClose} className="text-text-2 hover:text-text-0 text-lg ml-2">✕</button>
+                <Button onClick={refresh} disabled={loading}>
+                  <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+                </Button>
+                <button onClick={onClose} className="text-text-2 hover:text-text-0 ml-2">
+                  <X size={18} />
+                </button>
               </div>
             </div>
             <pre className="flex-1 overflow-auto p-4 text-[11px] font-mono text-text-2 leading-relaxed whitespace-pre-wrap">
