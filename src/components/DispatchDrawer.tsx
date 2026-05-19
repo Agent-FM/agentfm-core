@@ -6,8 +6,7 @@ import { useUIStore } from '../lib/store';
 import { useWorkers } from '../lib/query';
 import { useDispatch } from '../hooks/useDispatch';
 import { Button } from './primitives/Button';
-import { HonestyBadge } from './HonestyBadge';
-import { DispatchBadge } from './DispatchBadge';
+import { Badge } from './primitives/Badge';
 import { StreamingView } from './StreamingView';
 import { shortenPeerID } from '../lib/peer';
 import { displayName } from '../lib/displayName';
@@ -96,11 +95,25 @@ export function DispatchDrawer() {
                   {shortenPeerID(worker.peer_id, 12, 5)}
                 </div>
                 <div className="flex gap-1.5 mt-1.5">
-                  <HonestyBadge score={worker.honesty_score} />
-                  <DispatchBadge
-                    allowed={worker.dispatch_allowed}
-                    reason={worker.dispatch_refuse_reason}
-                  />
+                  <Badge
+                    tone={
+                      worker.honesty_score > 0.3
+                        ? 'lime'
+                        : worker.honesty_score < -0.5
+                          ? 'rose'
+                          : 'neutral'
+                    }
+                    mono
+                  >
+                    {worker.honesty_score >= 0 ? '+' : ''}
+                    {worker.honesty_score.toFixed(2)}
+                  </Badge>
+                  <Badge
+                    tone={worker.dispatch_allowed ? 'lime' : 'rose'}
+                    title={worker.dispatch_refuse_reason}
+                  >
+                    {worker.dispatch_allowed ? '✓ allowed' : '✗ refused'}
+                  </Badge>
                 </div>
               </div>
               <button onClick={close} className="text-text-2 hover:text-text-0 text-lg">

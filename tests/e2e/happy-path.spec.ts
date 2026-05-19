@@ -77,7 +77,7 @@ test('settings sheet opens from footer with theme control', async () => {
   await page.locator('footer button:has-text("Settings")').click();
   await expect(page.locator('h2:has-text("Settings")')).toBeVisible({ timeout: 5000 });
   await expect(page.locator('text=Theme').first()).toBeVisible();
-  await page.locator('button:has-text("✕")').click();
+  await page.locator('button[aria-label="close"]').click();
 });
 
 test('status dashboard renders friendly view', async () => {

@@ -46,7 +46,7 @@ test('clicking each tab navigates and highlights', async () => {
   for (const label of ['Chat', 'Activity', 'Status', 'Radar']) {
     await page.locator(`a:has-text("${label}")`).click();
     const active = page.locator(`a:has-text("${label}")`).first();
-    await expect(active).toHaveClass(/border-accent/);
+    await expect(active).toHaveClass(/font-semibold/);
   }
 });
 
@@ -61,6 +61,6 @@ test('Cmd+1..4 navigate through tabs', async () => {
     await page.keyboard.press(c.key);
     await page.waitForTimeout(80);
     const active = page.locator(`a:has-text("${c.label}")`).first();
-    await expect(active).toHaveClass(/border-accent/);
+    await expect(active).toHaveClass(/font-semibold/);
   }
 });

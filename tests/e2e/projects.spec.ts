@@ -71,7 +71,7 @@ test('wizard opens on first launch and creates the default project', async () =>
   const wizard = page.locator('h2:has-text("New project")');
   if (!(await wizard.isVisible({ timeout: 3000 }).catch(() => false))) {
     await page.locator('header button:has-text("📁")').first().click();
-    await page.locator('text=+ New project').click();
+    await page.locator('button:has-text("New project")').click();
   }
   await expect(wizard).toBeVisible({ timeout: 8000 });
 
@@ -85,7 +85,7 @@ test('wizard opens on first launch and creates the default project', async () =>
 
 test('rejects a duplicate relay when creating a second project', async () => {
   await page.locator('header button:has-text("📁")').first().click();
-  await page.locator('text=+ New project').click();
+  await page.locator('button:has-text("New project")').click();
   await expect(page.locator('h2:has-text("New project")')).toBeVisible();
 
   await page.locator('input[placeholder*="Team Mesh"]').fill('Dupe');

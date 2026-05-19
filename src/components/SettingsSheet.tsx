@@ -39,7 +39,7 @@ export function SettingsSheet() {
             >
               <div className="flex justify-between items-start mb-7">
                 <h2 className="text-xl font-semibold tracking-tight text-text-0">Settings</h2>
-                <button onClick={close} className="text-text-2 hover:text-text-0">
+                <button onClick={close} aria-label="close" className="text-text-2 hover:text-text-0">
                   <X size={18} />
                 </button>
               </div>
