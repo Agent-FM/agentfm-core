@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { useUIStore } from '../lib/store'
 
 const tabs = [
@@ -8,25 +9,34 @@ const tabs = [
   { to: '/status', label: 'Status' },
 ]
 
-function tabClass({ isActive }: { isActive: boolean }) {
-  return `px-4 py-2 text-sm border-b-2 transition-colors ${
-    isActive
-      ? 'border-accent text-text-0'
-      : 'border-transparent text-text-2 hover:text-text-0'
-  }`
-}
-
 export function TabStrip() {
   const active = useUIStore((s) => s.activeProject())
+  const location = useLocation()
   if (!active) return null
 
   return (
-    <div className="border-b border-border-0 bg-bg-0 px-3 flex gap-1">
-      {tabs.map((t) => (
-        <NavLink key={t.to} to={t.to} className={tabClass}>
-          {t.label}
-        </NavLink>
-      ))}
+    <div className="border-b border-border-0 bg-bg-0 px-3 flex gap-1 relative">
+      {tabs.map((t) => {
+        const isActive = location.pathname === t.to || (t.to === '/chat' && location.pathname.startsWith('/chat'))
+        return (
+          <NavLink
+            key={t.to}
+            to={t.to}
+            className={`relative px-4 py-2.5 text-sm transition-colors ${
+              isActive ? 'text-text-0 font-semibold' : 'text-text-2 hover:text-text-0'
+            }`}
+          >
+            {t.label}
+            {isActive && (
+              <motion.div
+                layoutId="tab-indicator"
+                transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                className="absolute bottom-0 left-2 right-2 h-[2px] bg-gradient-to-r from-accent to-accent2"
+              />
+            )}
+          </NavLink>
+        )
+      })}
     </div>
   )
 }
