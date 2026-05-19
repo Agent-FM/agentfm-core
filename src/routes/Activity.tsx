@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { EntryRow } from '../components/peer/EntryRow';
 import type { PeerEntry } from '../types/api';
 import { usePeerName } from '../hooks/usePeerName';
+import { StatusDot } from '../components/primitives/StatusDot';
 
 interface ActivityEntry {
   subject: string;
@@ -81,7 +82,7 @@ export default function Activity() {
 
   return (
     <div className="p-7 max-w-5xl">
-      <h1 className="text-xl font-semibold text-text-0">My activity</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-text-0">My activity</h1>
       <p className="text-sm text-text-2 mt-1 mb-5">
         Every rating and comment <em>you</em> have signed and broadcast to the mesh.
         {someLoading && (
@@ -102,21 +103,23 @@ export default function Activity() {
         <div className="space-y-5">
           {orderedBuckets.map((b) => (
             <section key={b}>
-              <h2 className="text-[11px] uppercase tracking-wider text-text-2 mb-2 px-1">
+              <h2 className="text-2xs uppercase tracking-wider text-text-2 mb-2 px-1 inline-flex items-center">
+                <StatusDot tone="cyan" size="sm" className="mr-2" />
                 {BUCKET_LABEL[b]}{' '}
-                <span className="text-text-3 normal-case">({grouped[b].length})</span>
+                <span className="text-text-3 normal-case ml-1">({grouped[b].length})</span>
               </h2>
               <div className="bg-bg-1 border border-border-0 rounded-lg p-3">
                 {grouped[b].map(({ subject, entry }, i) => (
                   <div
                     key={`${entry.received_at}-${i}`}
-                    className="border-b border-border-0/40 last:border-0"
+                    className="last:border-0"
+                    style={{ borderBottom: '1px solid rgba(34,211,238,.08)' }}
                   >
                     <button
                       onClick={() => navigate(`/peer/${subject}`)}
                       className="block w-full text-left text-2xs text-text-2 px-1 pt-2.5 hover:text-accent"
                     >
-                      about <span className="text-text-0 font-medium"><PeerName peerId={subject} /></span>
+                      about <span className="text-accent2-light hover:glow-text-violet transition-colors font-medium"><PeerName peerId={subject} /></span>
                       <span className="ml-2 font-mono text-text-3">{subject.slice(0, 12)}…</span>
                     </button>
                     <EntryRow entry={entry} peerId={subject} />
