@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { toast } from 'sonner'
+import { ChevronDown, Plus, Trash2 } from 'lucide-react'
 import { useUIStore } from '../../lib/store'
 
 export function ProjectDropdown() {
@@ -44,54 +45,60 @@ export function ProjectDropdown() {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-2 bg-bg-1 hover:bg-bg-2 border border-border-0 rounded-full px-3 py-1.5 text-xs text-text-1 transition-colors"
+        className="relative inline-flex items-center gap-2 bg-bg-1 hover:bg-bg-2 border border-border-0 rounded-full pl-3 pr-2 py-1.5 text-xs text-text-1 transition-colors"
       >
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-gradient-to-b from-accent to-accent2 rounded-full" />
         <span>📁</span>
         <span className="font-medium text-text-0 max-w-[200px] truncate">{active.name}</span>
-        <span className="text-text-2">▾</span>
+        <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.18 }}>
+          <ChevronDown size={14} className="text-text-2" />
+        </motion.span>
       </button>
 
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.12 }}
-            className="absolute top-full mt-1 left-0 bg-bg-1 border border-border-0 rounded-md shadow-xl w-72 max-h-80 overflow-auto z-50"
+            initial={{ opacity: 0, y: -8, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+            className="absolute top-full mt-2 left-0 bg-bg-1 border border-border-0 rounded-xl shadow-2xl w-80 overflow-hidden z-50 neon-glow-cyan"
           >
-            {projects.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => {
-                  setOpen(false)
-                  switchProject(p.id)
-                }}
-                className={`w-full text-left px-3 py-2 text-xs hover:bg-bg-2 ${
-                  p.id === activeId ? 'text-accent' : 'text-text-1'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span>📁</span>
-                  <span className="font-medium truncate">{p.name}</span>
-                </div>
-              </button>
-            ))}
+            <div className="max-h-72 overflow-auto">
+              {projects.map((p) => {
+                const isActive = p.id === activeId
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      setOpen(false)
+                      switchProject(p.id)
+                    }}
+                    className={`relative w-full text-left px-3 py-2.5 text-xs flex items-center gap-2 transition-colors ${
+                      isActive ? 'text-accent bg-accent/8' : 'text-text-1 hover:bg-bg-2 hover:text-text-0'
+                    }`}
+                  >
+                    {isActive && <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-accent" />}
+                    <span>📁</span>
+                    <span className="font-medium truncate">{p.name}</span>
+                  </button>
+                )
+              })}
+            </div>
             <div className="border-t border-border-0" />
             <button
-              onClick={() => {
-                setOpen(false)
-                openWizard()
-              }}
-              className="w-full text-left px-3 py-2 text-xs text-text-1 hover:bg-bg-2 hover:text-accent"
+              onClick={() => { setOpen(false); openWizard() }}
+              className="w-full text-left px-3 py-2.5 text-xs text-accent hover:bg-accent/10 inline-flex items-center gap-2"
             >
-              + New project
+              <Plus size={14} />
+              <span className="font-medium">New project</span>
             </button>
             <button
               onClick={handleDelete}
-              className="w-full text-left px-3 py-2 text-xs text-rose-400 hover:bg-bg-2 hover:text-rose-300"
+              className="w-full text-left px-3 py-2.5 text-xs text-bad hover:bg-bad/10 inline-flex items-center gap-2"
             >
-              Delete "{active.name}"
+              <Trash2 size={14} />
+              <span>Delete "{active.name}"</span>
             </button>
           </motion.div>
         )}
