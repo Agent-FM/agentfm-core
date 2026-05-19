@@ -9,7 +9,7 @@ interface Props {
 
 export function StatusCard({ title, status = 'ok', children }: Props) {
   const dotColor = {
-    ok: 'bg-emerald-500',
+    ok: 'bg-accent',
     warn: 'bg-amber-500',
     err: 'bg-rose-500',
     idle: 'bg-text-3',
