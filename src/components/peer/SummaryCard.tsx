@@ -18,7 +18,7 @@ export function SummaryCard({ data }: { data: PeerSummary }) {
       </Field>
       <Field label="Status">
         {data.online ? (
-          <span className="text-sm text-emerald-400">
+          <span className="text-sm text-accent">
             ✓ online{data.last_seen ? ' · last seen ' + compactAge(data.last_seen) + ' ago' : ''}
           </span>
         ) : (
@@ -28,7 +28,7 @@ export function SummaryCard({ data }: { data: PeerSummary }) {
         )}
       </Field>
       <Field label="Equivocator">
-        <span className={`text-sm ${data.is_equivocator ? 'text-rose-400' : 'text-text-1'}`}>
+        <span className={`text-sm ${data.is_equivocator ? 'text-bad' : 'text-text-1'}`}>
           {data.is_equivocator ? '⚠ yes — floored at -1.00' : 'no'}
         </span>
       </Field>

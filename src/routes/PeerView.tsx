@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, AlertOctagon } from 'lucide-react';
 import { usePeer, usePeerLog } from '../lib/query';
 import { useUIStore } from '../lib/store';
 import { SummaryCard } from '../components/peer/SummaryCard';
@@ -20,13 +21,13 @@ export default function PeerView() {
   const { data: log, isPending: lPending, error: lErr } = usePeerLog(peerId, { limit: 100 });
 
   if (!peerId) {
-    return <div className="p-7 text-rose-400">No peer id</div>;
+    return <div className="p-7 text-bad">No peer id</div>;
   }
   if (sPending || lPending) {
     return <div className="p-7 text-text-2">Loading peer history…</div>;
   }
   if (sErr || lErr) {
-    return <div className="p-7 text-rose-400">{(sErr || lErr)?.message}</div>;
+    return <div className="p-7 text-bad">{(sErr || lErr)?.message}</div>;
   }
   if (!summary || !log) return <div className="p-7 text-text-2">No data.</div>;
 
@@ -39,14 +40,15 @@ export default function PeerView() {
     <div className="p-7 max-w-5xl">
       <button
         onClick={() => navigate(-1)}
-        className="inline-flex items-center gap-1.5 text-[11px] text-text-2 mb-3 hover:text-text-0"
+        className="inline-flex items-center gap-1.5 text-xs text-text-2 mb-3 hover:text-text-0"
       >
-        ← back
+        <ArrowLeft size={14} />
+        <span>Back</span>
       </button>
 
       <div className="flex justify-between items-start mb-2">
         <div>
-          <h1 className="text-2xl font-semibold text-text-0">
+          <h1 className="text-3xl font-semibold tracking-tight text-text-0">
             {displayName({ ...summary, name: summary.agent_name, peer_id: summary.peer_id })}
           </h1>
           <div className="font-mono text-[11px] text-text-2 mt-1 break-all">{summary.peer_id}</div>
@@ -66,11 +68,11 @@ export default function PeerView() {
       {summary.is_equivocator && (
         <div
           role="alert"
-          className="my-4 border border-rose-500/50 bg-rose-500/10 rounded-lg p-4 flex gap-3"
+          className="my-4 border border-bad/40 bg-gradient-to-r from-bad/15 to-warn/8 rounded-xl p-5 flex gap-3"
         >
-          <div className="text-rose-400 text-lg leading-none">⚠</div>
+          <AlertOctagon size={24} className="text-bad flex-none mt-0.5" />
           <div>
-            <div className="text-rose-300 font-semibold text-sm">Equivocator detected</div>
+            <div className="text-bad font-semibold text-sm">Equivocator detected</div>
             <div className="text-xs text-text-1 mt-1">
               The mesh observed this peer publishing inconsistent telemetry or claims. Dispatch is
               auto-refused.
