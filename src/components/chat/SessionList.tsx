@@ -1,3 +1,4 @@
+import { Trash2 } from 'lucide-react'
 import { Button } from '../primitives/Button';
 import type { ChatSession } from '../../types/chat';
 
@@ -37,11 +38,12 @@ export function SessionList({ sessions, activeId, onSelect, onNew, onDelete }: P
             {buckets[bucket].map((s) => {
               const isActive = s.id === activeId;
               return (
-                <div key={s.id} className="group flex items-center">
+                <div key={s.id} className="group flex items-center relative">
+                  {isActive && <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-accent to-accent2" />}
                   <button
                     onClick={() => onSelect(s.id)}
                     className={`flex-1 text-left px-2.5 py-1.5 rounded-md text-sm transition-colors ${
-                      isActive ? 'bg-accent-bg text-accent' : 'text-text-1 hover:bg-bg-2'
+                      isActive ? 'bg-accent/10 text-text-0' : 'text-text-1 hover:bg-bg-2'
                     }`}
                   >
                     <div className="truncate">{s.title || 'Untitled'}</div>
@@ -52,7 +54,7 @@ export function SessionList({ sessions, activeId, onSelect, onNew, onDelete }: P
                       className="opacity-0 group-hover:opacity-100 text-text-2 hover:text-rose-400 px-1 py-1 text-xs transition-opacity"
                       title="Delete session"
                     >
-                      ×
+                      <Trash2 size={12} />
                     </button>
                   )}
                 </div>

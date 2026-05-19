@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
@@ -66,11 +67,10 @@ export default function Chat() {
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-bg-0">
         <header className="border-b border-border-0 px-5 py-3 flex items-center gap-3">
-          <button
-            onClick={() => navigate('/radar')}
-            className="text-2xs text-text-2 hover:text-text-0"
-          >
-            ← Radar
+          <button onClick={() => navigate('/radar')}
+            className="inline-flex items-center gap-1.5 text-xs text-text-2 hover:text-text-0">
+            <ArrowLeft size={14} />
+            <span>Radar</span>
           </button>
           <AgentPicker
             pinnedPeerId={active.pinnedPeerId}
