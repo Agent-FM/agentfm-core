@@ -29,7 +29,7 @@ export function EmptyRadar() {
   return (
     <div className="max-w-2xl bg-bg-1 border border-border-0 rounded-xl p-7">
       <div className="text-5xl mb-3 opacity-70">🛰</div>
-      <h2 className="text-lg font-semibold text-text-0">No agents on the mesh yet</h2>
+      <h2 className="text-xl font-semibold tracking-tight text-text-0">No agents on the mesh yet</h2>
       <p className="text-sm text-text-2 mt-1.5 mb-5">
         Workers announce themselves on the GossipSub telemetry topic. Once one
         comes online, its card will appear here in real time — no refresh needed.

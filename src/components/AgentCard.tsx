@@ -1,72 +1,69 @@
-import { motion } from 'framer-motion';
-import { shortenPeerID, shortenDigest } from '../lib/peer';
-import { Button } from './primitives/Button';
-import { HonestyBadge } from './HonestyBadge';
-import { DispatchBadge } from './DispatchBadge';
-import { EquivocatorBadge } from './EquivocatorBadge';
-import { CapabilityBadge } from './CapabilityBadge';
-import { displayName } from '../lib/displayName';
-import type { WorkerProfile } from '../types/api';
+import { motion } from 'framer-motion'
+import { ArrowRight, History } from 'lucide-react'
+import { shortenPeerID, shortenDigest } from '../lib/peer'
+import { displayName } from '../lib/displayName'
+import { Button } from './primitives/Button'
+import { Badge } from './primitives/Badge'
+import { StatusDot } from './primitives/StatusDot'
+import { lift } from '../lib/motion'
+import type { WorkerProfile } from '../types/api'
 
 interface Props {
-  worker: WorkerProfile;
-  onHistory: () => void;
-  onDispatch: () => void;
+  worker: WorkerProfile
+  onHistory: () => void
+  onDispatch: () => void
 }
 
 export function AgentCard({ worker, onHistory, onDispatch }: Props) {
-  const busy = worker.online && worker.current_tasks >= worker.max_tasks;
-  const offline = !worker.online;
-  const equivocator = worker.is_equivocator;
-  const canDispatch = worker.dispatch_allowed && !busy && worker.online;
+  const busy = worker.online && worker.current_tasks >= worker.max_tasks
+  const offline = !worker.online
+  const equivocator = worker.is_equivocator
+  const canDispatch = worker.dispatch_allowed && !busy && worker.online
 
-  let dotClass = 'bg-text-3';
-  if (worker.online) {
-    dotClass = busy
-      ? 'bg-amber-500 shadow-[0_0_6px_#f59e0b]'
-      : 'bg-accent shadow-[0_0_8px_var(--accent)] animate-pulse';
-  } else if (equivocator) {
-    dotClass = 'bg-rose-500 shadow-[0_0_6px_#ef4444]';
-  }
+  const dotTone: 'cyan' | 'amber' | 'rose' | 'neutral' =
+    equivocator ? 'rose' : busy ? 'amber' : worker.online ? 'cyan' : 'neutral'
+
+  const stripVisible = worker.online && !equivocator
 
   return (
     <motion.div
-      whileHover={{ y: -2, boxShadow: '0 8px 24px -12px rgba(0,0,0,0.5)' }}
-      transition={{ duration: 0.18 }}
-      className={`bg-bg-1 border border-border-0 hover:border-accent/40 rounded-xl px-4 py-3.5 grid grid-cols-[auto_1fr_auto] gap-4 items-center transition-colors ${offline ? 'opacity-65' : ''}`}
+      whileHover={offline ? undefined : lift.whileHover}
+      transition={lift.transition}
+      className={`relative bg-bg-1 border border-border-0 rounded-xl pl-5 pr-4 py-4 grid grid-cols-[1fr_auto] gap-4 items-center transition-all overflow-hidden ${
+        offline ? 'opacity-60' : 'hover:border-accent/40 hover:shadow-[0_10px_30px_-14px_rgba(34,211,238,.35)]'
+      }`}
     >
-      <span className={`w-2 h-2 rounded-full ${dotClass}`} />
+      {stripVisible && (
+        <span className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-accent to-accent2" />
+      )}
 
       <div>
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <h4 className="text-sm font-semibold text-text-0">{displayName(worker)}</h4>
-          {worker.agent_capability && <CapabilityBadge name={worker.agent_capability} />}
-          {busy && (
-            <span className="text-[10px] text-amber-400 uppercase tracking-wider">
-              ⏳ busy {worker.current_tasks}/{worker.max_tasks}
-            </span>
-          )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <StatusDot tone={dotTone} pulse={worker.online && !busy && !equivocator} />
+          <h4 className="text-base font-semibold text-text-0">{displayName(worker)}</h4>
+          {worker.agent_capability && <Badge tone="violet" mono>{worker.agent_capability}</Badge>}
+          {busy && <Badge tone="amber">busy {worker.current_tasks}/{worker.max_tasks}</Badge>}
         </div>
-        <div className="text-[11px] text-text-2 font-mono mt-1">
+        <div className="text-2xs text-text-2 font-mono mt-1.5">
           {shortenPeerID(worker.peer_id, 12, 5)}
-          {worker.agent_image_ref && (
-            <> · {worker.model || 'unknown'}</>
-          )}
-          {worker.agent_image_digest && (
-            <> · {shortenDigest(worker.agent_image_digest, 8)}</>
-          )}
+          {worker.model && <> · {worker.model}</>}
+          {worker.agent_image_digest && <> · {shortenDigest(worker.agent_image_digest, 8)}</>}
         </div>
-        <div className="flex flex-wrap gap-1.5 items-center mt-1.5">
+        <div className="flex flex-wrap gap-1.5 items-center mt-2">
           {equivocator ? (
-            <EquivocatorBadge />
+            <Badge tone="rose">⚠ equivocator</Badge>
           ) : (
-            <HonestyBadge score={worker.honesty_score} />
+            <Badge tone={worker.honesty_score > 0.3 ? 'lime' : worker.honesty_score < -0.5 ? 'rose' : 'neutral'} mono>
+              {worker.honesty_score >= 0 ? '+' : ''}{worker.honesty_score.toFixed(2)}
+            </Badge>
           )}
           {!equivocator && (
-            <DispatchBadge allowed={worker.dispatch_allowed} reason={worker.dispatch_refuse_reason} />
+            <Badge tone={worker.dispatch_allowed ? 'lime' : 'rose'}>
+              {worker.dispatch_allowed ? '✓ allowed' : '✗ refused'}
+            </Badge>
           )}
-          {worker.online && !offline && (
-            <span className="text-[11px] text-text-2 ml-1">
+          {worker.online && (
+            <span className="text-2xs text-text-2 ml-1">
               {worker.cpu_usage_pct.toFixed(0)}% cpu · {worker.ram_free_gb.toFixed(1)} GB free
             </span>
           )}
@@ -74,11 +71,15 @@ export function AgentCard({ worker, onHistory, onDispatch }: Props) {
       </div>
 
       <div className="flex gap-1.5">
-        <Button onClick={onHistory}>History</Button>
+        <Button onClick={onHistory}>
+          <History size={12} />
+          <span>History</span>
+        </Button>
         <Button variant="primary" onClick={onDispatch} disabled={!canDispatch}>
-          {equivocator ? 'Refused' : busy ? 'At capacity' : 'Dispatch ↵'}
+          <span>{equivocator ? 'Refused' : busy ? 'At capacity' : 'Dispatch'}</span>
+          <ArrowRight size={12} />
         </Button>
       </div>
     </motion.div>
-  );
+  )
 }
