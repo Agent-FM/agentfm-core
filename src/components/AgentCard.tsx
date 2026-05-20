@@ -12,8 +12,6 @@ import { useNavigate } from 'react-router-dom'
 
 interface Props {
   worker: WorkerProfile
-  onHistory?: () => void
-  onDispatch?: () => void
 }
 
 function honestyTone(score: number): 'lime' | 'rose' | 'cyan' {
