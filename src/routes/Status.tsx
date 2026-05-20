@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileText, RefreshCw, Radar as RadarIcon, ScrollText } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAbout } from '../lib/query'
 import { useBackend } from '../hooks/useBackend'
 import { useUIStore } from '../lib/store'
@@ -59,6 +60,24 @@ export default function Status() {
   const ledgerSize = about?.ledger_tree_size ?? 0
   const uptime = about?.uptime_seconds ?? 0
 
+  const relayConnected = !!about?.relay_peer_id
+  const relayValue = !relayConnected ? 'OFF' : isPrivate ? 'PSK' : 'PUBLIC'
+  const relayTone: 'ok' | 'cyan' | 'violet' | 'rose' = !relayConnected
+    ? 'rose'
+    : isPrivate ? 'violet' : 'cyan'
+  const relayEmoji = !relayConnected ? '⚠' : isPrivate ? '🔒' : '🌐'
+
+  async function handleRestart() {
+    const ok = window.confirm('Restart the backend? Any in-flight tasks will be cancelled.')
+    if (!ok) return
+    try {
+      await window.api.backend.restart()
+      toast.success('Backend restarted')
+    } catch (e) {
+      toast.error('Restart failed: ' + (e as Error).message)
+    }
+  }
+
   return (
     <>
       <div className="p-7 max-w-5xl">
@@ -83,9 +102,9 @@ export default function Status() {
             sub={`online · ${active ? 'live mesh' : 'no project'}`}
           />
           <StatCard
-            label="RELAY" emoji={isPrivate ? '🔒' : '🌐'}
-            value={isPrivate ? 'PSK' : 'PUBLIC'}
-            valueTone={isPrivate ? 'violet' : 'cyan'}
+            label="RELAY" emoji={relayEmoji}
+            value={relayValue}
+            valueTone={relayTone}
             sub={about?.relay_peer_id ? shortenPeerID(about.relay_peer_id, 6, 5) : '(not connected)'}
           />
           <StatCard
@@ -155,7 +174,7 @@ export default function Status() {
                 text-text-0 border border-accent/30 hover:border-accent/55 transition-colors">
               <FileText size={12} /><span>View logs</span>
             </button>
-            <button onClick={() => window.api.backend.restart()}
+            <button onClick={handleRestart}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[13px] font-semibold
                 text-text-0 border border-accent/30 hover:border-accent/55 transition-colors">
               <RefreshCw size={12} /><span>Restart backend</span>
