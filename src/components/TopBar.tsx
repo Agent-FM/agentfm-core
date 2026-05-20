@@ -3,14 +3,21 @@ import { toast } from 'sonner'
 import { Copy, Check } from 'lucide-react'
 import { useUIStore } from '../lib/store'
 import { ProjectDropdown } from './projects/ProjectDropdown'
+import { RelayPill } from './primitives/RelayPill'
+import { useAbout } from '../lib/query'
 
 function truncateMultiaddr(m: string): string {
   if (m.length <= 32) return m
   return m.slice(0, 14) + '…' + m.slice(-14)
 }
 
+const isMac = typeof window !== 'undefined' && window.api?.platform === 'darwin'
+const noDrag = { WebkitAppRegion: 'no-drag' as const }
+
 export function TopBar() {
   const active = useUIStore((s) => s.activeProject())
+  const { data: about } = useAbout()
+  const mode = active?.connectionMode ?? 'public'
   const [copied, setCopied] = useState(false)
 
   async function copyRelay() {
@@ -28,25 +35,36 @@ export function TopBar() {
 
   return (
     <header
-      className="h-12 bg-bg-0 flex items-center gap-4 px-4 select-none relative"
+      className={`h-12 bg-bg-0 flex items-center gap-4 px-4 select-none relative ${isMac ? 'pl-20' : ''}`}
       style={{
         borderBottom: '1px solid transparent',
         backgroundImage:
           'linear-gradient(#07090d,#07090d), linear-gradient(90deg, rgba(34,211,238,.35) 0%, rgba(34,211,238,0) 50%, rgba(168,85,247,.25) 100%)',
         backgroundOrigin: 'border-box',
         backgroundClip: 'padding-box, border-box',
+        WebkitAppRegion: 'drag',
       }}
     >
       <div className="text-sm font-semibold tracking-tight">
         Agent<span className="text-accent glow-text-cyan">FM</span>
       </div>
-      {active && <ProjectDropdown />}
+      {active && (
+        <div style={noDrag}>
+          <ProjectDropdown />
+        </div>
+      )}
       <div className="flex-1" />
+      {about?.relay_peer_id && (
+        <div style={noDrag}>
+          <RelayPill peerId={about.relay_peer_id} mode={mode} />
+        </div>
+      )}
       {active && (
         <button
           onClick={copyRelay}
           className="group inline-flex items-center gap-1.5 text-2xs text-text-2 hover:text-text-0 font-mono transition-colors px-2 py-1 rounded"
           title={active.relayMultiaddr ?? 'bundled public lighthouse'}
+          style={noDrag}
         >
           <span>relay: {active.relayMultiaddr ? truncateMultiaddr(active.relayMultiaddr) : 'bundled'}</span>
           {copied ? <Check size={12} className="text-accent" /> : <Copy size={12} className="opacity-0 group-hover:opacity-70 transition-opacity" />}

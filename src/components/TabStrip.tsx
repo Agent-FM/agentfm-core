@@ -6,7 +6,9 @@ const tabs = [
   { to: '/radar', label: 'Radar' },
   { to: '/chat', label: 'Chat' },
   { to: '/activity', label: 'Activity' },
+  { to: '/assets', label: 'Assets' },
   { to: '/status', label: 'Status' },
+  { to: '/settings', label: 'Settings' },
 ]
 
 export function TabStrip() {
@@ -22,7 +24,7 @@ export function TabStrip() {
           <NavLink
             key={t.to}
             to={t.to}
-            className={`relative px-4 py-2.5 text-sm transition-colors ${
+            className={`relative px-4 py-2.5 text-[14px] transition-colors ${
               isActive ? 'text-text-0 font-semibold' : 'text-text-2 hover:text-text-0'
             }`}
           >
