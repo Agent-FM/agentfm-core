@@ -6,6 +6,7 @@ import { TabStrip } from './TabStrip'
 import { EmptyState } from './EmptyState'
 import { SettingsFooter } from './SettingsFooter'
 import { RouteErrorBoundary } from './RouteErrorBoundary'
+import { RoutePage } from './primitives/RoutePage'
 import { useGlobalShortcuts } from '../hooks/useGlobalShortcuts'
 
 export function Shell() {
@@ -31,7 +32,9 @@ export function Shell() {
               className="h-full overflow-auto"
             >
               <RouteErrorBoundary>
-                <Outlet />
+                <RoutePage>
+                  <Outlet />
+                </RoutePage>
               </RouteErrorBoundary>
             </motion.div>
           </AnimatePresence>

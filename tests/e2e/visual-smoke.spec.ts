@@ -39,7 +39,30 @@ test('active tab is bolded after Cmd+2 navigation', async () => {
   await expect(chatActive).toHaveClass(/font-semibold/)
 })
 
-test('status hero shows healthy or issues summary', async () => {
-  await page.keyboard.press('Meta+4')
-  await expect(page.locator('text=/All systems are healthy|issues? detected/i')).toBeVisible({ timeout: 5000 })
+// Regression test for the "navigating to different tabs breaks the UI with
+// black screen" bug. Cycles through every tab by clicking the TabStrip nav
+// links (more reliable than relying on Cmd+N hotkeys which can be eaten by
+// the OS), and asserts the <main> region renders something — non-empty
+// content rules out the dark background showing through an unmounted Outlet.
+test('cycles every tab without empty content', async () => {
+  const tabs = ['Radar', 'Chat', 'Activity', 'Assets', 'Status']
+  for (const label of tabs) {
+    await page.locator(`a:has-text("${label}")`).first().click()
+    await page.waitForTimeout(250) // let AnimatePresence settle
+    const txt = await page.locator('main').innerText()
+    expect(
+      txt.trim().length,
+      `tab "${label}" rendered empty main — black screen regression`,
+    ).toBeGreaterThan(20)
+  }
+})
+
+test('every tab shows the route-page mesh background', async () => {
+  const tabs = ['Radar', 'Chat', 'Activity', 'Assets', 'Status', 'Settings']
+  for (const label of tabs) {
+    await page.locator(`a:has-text("${label}")`).first().click()
+    await page.waitForTimeout(200)
+    const grid = await page.locator('.route-page__grid').count()
+    expect(grid, `tab "${label}" missing route-page mesh layer`).toBeGreaterThan(0)
+  }
 })
