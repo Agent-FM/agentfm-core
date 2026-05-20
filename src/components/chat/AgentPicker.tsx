@@ -29,7 +29,7 @@ export function AgentPicker({ pinnedPeerId, preferredModel, onPin }: Props) {
         onClick={() => setOpen(!open)}
         className="inline-flex items-center gap-2 bg-bg-2 border border-border-0 px-2.5 py-1.5 rounded-md text-xs text-text-1 hover:text-text-0"
       >
-        <span className="w-1.5 h-1.5 rounded-full bg-accent shadow-[0_0_6px_var(--accent)] animate-pulse" />
+        <span className="w-1.5 h-1.5 rounded-full bg-accent shadow-[0_0_6px_#22d3ee] animate-pulse-cyan" />
         <span>{label}</span>
         <ChevronDown size={12} className="text-text-2" />
       </button>
@@ -74,7 +74,7 @@ export function AgentPicker({ pinnedPeerId, preferredModel, onPin }: Props) {
                 >
                   {isPinned && <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-accent" />}
                   <div className="font-medium">{displayName(w)}</div>
-                  <div className="text-text-2 text-[11px] font-mono">
+                  <div className="text-accent2-light text-[11px] font-mono">
                     {shortenPeerID(w.peer_id, 12, 5)} · honesty{' '}
                     {w.honesty_score.toFixed(2)}
                   </div>
