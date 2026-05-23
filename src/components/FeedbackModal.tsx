@@ -44,11 +44,16 @@ export function FeedbackModal() {
   async function submit() {
     if (!text.trim() || !ctx || submitting) return;
     setSubmitting(true);
-    const body = hasRating
-      ? `${text.trim()}\n\n(rating: ${rating >= 0 ? '+' : ''}${rating.toFixed(2)})`
-      : text.trim();
     try {
-      const res = await api.submitSelfComment(ctx.peerId, { text: body, language: 'en' });
+      // Send the rating as a discrete field so the boss appends a paired
+      // Rating ledger entry. Previously the rating was string-concatenated
+      // into the comment body — visible but cosmetic; it never flowed into
+      // EigenTrust or appeared under the PeerView Ratings tab.
+      const res = await api.submitSelfComment(ctx.peerId, {
+        text: text.trim(),
+        language: 'en',
+        rating: hasRating ? rating : undefined,
+      });
       await Promise.all([
         qc.invalidateQueries({ queryKey: qk.peer(ctx.peerId) }),
         qc.invalidateQueries({

@@ -8,6 +8,12 @@ export function setApiPort(p: number) {
   port = p
 }
 
+// getApiBaseURL exposes the resolved base URL so non-fetch callers (EventSource,
+// WebSocket) can build URLs from the same source of truth as the HTTP client.
+export function getApiBaseURL(): string {
+  return baseURL()
+}
+
 export async function loadApiPortFromSettings() {
   try {
     const stored = await window.api?.settings.get<number>('apiPort')
@@ -68,7 +74,15 @@ export const api = {
     ),
   submitSelfComment: (
     peerId: string,
-    body: { text: string; language?: string; attached_rating_hash?: string },
+    body: {
+      text: string
+      language?: string
+      attached_rating_hash?: string
+      /** Optional honesty rating in [-1.0, +1.0]. When set, the boss appends a
+       *  paired Rating ledger entry alongside the Comment so it surfaces in
+       *  the PeerView Ratings tab and flows into EigenTrust. */
+      rating?: number
+    },
   ) =>
     postJSON<SelfCommentResponse>(
       `/v1/peers/${peerId}/comments/self`,
@@ -99,6 +113,11 @@ export const api = {
     }
     return res
   },
+
+  testRelay: (multiaddr: string) =>
+    postJSON<{ ok: boolean; peer_id?: string; error?: string }>('/api/relay/test', {
+      multiaddr,
+    }),
 
   chatCompletion: async (body: unknown, signal?: AbortSignal) => {
     const res = await fetch(`${baseURL()}/v1/chat/completions`, {
