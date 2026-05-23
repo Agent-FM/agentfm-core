@@ -3,6 +3,8 @@
 **Status:** Draft · 2026-05-23
 **Scope:** `agentfm-desktop` (renderer only). Zero changes to `agentfm-core/agentfm-go`.
 
+> **Path convention.** All `src/…` paths in this document are relative to the `agentfm-desktop/` repository root (the Electron app). All `internal/…` paths are relative to `agentfm-core/agentfm-go/`. The spec lives in `agentfm-core/` because AgentFM is a single product spread across two sibling repos.
+
 ## Summary
 
 Add a real-time observability surface to the Electron desktop app, sourced from the boss API's existing `/metrics` endpoint and the existing `/api/workers` telemetry poll. Two surfaces:
@@ -103,7 +105,7 @@ boss API (existing, :8080)                            renderer (Electron + React
 
 9. `src/components/Shell.tsx` — add a `Dashboard` link to the sidebar between Radar and Activity. Match existing icon/label rhythm.
 
-10. `src/App.tsx` — register `<Route path="/dashboard" element={<Dashboard />} />`. Mount `<UseWorkerHistoryProvider />` (a no-render component wrapping `useWorkerHistory()`) at the App root.
+10. `src/App.tsx` — register `<Route path="/dashboard" element={<Dashboard />} />`. Call `useWorkerHistory()` directly inside `App` so it runs for the lifetime of the renderer (no wrapper component needed).
 
 11. `src/routes/PeerView.tsx` — insert `<TelemetryStrip peerId={summary.peer_id} />` between the existing `<SummaryCard>` (line 95) and `<Tabs>` (line 98).
 
@@ -141,7 +143,7 @@ React Query /api/workers (existing 2s poll)
   └─→ WorkerProfile[]
         │
         ▼
-useWorkerHistory diffs against last snapshot
+useWorkerHistory pushes every snapshot
   └─→ for each profile: peerSeries[peerId][metric].push(now, value)
         │
         ▼
