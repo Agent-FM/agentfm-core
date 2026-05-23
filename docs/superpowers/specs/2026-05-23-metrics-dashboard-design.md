@@ -10,7 +10,7 @@
 Add a real-time observability surface to the Electron desktop app, sourced from the boss API's existing `/metrics` endpoint and the existing `/api/workers` telemetry poll. Two surfaces:
 
 1. A new top-level **`/dashboard`** route showing boss-level signals (task throughput, durations, stream errors, auth attempts, runtime health).
-2. A **`<TelemetryStrip>`** band on each **`/peer/:peerId`** view showing live CPU/GPU/RAM/queue sparklines for that worker.
+2. A **`<TelemetryStrip>`** band on each **`/peer/:peerId`** view showing live CPU/GPU/RAM-free/queue sparklines for that worker.
 
 The boss API already exposes `/metrics` on port 8080 unauthenticated and CORS-free (see `internal/boss/api.go:157`). No backend work is required.
 
@@ -34,7 +34,7 @@ The boss API already exposes `/metrics` on port 8080 unauthenticated and CORS-fr
 | Source | Endpoint | Cadence | Used by |
 |---|---|---|---|
 | Boss Prometheus metrics | `GET http://127.0.0.1:8080/metrics` | 2 s poll while `/dashboard` visible | `Dashboard.tsx` tiles |
-| Worker telemetry snapshots | `GET /api/workers` (already polled by `useBackend`) | 2 s (existing) | `TelemetryStrip.tsx` on `PeerView` |
+| Worker telemetry snapshots | `GET /api/workers` (polled by existing `useWorkers` React Query hook in `src/lib/query.ts`) | 2 s (existing) | `TelemetryStrip.tsx` on `PeerView` |
 
 ### Metrics consumed (from `internal/metrics/metrics.go`)
 
@@ -55,7 +55,13 @@ The boss API already exposes `/metrics` on port 8080 unauthenticated and CORS-fr
 
 ### Worker profile fields consumed (from existing `WorkerProfile` type in `src/types/api.ts`)
 
-`cpu_percent`, `gpu_percent`, `ram_used_mb`, `queue_depth`, `peer_id`, `last_seen_at`.
+| Field | Used as |
+|---|---|
+| `cpu_usage_pct` | CPU sparkline (0–100 %) |
+| `gpu_usage_pct` | GPU sparkline (0–100 %) |
+| `ram_free_gb` | RAM-free sparkline (GB, shown as "RAM FREE") |
+| `current_tasks` | Queue sparkline (count) |
+| `peer_id`, `last_seen`, `online` | Buffer key / offline detection |
 
 ## Architecture
 
@@ -99,11 +105,11 @@ boss API (existing, :8080)                            renderer (Electron + React
 
 7. `src/components/peer/TelemetryStrip.tsx` — 4-cell strip (CPU/GPU/RAM/Queue) using `SparkLine`. Shows the existing "Waiting for telemetry beacon…" placeholder when buffer empty. Shows "(offline — last seen Nm ago)" when `Date.now() - lastTickTs > 30_000`. Re-renders subscribed to one store slice (`peerSeries.get(peerId)`).
 
-8. `src/hooks/useWorkerHistory.ts` — runs continuously app-wide (mounted in `App.tsx`). Subscribes to the existing React Query `/api/workers` cache; on every successful refetch, iterates the profile list and pushes each peer's CPU/GPU/RAM/queue into `peerSeries`. Decoupling history capture from PeerView mount means navigating to a peer page shows charts immediately.
+8. `src/hooks/useWorkerHistory.ts` — runs continuously app-wide (mounted in `App.tsx`). Subscribes to the existing React Query `/api/workers` cache; on every successful refetch, iterates the profile list and pushes each peer's CPU/GPU/RAM-free/queue into `peerSeries`. Decoupling history capture from PeerView mount means navigating to a peer page shows charts immediately.
 
 **Modified files (3):**
 
-9. `src/components/Shell.tsx` — add a `Dashboard` link to the sidebar between Radar and Activity. Match existing icon/label rhythm.
+9. `src/components/TabStrip.tsx` — add a `Dashboard` entry to the `tabs` array between Radar and Activity. Match existing label rhythm (no icon column — TabStrip is text-only).
 
 10. `src/App.tsx` — register `<Route path="/dashboard" element={<Dashboard />} />`. Call `useWorkerHistory()` directly inside `App` so it runs for the lifetime of the renderer (no wrapper component needed).
 
