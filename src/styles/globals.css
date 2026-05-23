@@ -1,4 +1,3 @@
-@import 'uplot/dist/uPlot.min.css';
 @import './tokens.css';
 @tailwind base;
 @tailwind components;
