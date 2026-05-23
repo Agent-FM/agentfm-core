@@ -51,6 +51,17 @@ describe('parseMetrics', () => {
     expect(samples.map((s) => s.value)).toEqual([1, 2])
   })
 
+  it('drops samples whose numeric value is unparseable NaN', () => {
+    const samples = parseMetrics('# TYPE x gauge\nx 1.2.3\nx 5\nx 1e')
+    expect(samples.map((s) => s.value)).toEqual([5])
+  })
+
+  it('keeps explicit NaN literal as value', () => {
+    const samples = parseMetrics('# TYPE x gauge\nx NaN')
+    expect(samples).toHaveLength(1)
+    expect(Number.isNaN(samples[0].value)).toBe(true)
+  })
+
   it('parses the full /metrics fixture', () => {
     const samples = parseMetrics(FIXTURE)
     const names = new Set(samples.map((s) => s.name))

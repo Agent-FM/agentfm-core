@@ -47,6 +47,7 @@ export function parseMetrics(text: string): MetricSample[] {
       const name = m[1]
       const labels = parseLabels(m[2])
       const value = parseValue(m[3])
+      if (Number.isNaN(value) && m[3] !== 'NaN') continue
       const type = types.get(baseName(name)) ?? 'unknown'
       out.push({ name, labels, value, type })
     } catch {
