@@ -57,7 +57,7 @@ export const useMetricsStore = create<MetricsState>((set, get) => ({
       const last = latestValue(buf)
       if (last !== undefined) pushRing(buf, ts, last)
     }
-    set({ bossSeries, lastBossTick: ts })
+    set({ bossSeries: new Map(bossSeries), lastBossTick: ts })
   },
 
   pushPeer: (peerId, ts, snap) => {
@@ -78,8 +78,8 @@ export const useMetricsStore = create<MetricsState>((set, get) => ({
     pushRing(peerBufs.get('queue')!, ts, snap.queue)
     peerLastTick.set(peerId, ts)
     set({
-      peerSeries,
-      peerLastTick,
+      peerSeries: new Map(peerSeries),
+      peerLastTick: new Map(peerLastTick),
     })
   },
 

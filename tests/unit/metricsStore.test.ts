@@ -18,41 +18,34 @@ describe('metricsStore.pushBoss', () => {
   })
 
   it('appends multiple ticks to the same series', () => {
-    const s = useMetricsStore.getState()
-    s.pushBoss(1000, [
-      { name: 'g', labels: {}, value: 1, type: 'gauge' },
-    ])
-    s.pushBoss(2000, [
-      { name: 'g', labels: {}, value: 2, type: 'gauge' },
-    ])
-    s.pushBoss(3000, [
-      { name: 'g', labels: {}, value: 3, type: 'gauge' },
-    ])
-    const buf = s.bossSeries.get(seriesKey('g', {}))!
+    useMetricsStore.getState().pushBoss(1000, [{ name: 'g', labels: {}, value: 1, type: 'gauge' }])
+    useMetricsStore.getState().pushBoss(2000, [{ name: 'g', labels: {}, value: 2, type: 'gauge' }])
+    useMetricsStore.getState().pushBoss(3000, [{ name: 'g', labels: {}, value: 3, type: 'gauge' }])
+    const buf = useMetricsStore.getState().bossSeries.get(seriesKey('g', {}))!
     expect(ringToArrays(buf)).toEqual({ ts: [1000, 2000, 3000], v: [1, 2, 3] })
   })
 
   it('carries forward series that are missing this tick', () => {
-    const s = useMetricsStore.getState()
-    s.pushBoss(1000, [
+    useMetricsStore.getState().pushBoss(1000, [
       { name: 'a', labels: {}, value: 10, type: 'gauge' },
       { name: 'b', labels: {}, value: 20, type: 'gauge' },
     ])
-    s.pushBoss(2000, [
+    useMetricsStore.getState().pushBoss(2000, [
       { name: 'a', labels: {}, value: 11, type: 'gauge' },
     ])
-    const b = s.bossSeries.get(seriesKey('b', {}))!
+    const { bossSeries } = useMetricsStore.getState()
+    const b = bossSeries.get(seriesKey('b', {}))!
     expect(ringToArrays(b)).toEqual({ ts: [1000, 2000], v: [20, 20] })
   })
 })
 
 describe('metricsStore.pushPeer', () => {
   it('isolates per-peer buffers', () => {
-    const s = useMetricsStore.getState()
-    s.pushPeer('peerA', 1000, { cpu: 50, gpu: 0, ram: 4, queue: 1 })
-    s.pushPeer('peerB', 1000, { cpu: 90, gpu: 0, ram: 2, queue: 3 })
-    const a = s.peerSeries.get('peerA')!
-    const b = s.peerSeries.get('peerB')!
+    useMetricsStore.getState().pushPeer('peerA', 1000, { cpu: 50, gpu: 0, ram: 4, queue: 1 })
+    useMetricsStore.getState().pushPeer('peerB', 1000, { cpu: 90, gpu: 0, ram: 2, queue: 3 })
+    const { peerSeries } = useMetricsStore.getState()
+    const a = peerSeries.get('peerA')!
+    const b = peerSeries.get('peerB')!
     expect(latestValue(a.get('cpu')!)).toBe(50)
     expect(latestValue(b.get('cpu')!)).toBe(90)
     expect(latestValue(a.get('queue')!)).toBe(1)
