@@ -10,14 +10,17 @@ import { SettingsSheet } from './components/SettingsSheet'
 import { useBackend } from './hooks/useBackend'
 import { useEventStream } from './hooks/useEventStream'
 import Radar from './routes/Radar'
+import Dashboard from './routes/Dashboard'
 import Chat from './routes/Chat'
 import PeerView from './routes/PeerView'
 import Activity from './routes/Activity'
 import Status from './routes/Status'
+import { useWorkerHistory } from './hooks/useWorkerHistory'
 
 export default function App() {
   const backend = useBackend()
   useEventStream()
+  useWorkerHistory()
   const showOverlay = backend.consecutiveFailures >= 3
 
   return (
@@ -28,6 +31,7 @@ export default function App() {
             <Route element={<Shell />}>
               <Route index element={<Navigate to="/radar" replace />} />
               <Route path="radar" element={<Radar />} />
+              <Route path="dashboard" element={<Dashboard />} />
               <Route path="chat" element={<Chat />} />
               <Route path="chat/:sessionId" element={<Chat />} />
               <Route path="peer/:peerId" element={<PeerView />} />

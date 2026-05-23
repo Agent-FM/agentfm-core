@@ -4,6 +4,7 @@ import { ArrowLeft, AlertOctagon } from 'lucide-react';
 import { usePeer, usePeerLog } from '../lib/query';
 import { useUIStore } from '../lib/store';
 import { SummaryCard } from '../components/peer/SummaryCard';
+import { TelemetryStrip } from '../components/peer/TelemetryStrip';
 import { Tabs } from '../components/peer/Tabs';
 import { EntryRow } from '../components/peer/EntryRow';
 import { Button } from '../components/primitives/Button';
@@ -93,6 +94,10 @@ export default function PeerView() {
 
       <div className="my-4">
         <SummaryCard data={summary} />
+      </div>
+
+      <div className="my-4">
+        <TelemetryStrip peerId={summary.peer_id} />
       </div>
 
       <Tabs<TabKind>
