@@ -30,7 +30,7 @@ func main() {
 		return
 	}
 
-	mode := flag.String("mode", "", "Node mode: 'boss', 'worker', 'relay', 'api', 'test', or 'genkey'")
+	mode := flag.String("mode", "", "Node mode: 'boss', 'worker', 'relay', 'witness', 'api', 'test', or 'genkey'")
 
 	// Private Swarm & Network Flags
 	swarmKey := flag.String("swarmkey", "", "Path to private swarm.key file (optional)")
@@ -97,7 +97,7 @@ func main() {
 	}
 
 	if *mode == "" {
-		pterm.Error.Println("Please specify a mode: -mode boss, worker, relay, api, test, or genkey")
+		pterm.Error.Println("Please specify a mode: -mode boss, worker, relay, witness, api, test, or genkey")
 		os.Exit(1)
 	}
 
@@ -131,6 +131,8 @@ func main() {
 		runTestMode(ctx, cfg, *testPrompt)
 	case "relay":
 		runRelayMode(ctx, netCfg, defaultPromListen(*promListen, "127.0.0.1:9091"))
+	case "witness":
+		runWitnessMode(ctx, netCfg, defaultPromListen(*promListen, "127.0.0.1:9092"))
 	case "worker":
 		runWorkerMode(ctx, netCfg, cfg, defaultPromListen(*promListen, "127.0.0.1:9090"))
 	case "boss":
@@ -138,7 +140,7 @@ func main() {
 	case "api":
 		runAPIMode(ctx, netCfg, *apiBind, *apiPort, *reputationFloor)
 	default:
-		pterm.Error.Println("Invalid mode. Use 'boss', 'worker', 'relay', 'api', 'test', or 'genkey'.")
+		pterm.Error.Println("Invalid mode. Use 'boss', 'worker', 'relay', 'witness', 'api', 'test', or 'genkey'.")
 		os.Exit(1)
 	}
 }
