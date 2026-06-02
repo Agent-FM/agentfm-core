@@ -295,6 +295,58 @@ func (s *Store) IterateAllInboxEntries(ctx context.Context, fn func(*InboxEntry)
 	return rows.Err()
 }
 
+// IterateInboxFrom streams accepted inbox entries with rowid > sinceRowid,
+// in ascending rowid order (which equals insertion order for SQLite's
+// implicit rowid). Stops after limit rows or when fn returns an error.
+//
+// The rowid passed to fn is the SQLite-assigned monotonic cursor for the
+// row; callers should remember the last rowid they saw and pass it as
+// sinceRowid on the next call to resume.
+//
+// Used by the InboxFetchProtocol handler so a remote peer can pull a
+// witness's accumulated inbox without knowing the (peer_id, hash) keys
+// in advance.
+func (s *Store) IterateInboxFrom(
+	ctx context.Context,
+	sinceRowid uint64,
+	limit int,
+	fn func(rowid uint64, e *InboxEntry) error,
+) error {
+	if limit <= 0 {
+		return nil
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT rowid, peer_id, hash, prev_hash, payload, received_at
+		 FROM inbox_entries
+		 WHERE rowid > ?
+		 ORDER BY rowid ASC
+		 LIMIT ?`,
+		sinceRowid, limit,
+	)
+	if err != nil {
+		return fmt.Errorf("query inbox_entries by rowid: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var rowid uint64
+		e := &InboxEntry{}
+		var h, p []byte
+		if err := rows.Scan(&rowid, &e.PeerID, &h, &p, &e.Payload, &e.ReceivedAt); err != nil {
+			return fmt.Errorf("scan inbox row: %w", err)
+		}
+		if len(h) != 32 || len(p) != 32 {
+			return fmt.Errorf("malformed inbox row: hash=%d prev=%d", len(h), len(p))
+		}
+		copy(e.Hash[:], h)
+		copy(e.PrevHash[:], p)
+		if err := fn(rowid, e); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
 // -----------------------------------------------------------------------------
 // equivocators — permanent marker per peer caught showing two
 // non-extending heads (P2-3). The marker is set ON CONFLICT DO NOTHING
