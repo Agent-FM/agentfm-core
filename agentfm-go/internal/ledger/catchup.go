@@ -250,22 +250,32 @@ func CatchUpInbox(ctx context.Context, local Ledger, h host.Host, source peer.ID
 	const pageSize = uint64(maxInboxFetchEntries)
 	var cursor uint64
 	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		entries, err := FetchInboxFrom(ctx, h, source, cursor, pageSize)
 		if err != nil {
 			return fmt.Errorf("inbox catch-up: page from rowid %d: %w", cursor, err)
 		}
+		var maxSeen uint64
 		for _, e := range entries {
 			if err := local.AcceptEntry(ctx, e.Payload); err != nil {
 				slog.Debug("inbox catch-up: AcceptEntry rejected",
 					slog.Uint64("rowid", e.Rowid),
 					slog.Any(obs.FieldErr, err))
 			}
-			if e.Rowid > cursor {
-				cursor = e.Rowid
+			if e.Rowid > maxSeen {
+				maxSeen = e.Rowid
 			}
 		}
 		if uint64(len(entries)) < pageSize {
 			return nil
 		}
+		if maxSeen <= cursor {
+			return fmt.Errorf("inbox catch-up: source returned full page with rowids <= cursor %d — protocol violation", cursor)
+		}
+		cursor = maxSeen
 	}
 }
