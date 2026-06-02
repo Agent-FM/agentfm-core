@@ -18,6 +18,7 @@ import (
 	"agentfm/internal/reputation"
 
 	netcore "github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 // bossOptionsFromFlags assembles the v1.3 boss.Options bundle that
@@ -87,20 +88,54 @@ func bossOptionsFromFlags(
 	go func() {
 		const waitBudget = 30 * time.Second
 		deadline := time.Now().Add(waitBudget)
+
 		for time.Now().Before(deadline) {
 			if node.RelayPeerID != "" &&
 				node.Host.Network().Connectedness(node.RelayPeerID) == netcore.Connected {
-				if err := ledger.CatchUp(context.Background(), l, node.Host, node.RelayPeerID); err != nil {
-					slog.Warn("boss bootstrap: catch-up failed",
-						slog.Any(obs.FieldErr, err))
-				} else {
-					slog.Info("boss bootstrap: catch-up complete")
-				}
-				return
+				break
 			}
 			time.Sleep(1 * time.Second)
 		}
-		slog.Warn("boss bootstrap: relay never came online within 30s; no catch-up")
+		if node.RelayPeerID == "" ||
+			node.Host.Network().Connectedness(node.RelayPeerID) != netcore.Connected {
+			slog.Warn("boss bootstrap: relay never came online within 30s; no catch-up")
+			return
+		}
+
+		bgCtx := context.Background()
+
+		if err := ledger.CatchUp(bgCtx, l, node.Host, node.RelayPeerID); err != nil {
+			slog.Warn("boss bootstrap: own-log catch-up against relay failed",
+				slog.Any(obs.FieldErr, err))
+		} else {
+			slog.Info("boss bootstrap: own-log catch-up complete")
+		}
+
+		candidates := []peer.ID{node.RelayPeerID}
+		seen := map[peer.ID]struct{}{node.RelayPeerID: {}}
+		for _, p := range node.Host.Network().Peers() {
+			if _, ok := seen[p]; ok {
+				continue
+			}
+			if p == node.Host.ID() {
+				continue
+			}
+			seen[p] = struct{}{}
+			candidates = append(candidates, p)
+			if len(candidates) >= 5 {
+				break
+			}
+		}
+		for _, p := range candidates {
+			if err := ledger.CatchUpInbox(bgCtx, l, node.Host, p); err != nil {
+				slog.Debug("boss bootstrap: inbox catch-up against peer failed",
+					slog.String("peer", p.String()),
+					slog.Any(obs.FieldErr, err))
+				continue
+			}
+			slog.Info("boss bootstrap: inbox catch-up complete",
+				slog.String("peer", p.String()))
+		}
 	}()
 
 	// Hourly aggregate outcome rater (P2 / Task 2.1).
