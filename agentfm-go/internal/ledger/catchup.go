@@ -230,3 +230,42 @@ func CatchUp(ctx context.Context, local Ledger, h host.Host, relayPID peer.ID) e
 		slog.Uint64("relay_head_size", relayHead.TreeSize))
 	return nil
 }
+
+// CatchUpInbox pulls third-party entries from source's inbox into
+// local's inbox, routing each through local.AcceptEntry for full
+// signature + chain verification. Used by a freshly-joined boss to
+// recover entries gossiped while it was offline — the witness
+// equivalent of CatchUp.
+//
+// Pagination is cursor-driven via rowid; the loop terminates when
+// a page returns fewer than maxInboxFetchEntries rows (i.e. source
+// has nothing more after the last rowid).
+//
+// On success returns nil. On any unrecoverable error (source
+// unreachable, stream error) returns the underlying error so the
+// caller can log and continue without catch-up. Per-entry rejections
+// from AcceptEntry (bad sig, orphan, dup) are logged at debug and do
+// not abort the loop — the inbox dedups so a re-pull is always safe.
+func CatchUpInbox(ctx context.Context, local Ledger, h host.Host, source peer.ID) error {
+	const pageSize = uint64(maxInboxFetchEntries)
+	var cursor uint64
+	for {
+		entries, err := FetchInboxFrom(ctx, h, source, cursor, pageSize)
+		if err != nil {
+			return fmt.Errorf("inbox catch-up: page from rowid %d: %w", cursor, err)
+		}
+		for _, e := range entries {
+			if err := local.AcceptEntry(ctx, e.Payload); err != nil {
+				slog.Debug("inbox catch-up: AcceptEntry rejected",
+					slog.Uint64("rowid", e.Rowid),
+					slog.Any(obs.FieldErr, err))
+			}
+			if e.Rowid > cursor {
+				cursor = e.Rowid
+			}
+		}
+		if uint64(len(entries)) < pageSize {
+			return nil
+		}
+	}
+}
