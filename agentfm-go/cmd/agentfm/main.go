@@ -49,7 +49,7 @@ func main() {
 	// for safety; pass 0.0.0.0:<port> to expose to off-host scrapers.
 	// Empty string disables the metrics server (worker and relay only;
 	// boss-api always serves /metrics on its own port).
-	promListen := flag.String("prom-listen", "", "Prometheus /metrics listen address (worker default 127.0.0.1:9090, relay default 127.0.0.1:9091, empty disables)")
+	promListen := flag.String("prom-listen", "", "Prometheus /metrics listen address (worker default 127.0.0.1:9090, relay default 127.0.0.1:9091, witness default 127.0.0.1:9092, empty disables)")
 
 	// Structured-logging controls. Format auto-detects: console on a TTY,
 	// JSON otherwise. Operators running under systemd / docker / k8s want
