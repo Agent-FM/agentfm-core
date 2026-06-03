@@ -161,7 +161,7 @@ export default function Settings() {
           <SectionLabel>AUTO-REFUSE THRESHOLD</SectionLabel>
           <NeonCard className="p-5">
             <div className="text-[15px] text-text-1 leading-[1.5] mb-4">
-              Workers with honesty below{' '}
+              Workers with rating below{' '}
               <span
                 className="font-mono font-bold text-[18px]"
                 style={{

@@ -3,7 +3,7 @@ import { HeroTitle } from '../components/primitives/HeroTitle'
 import { AgentCard } from '../components/AgentCard'
 import { useWorkers } from '../lib/query'
 import { useUIStore } from '../lib/store'
-import { EmptyState } from '../components/EmptyState'
+import { EmptyRadar } from '../components/EmptyRadar'
 
 export default function Radar() {
   const { data, isPending, error } = useWorkers(true)
@@ -46,11 +46,11 @@ export default function Radar() {
         <span className="text-accent font-mono font-semibold">{onlineCount}</span>{' '}
         agents online ·{' '}
         <span className="text-accent font-mono font-semibold">{offlineCount}</span>{' '}
-        known offline · gossip every 2s
+        known offline
       </p>
 
       {agents.length === 0 ? (
-        <EmptyState />
+        <EmptyRadar />
       ) : filtered.length === 0 ? (
         <div className="text-text-2 text-[15px]">
           No agents match the current filter. Clear the search to see all{' '}

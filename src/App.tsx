@@ -15,6 +15,8 @@ import Chat from './routes/Chat'
 import PeerView from './routes/PeerView'
 import Activity from './routes/Activity'
 import Status from './routes/Status'
+import Assets from './routes/Assets'
+import Settings from './routes/Settings'
 import { useWorkerHistory } from './hooks/useWorkerHistory'
 
 export default function App() {
@@ -36,7 +38,9 @@ export default function App() {
               <Route path="chat/:sessionId" element={<Chat />} />
               <Route path="peer/:peerId" element={<PeerView />} />
               <Route path="activity" element={<Activity />} />
+              <Route path="assets" element={<Assets />} />
               <Route path="status" element={<Status />} />
+              <Route path="settings" element={<Settings />} />
             </Route>
           </Routes>
         </ErrorBoundary>

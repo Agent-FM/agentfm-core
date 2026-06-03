@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
+import { Eye, EyeOff } from 'lucide-react';
 import { useCommentBody } from '../../lib/query';
 
 interface Props {
@@ -13,8 +14,16 @@ export function CommentBodyExpander({ peerId, cid, expanded, onToggle }: Props) 
 
   return (
     <>
-      <button onClick={onToggle} className="text-[10px] text-accent hover:underline mt-1">
-        {expanded ? '▼ Hide body' : '▶ Show body'}
+      <button
+        onClick={onToggle}
+        title={expanded ? 'Hide comment' : 'Show comment'}
+        aria-label={expanded ? 'Hide comment' : 'Show comment'}
+        className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded
+          text-[10px] text-accent border border-accent/25 hover:border-accent/55
+          hover:bg-accent/10 transition-colors"
+      >
+        {expanded ? <EyeOff size={11} /> : <Eye size={11} />}
+        <span>{expanded ? 'Hide' : 'Show'}</span>
       </button>
       <AnimatePresence>
         {expanded && (

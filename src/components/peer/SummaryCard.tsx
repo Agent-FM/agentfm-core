@@ -6,18 +6,13 @@ export function SummaryCard({ data }: { data: PeerSummary }) {
   const score = data.honesty_score;
   return (
     <div className="bg-bg-1 border border-border-0 rounded-lg p-5 grid grid-cols-3 gap-x-6 gap-y-4">
-      <Field label="Honesty">
+      <Field label="Rating">
         <div className="flex gap-1.5 flex-wrap items-center">
           {data.is_equivocator ? (
             <Badge tone="rose">⚠ equivocator</Badge>
           ) : (
             <Badge tone={score > 0.3 ? 'lime' : score < -0.5 ? 'rose' : 'neutral'} mono>
               {score >= 0 ? '+' : ''}{score.toFixed(2)}
-            </Badge>
-          )}
-          {!data.is_equivocator && (
-            <Badge tone={data.dispatch_allowed ? 'lime' : 'rose'} title={data.dispatch_refuse_reason}>
-              {data.dispatch_allowed ? '✓ allowed' : '✗ refused'}
             </Badge>
           )}
         </div>

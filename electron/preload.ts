@@ -1,5 +1,20 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+export interface ArtifactMetadata {
+  projectName?: string
+  prompt?: string
+  agentName?: string
+  agentDescription?: string
+  agentPeerId?: string
+}
+
+export interface ArtifactListEntry {
+  taskId: string
+  sizeBytes: number
+  mtime: number
+  metadata?: ArtifactMetadata
+}
+
 const api = {
   backend: {
     health: () => ipcRenderer.invoke('backend:health'),
@@ -27,6 +42,9 @@ const api = {
     showItemInFolder: (path: string) => ipcRenderer.invoke('app:showItemInFolder', path),
     checkArtifact: (taskId: string) => ipcRenderer.invoke('app:checkArtifact', taskId) as Promise<boolean>,
     openArtifact: (taskId: string) => ipcRenderer.invoke('app:openArtifact', taskId),
+    listArtifacts: () => ipcRenderer.invoke('app:listArtifacts') as Promise<ArtifactListEntry[]>,
+    writeArtifactMeta: (taskId: string, meta: ArtifactMetadata) =>
+      ipcRenderer.invoke('app:writeArtifactMeta', taskId, meta) as Promise<void>,
   },
 }
 

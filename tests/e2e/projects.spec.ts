@@ -76,7 +76,7 @@ test('wizard opens on first launch and creates the default project', async () =>
   await expect(wizard).toBeVisible({ timeout: 8000 });
 
   await page.locator('input[placeholder*="Team Mesh"]').fill('Smoke Project');
-  await page.locator('button:has-text("Create project")').click();
+  await page.locator('button:has-text("Create project")').last().click();
   await expect(wizard).toBeHidden({ timeout: 15000 });
 
   await expect(page.locator('text=Smoke Project').first()).toBeVisible();
@@ -89,12 +89,48 @@ test('rejects a duplicate relay when creating a second project', async () => {
   await expect(page.locator('h2:has-text("New project")')).toBeVisible();
 
   await page.locator('input[placeholder*="Team Mesh"]').fill('Dupe');
-  await page.locator('button:has-text("Create project")').click();
+  await page.locator('button:has-text("Create project")').last().click();
 
   await expect(page.locator('h2:has-text("New project")')).toBeVisible();
   await expect(
     page.locator('text=/already uses the bundled|already uses /i'),
   ).toBeVisible({ timeout: 3000 });
+
+  await page.locator('button:has-text("Cancel")').click();
+});
+
+test('private mode wizard demands a relay + 64-hex swarm key', async () => {
+  await page.locator('header button:has-text("📁")').first().click();
+  await page.locator('button:has-text("New project")').click();
+  const wizard = page.locator('h2:has-text("New project")');
+  await expect(wizard).toBeVisible();
+
+  await page.locator('input[placeholder*="Team Mesh"]').fill('Private smoke');
+  await page.locator('button:has-text("Private")').click();
+
+  // Submitting empty private form must surface the relay error.
+  await page.locator('button:has-text("Create project")').last().click();
+  await expect(wizard).toBeVisible();
+  await expect(
+    page.locator('text=/private relay multiaddr/i').first(),
+  ).toBeVisible({ timeout: 3000 });
+
+  // Fill a valid private multiaddr, then try with a malformed swarm key.
+  await page
+    .locator('input[placeholder*="12D3KooW"]')
+    .first()
+    .fill('/ip4/10.0.0.42/tcp/4001/p2p/12D3KooWPrivatePlaceholderXYZ');
+  await page.locator('input[placeholder*="hex"]').fill('not-hex');
+  await page.locator('button:has-text("Create project")').last().click();
+  await expect(wizard).toBeVisible();
+  await expect(
+    page.locator('text=/64 hex|hex characters/i').first(),
+  ).toBeVisible({ timeout: 3000 });
+
+  // Generate button must populate a 64-hex value into the swarm key field.
+  await page.locator('button:has-text("Generate")').click();
+  const keyValue = await page.locator('input[placeholder*="hex"]').inputValue();
+  expect(keyValue).toMatch(/^[0-9a-f]{64}$/);
 
   await page.locator('button:has-text("Cancel")').click();
 });

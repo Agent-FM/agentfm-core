@@ -1,5 +1,5 @@
 import { Outlet, useLocation } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { useUIStore } from '../lib/store'
 import { TopBar } from './TopBar'
 import { TabStrip } from './TabStrip'
@@ -22,22 +22,19 @@ export function Shell() {
         {!active ? (
           <EmptyState />
         ) : (
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={loc.pathname}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.18 }}
-              className="h-full overflow-auto"
-            >
-              <RouteErrorBoundary>
-                <RoutePage>
-                  <Outlet />
-                </RoutePage>
-              </RouteErrorBoundary>
-            </motion.div>
-          </AnimatePresence>
+          <motion.div
+            key={loc.pathname}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18 }}
+            className="h-full overflow-auto"
+          >
+            <RouteErrorBoundary>
+              <RoutePage>
+                <Outlet />
+              </RoutePage>
+            </RouteErrorBoundary>
+          </motion.div>
         )}
       </main>
       <SettingsFooter />

@@ -5,6 +5,7 @@ import { X, Send, ExternalLink } from 'lucide-react';
 import { useUIStore } from '../lib/store';
 import { useWorkers } from '../lib/query';
 import { useDispatch } from '../hooks/useDispatch';
+import { usePeerIdentityCache } from '../lib/peerIdentityCache';
 import { Button } from './primitives/Button';
 import { Badge } from './primitives/Badge';
 import { StreamingView } from './StreamingView';
@@ -19,6 +20,10 @@ export function DispatchDrawer() {
 
   const { data: workersData } = useWorkers(true);
   const worker = workersData?.agents.find((a) => a.peer_id === target);
+  const cached = usePeerIdentityCache((s) =>
+    target ? s.byPeerId[target] : undefined,
+  );
+  const activeProject = useUIStore((s) => s.activeProject());
 
   const [prompt, setPrompt] = useState('');
   const { state, send, reset } = useDispatch();
@@ -44,7 +49,11 @@ export function DispatchDrawer() {
 
   function submit() {
     if (!worker || !prompt.trim()) return;
-    send(worker.peer_id, prompt.trim());
+    send(worker.peer_id, prompt.trim(), {
+      agentName: displayName(worker, cached),
+      agentDescription: worker.description?.trim() || cached?.description,
+      projectName: activeProject?.name,
+    });
   }
 
   function handleKey(e: React.KeyboardEvent) {
@@ -88,7 +97,7 @@ export function DispatchDrawer() {
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-xl font-semibold tracking-tight text-text-0">
-                  {displayName(worker)}
+                  {displayName(worker, cached)}
                   {worker.model ? ` · ${worker.model}` : ''}
                 </h2>
                 <div className="font-mono text-[11px] text-text-2 mt-0.5">

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -42,11 +42,6 @@ export default function Chat() {
     prevErrorRef.current = error;
   }, [error]);
 
-  // If no sessions yet, auto-create one
-  useEffect(() => {
-    if (sessions.length === 0) createSession();
-  }, [sessions, createSession]);
-
   if (!active) {
     return (
       <div className="flex flex-1 items-center justify-center text-text-2">
@@ -74,7 +69,6 @@ export default function Chat() {
           </button>
           <AgentPicker
             pinnedPeerId={active.pinnedPeerId}
-            preferredModel={active.preferredModel}
             onPin={(pid) => updateActive({ pinnedPeerId: pid })}
           />
         </header>
@@ -108,7 +102,12 @@ export default function Chat() {
           )}
         </div>
 
-        <Composer onSend={send} onStop={stop} streaming={streaming} />
+        {!active.pinnedPeerId && (
+          <div className="mx-5 mb-3 text-xs text-warn bg-warn/10 border border-warn/30 rounded-md px-3 py-2">
+            Pin an agent above to start chatting. Use the picker to choose one from the online mesh.
+          </div>
+        )}
+        <Composer onSend={send} onStop={stop} streaming={streaming} disabled={!active.pinnedPeerId} />
       </div>
     </div>
   );

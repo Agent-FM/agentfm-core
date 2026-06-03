@@ -99,6 +99,8 @@ export const useUIStore = create<UIState>()(
         relayMultiaddr: input.relayMultiaddr,
         reputationFloor: input.reputationFloor ?? -0.5,
         createdAt: Date.now(),
+        connectionMode: input.connectionMode,
+        swarmKey: input.connectionMode === 'private' ? input.swarmKey : null,
       }
       const nextProjects = [...projects, project]
       set({ projects: nextProjects })
@@ -115,6 +117,9 @@ export const useUIStore = create<UIState>()(
         relayMultiaddr:
           patch.relayMultiaddr === undefined ? current.relayMultiaddr : patch.relayMultiaddr,
         reputationFloor: patch.reputationFloor ?? current.reputationFloor,
+        connectionMode: patch.connectionMode ?? current.connectionMode,
+        swarmKey:
+          patch.swarmKey === undefined ? current.swarmKey : patch.swarmKey,
       }
       validateProjectInput(projects, merged, id)
       const next = projects.map((p) =>
@@ -152,8 +157,10 @@ export const useUIStore = create<UIState>()(
         set({ activeProjectId: id })
         await window.api?.backend.restart({
           apiPort: state.apiPort,
+          projectId: project.id,
           reputationFloor: project.reputationFloor,
           relayMultiaddr: project.relayMultiaddr ?? undefined,
+          swarmKey: project.connectionMode === 'private' ? project.swarmKey ?? undefined : undefined,
         })
       } catch (e) {
         console.warn('switchProject: backend restart failed', e)

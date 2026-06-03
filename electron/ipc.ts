@@ -27,6 +27,11 @@ export function registerIPC(backend: BackendManager): void {
     const artifactPath = backend.getArtifactPath(taskId)
     if (backend.artifactExists(taskId)) shell.showItemInFolder(artifactPath)
   })
+  ipcMain.handle('app:listArtifacts', () => backend.listArtifacts())
+  ipcMain.handle('app:writeArtifactMeta', (_event, taskId: string, meta: unknown) => {
+    if (typeof taskId !== 'string' || !meta || typeof meta !== 'object') return
+    backend.writeArtifactMeta(taskId, meta as Parameters<typeof backend.writeArtifactMeta>[1])
+  })
 
   // Forward backend events to all renderer windows
   backend.on('crashed', (data) => {

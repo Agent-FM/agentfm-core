@@ -1,12 +1,15 @@
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, MessageSquare } from 'lucide-react'
 import type { ChatMessage } from '../../types/chat'
 import { shortenPeerID, compactAge } from '../../lib/peer'
 import { NeonCard } from '../primitives/NeonCard'
 import { Avatar } from '../primitives/Avatar'
+import { useUIStore } from '../../lib/store'
 
 export function MessageBubble({ msg, streaming }: { msg: ChatMessage; streaming?: boolean }) {
   const isUser = msg.role === 'user'
   const showArtifact = !isUser && msg.has_artifact && msg.task_id
+  const showFeedback = !isUser && !streaming && msg.rater_peer_id && msg.task_id && msg.content.trim().length > 0
+  const openFeedback = useUIStore((s) => s.openFeedback)
 
   return (
     <div className={`flex flex-col gap-2 max-w-[78%] min-w-0 ${isUser ? 'self-end items-end' : 'self-start items-start'}`}>
@@ -89,6 +92,18 @@ export function MessageBubble({ msg, streaming }: { msg: ChatMessage; streaming?
             <span>Show in Finder</span>
           </button>
         </div>
+      )}
+
+      {showFeedback && (
+        <button
+          onClick={() => openFeedback(msg.rater_peer_id!, msg.task_id!)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px]
+            text-text-1 hover:text-text-0 border border-accent/20 hover:border-accent/45
+            bg-bg-1 hover:bg-accent/[.06] transition-colors"
+        >
+          <MessageSquare size={11} />
+          <span>Rate this response</span>
+        </button>
       )}
     </div>
   )

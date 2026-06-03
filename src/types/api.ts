@@ -11,6 +11,8 @@ export interface AboutResponse {
 export interface WorkerProfile {
   peer_id: string
   name: string
+  author?: string
+  description?: string
   status: string
   online: boolean
   last_seen: string | null
@@ -60,6 +62,8 @@ export interface PeerLogResponse {
 export interface PeerSummary {
   peer_id: string
   agent_name: string
+  author?: string
+  description?: string
   online: boolean
   last_seen: string | null
   honesty_score: number

@@ -4,6 +4,8 @@ import { ExternalLink, RefreshCw } from 'lucide-react'
 import { SectionLabel } from '../components/primitives/SectionLabel'
 import { HeroTitle } from '../components/primitives/HeroTitle'
 import { GradientButton } from '../components/primitives/GradientButton'
+import { usePeerIdentityCache } from '../lib/peerIdentityCache'
+import { shortenPeerID } from '../lib/peer'
 import type { ArtifactListEntry } from '../../electron/preload'
 
 function formatBytes(b: number): string {
@@ -26,6 +28,20 @@ export default function Assets() {
   const [error, setError] = useState<string | null>(null)
   const [activeProject, setActiveProject] = useState<string>('all')
   const [filter, setFilter] = useState('')
+  const peerCache = usePeerIdentityCache((s) => s.byPeerId)
+
+  const resolveIdentity = useCallback(
+    (it: ArtifactListEntry): { name: string; description?: string; peerLabel?: string } => {
+      const meta = it.metadata
+      const cached = meta?.agentPeerId ? peerCache[meta.agentPeerId] : undefined
+      const name =
+        (meta?.agentName?.trim() || cached?.name?.trim() || cached?.agent_capability?.trim()) ?? ''
+      const description = meta?.agentDescription?.trim() || cached?.description?.trim()
+      const peerLabel = meta?.agentPeerId ? shortenPeerID(meta.agentPeerId, 6, 5) : undefined
+      return { name, description, peerLabel }
+    },
+    [peerCache],
+  )
 
   const refresh = useCallback(async () => {
     try {
@@ -52,13 +68,16 @@ export default function Assets() {
       if (activeProject !== 'all' && p !== activeProject) return false
       if (filter.trim() === '') return true
       const q = filter.trim().toLowerCase()
+      const { name, description } = resolveIdentity(it)
       return (
         it.taskId.toLowerCase().includes(q) ||
         (it.metadata?.prompt ?? '').toLowerCase().includes(q) ||
-        (it.metadata?.agentName ?? '').toLowerCase().includes(q)
+        (it.metadata?.agentPeerId ?? '').toLowerCase().includes(q) ||
+        name.toLowerCase().includes(q) ||
+        (description ?? '').toLowerCase().includes(q)
       )
     })
-  }, [items, activeProject, filter])
+  }, [items, activeProject, filter, resolveIdentity])
 
   return (
     <div className="p-7 max-w-6xl">
@@ -118,7 +137,7 @@ export default function Assets() {
         </span>
         {/* Header */}
         <div className="grid items-center gap-3.5 px-3.5 py-2.5 border-b border-accent/[.12]"
-             style={{gridTemplateColumns:'28px 1.3fr 1fr 2fr 1.2fr 70px 80px 110px',
+             style={{gridTemplateColumns:'28px 1.6fr 1fr 2fr 1.2fr 70px 80px 110px',
                      fontSize:10,letterSpacing:'0.14em'}}>
           <div></div>
           <div className="font-mono uppercase font-bold text-text-2">Agent</div>
@@ -138,17 +157,31 @@ export default function Assets() {
         ) : (
           visible.map((it) => {
             const project = it.metadata?.projectName ?? '(no metadata)'
+            const { name, description, peerLabel } = resolveIdentity(it)
+            const hasName = name.length > 0
             return (
               <div key={it.taskId}
                    className="relative group grid items-center gap-3.5 px-3.5 py-2.5
                      border-b border-accent/[.08] last:border-b-0 hover:bg-accent/[.04] transition-colors text-[13px]"
-                   style={{gridTemplateColumns:'28px 1.3fr 1fr 2fr 1.2fr 70px 80px 110px'}}>
+                   style={{gridTemplateColumns:'28px 1.6fr 1fr 2fr 1.2fr 70px 80px 110px'}}>
                 <span className="absolute left-0 top-0 bottom-0 w-[2px] opacity-0 group-hover:opacity-100 transition-opacity"
                       style={{background:'linear-gradient(180deg,#22d3ee,#a855f7)',
                               boxShadow:'0 0 8px rgba(34,211,238,.5)'}}/>
                 <div className="text-[18px] text-accent">📦</div>
-                <div className="font-semibold text-text-0 truncate text-[14px]">
-                  {it.metadata?.agentName ?? <span className="text-text-2">Unknown agent</span>}
+                <div className="min-w-0">
+                  <div className="font-semibold text-text-0 truncate text-[14px]">
+                    {hasName ? name : <span className="text-text-2">Unknown agent</span>}
+                  </div>
+                  {peerLabel && (
+                    <div className="font-mono text-[11px] text-text-2 truncate" title={it.metadata?.agentPeerId}>
+                      {peerLabel}
+                    </div>
+                  )}
+                  {description && (
+                    <div className="text-[11px] text-text-2 truncate mt-0.5" title={description}>
+                      {description}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <span className="inline-flex font-mono text-[11px] px-2 py-0.5 rounded-full"

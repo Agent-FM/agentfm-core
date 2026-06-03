@@ -35,7 +35,7 @@ export function TopBar() {
 
   return (
     <header
-      className={`h-12 bg-bg-0 flex items-center gap-4 px-4 select-none relative ${isMac ? 'pl-20' : ''}`}
+      className={`h-12 bg-bg-0 flex items-center gap-4 px-4 select-none relative ${isMac ? 'pl-[92px]' : ''}`}
       style={{
         borderBottom: '1px solid transparent',
         backgroundImage:

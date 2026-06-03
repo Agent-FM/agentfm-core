@@ -6,6 +6,7 @@ import { queryClient } from './lib/query'
 import { loadApiPortFromSettings, setApiPort } from './lib/api'
 import { useUIStore } from './lib/store'
 import { migrateLegacySettings } from './lib/projectMigration'
+import { normalizeProject } from './lib/projectStore'
 import type { Project } from './types/project'
 import App from './App'
 import './styles/globals.css'
@@ -19,7 +20,8 @@ async function bootstrap() {
     delete: (k) => window.api.settings.delete(k),
   } as never).catch((e) => console.warn('migration failed', e))
 
-  const projects = (await window.api.settings.get<Project[]>('projects')) ?? []
+  const rawProjects = (await window.api.settings.get<Project[]>('projects')) ?? []
+  const projects = rawProjects.map(normalizeProject)
   const activeId = (await window.api.settings.get<string | null>('activeProjectId')) ?? null
   useUIStore.getState().hydrateProjects(projects, activeId)
 

@@ -23,6 +23,8 @@ export async function migrateLegacySettings(store: MigrationStore): Promise<void
     relayMultiaddr: legacyRelay,
     reputationFloor: legacyFloor,
     createdAt: Date.now(),
+    connectionMode: 'public',
+    swarmKey: null,
   }
 
   await store.set('projects', [defaultProject])

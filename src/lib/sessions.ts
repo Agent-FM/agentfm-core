@@ -28,7 +28,6 @@ export function newSession(): ChatSession {
     id: `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     title: 'New chat',
     pinnedPeerId: null,
-    preferredModel: 'auto',
     messages: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),

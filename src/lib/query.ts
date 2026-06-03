@@ -37,7 +37,8 @@ export function usePeer(peerId: string | undefined) {
     queryKey: qk.peer(peerId ?? ''),
     queryFn: () => api.peer(peerId!),
     enabled: !!peerId,
-    staleTime: 5000,
+    staleTime: 2000,
+    refetchInterval: 5000,
   })
 }
 

@@ -9,11 +9,17 @@ export interface DispatchState {
   hasArtifact: boolean;
 }
 
+export interface DispatchMeta {
+  agentName?: string;
+  agentDescription?: string;
+  projectName?: string;
+}
+
 export function useDispatch() {
   const [state, setState] = useState<DispatchState>({ status: 'idle', output: '', hasArtifact: false });
   const abortRef = useRef<AbortController | null>(null);
 
-  const send = useCallback(async (workerId: string, prompt: string) => {
+  const send = useCallback(async (workerId: string, prompt: string, meta?: DispatchMeta) => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -46,11 +52,24 @@ export function useDispatch() {
 
       setState((s) => ({ ...s, status: 'completed' }));
 
-      // Poll for artifact for up to 10s
+      // Poll for artifact for up to 10s. Once it appears, drop a metadata
+      // sidecar so the Assets view can surface agent name + description
+      // even after the agent has gone offline.
       for (let i = 0; i < 20; i++) {
         const exists = await window.api.app.checkArtifact(taskId);
         if (exists) {
           setState((s) => ({ ...s, hasArtifact: true }));
+          try {
+            await window.api.app.writeArtifactMeta(taskId, {
+              prompt,
+              agentName: meta?.agentName,
+              agentDescription: meta?.agentDescription,
+              agentPeerId: workerId,
+              projectName: meta?.projectName,
+            });
+          } catch {
+            // Best-effort: a failed sidecar must not break the dispatch.
+          }
           break;
         }
         await new Promise((r) => setTimeout(r, 500));

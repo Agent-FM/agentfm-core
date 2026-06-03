@@ -49,7 +49,7 @@ test.beforeAll(async () => {
       await retry.click();
       await page.waitForTimeout(500);
     }
-    const radarHeading = page.locator('h1:has-text("Agent Radar")');
+    const radarHeading = page.locator('h1:has-text("Your mesh")').first();
     if (await radarHeading.isVisible().catch(() => false)) break;
     await page.waitForTimeout(500);
   }
@@ -64,7 +64,7 @@ test('app boots and renders the Radar shell', async () => {
   await expect(page.locator('a[href="#/radar"]')).toBeVisible();
   // The route content is either the radar grid header or the loading state.
   // We accept either: both prove the route mounted without crashing.
-  const radarHeading = page.locator('h1:has-text("Agent Radar")');
+  const radarHeading = page.locator('h1:has-text("Your mesh")');
   const loading = page.locator('text=Loading agents…');
   await expect(async () => {
     const r = await radarHeading.isVisible().catch(() => false);
@@ -81,17 +81,13 @@ test('settings sheet opens from footer with theme control', async () => {
 });
 
 test('status dashboard renders friendly view', async () => {
-  await page.keyboard.press('Meta+4');
-  await expect(page.locator('h1:has-text("Your mesh")')).toBeVisible({ timeout: 5000 });
-  // Hero banner shows either healthy or issue summary
-  const hero = page.locator('text=/All systems are healthy|issue.*detected/i');
+  await page.locator('a[href="#/status"]').click();
+  await expect(page.locator('text=STATUS').first()).toBeVisible({ timeout: 5000 });
+  const hero = page.locator('text=/All systems healthy|Backend is down/i');
   await expect(hero).toBeVisible();
-  // The three friendly tiles
-  for (const tile of ['Workers', 'Relay', 'Ledger entries']) {
+  for (const tile of ['BOSS', 'AGENTS', 'RELAY', 'TRUST']) {
     await expect(page.locator(`text=${tile}`).first()).toBeVisible();
   }
-  // Trust gate strip
-  await expect(page.locator('text=Trust gate').first()).toBeVisible();
 });
 
 test('activity screen renders with grouped layout or empty state', async () => {
