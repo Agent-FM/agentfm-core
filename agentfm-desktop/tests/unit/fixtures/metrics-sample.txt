@@ -1,0 +1,29 @@
+# HELP agentfm_tasks_total Number of task executions, partitioned by terminal status.
+# TYPE agentfm_tasks_total counter
+agentfm_tasks_total{status="error"} 0
+agentfm_tasks_total{status="ok"} 142
+agentfm_tasks_total{status="rejected"} 0
+agentfm_tasks_total{status="timeout"} 0
+# HELP agentfm_task_duration_seconds Wall-clock task duration in seconds.
+# TYPE agentfm_task_duration_seconds histogram
+agentfm_task_duration_seconds_bucket{le="1"} 12
+agentfm_task_duration_seconds_bucket{le="5"} 45
+agentfm_task_duration_seconds_bucket{le="15"} 92
+agentfm_task_duration_seconds_bucket{le="60"} 128
+agentfm_task_duration_seconds_bucket{le="+Inf"} 142
+agentfm_task_duration_seconds_sum 1234.5
+agentfm_task_duration_seconds_count 142
+# HELP agentfm_workers_online Number of workers currently visible in this node's telemetry.
+# TYPE agentfm_workers_online gauge
+agentfm_workers_online 5
+# HELP agentfm_stream_errors_total Stream-level failures on AgentFM libp2p protocols.
+# TYPE agentfm_stream_errors_total counter
+agentfm_stream_errors_total{protocol="task",reason="deadline"} 2
+agentfm_stream_errors_total{protocol="task",reason="reset"} 0
+agentfm_stream_errors_total{protocol="artifacts",reason="peer_eof"} 1
+# HELP process_resident_memory_bytes Resident memory size in bytes.
+# TYPE process_resident_memory_bytes gauge
+process_resident_memory_bytes 1.4892e+08
+# HELP go_goroutines Number of goroutines that currently exist.
+# TYPE go_goroutines gauge
+go_goroutines 87
