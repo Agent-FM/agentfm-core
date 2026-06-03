@@ -38,6 +38,7 @@ func bossOptionsFromFlags(
 	node *network.MeshNode,
 	reputationFloor float64,
 	genesisSeedsPath string,
+	ledgerPathOverride string,
 ) (boss.Options, func()) {
 	opts := boss.Options{
 		// Always pass a pointer so an explicit --reputation-floor=0 stays 0
@@ -62,6 +63,9 @@ func bossOptionsFromFlags(
 	}
 
 	dbPath := defaultBossLedgerPath(mode)
+	if ledgerPathOverride != "" {
+		dbPath = ledgerPathOverride
+	}
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o700); err != nil {
 		slog.Warn("boss bootstrap: cannot create ledger dir; ledger disabled",
 			slog.String("path", dbPath),
@@ -101,6 +105,15 @@ func bossOptionsFromFlags(
 			slog.Warn("boss bootstrap: relay never came online within 30s; no catch-up")
 			return
 		}
+
+		// libp2p's identify protocol runs AFTER Connectedness flips to
+		// Connected. Without a small settle delay, h.NewStream(...) for a
+		// non-baseline protocol (head-fetch, ledger-fetch, inbox-fetch)
+		// can race ahead of the remote's identify response and fail with
+		// "protocols not supported" — silently truncating catch-up to zero
+		// entries. Two seconds is empirically enough on TCP loopback +
+		// public lighthouse; cheap insurance on a 30s budget.
+		time.Sleep(2 * time.Second)
 
 		bgCtx := context.Background()
 

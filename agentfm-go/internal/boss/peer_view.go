@@ -13,12 +13,14 @@ package boss
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"sort"
 	"time"
 
+	"agentfm/internal/ledger/comments"
 	pb "agentfm/internal/ledger/pb"
 	"agentfm/internal/ledger/store"
 
@@ -28,6 +30,10 @@ import (
 )
 
 // PeerEntry is one decoded ledger entry about a subject peer.
+//
+// TextCID is kept as raw multihash bytes for internal use (commentsStore lookups
+// expect raw bytes), but MarshalJSON emits it as lowercase hex so the wire
+// format matches what handleCommentBodyGet's URL parser expects.
 type PeerEntry struct {
 	ReceivedAt        time.Time `json:"received_at"`
 	Kind              string    `json:"kind"` // "Rating" | "Comment"
@@ -36,9 +42,22 @@ type PeerEntry struct {
 	Score             float64   `json:"score,omitempty"`
 	Context           string    `json:"context,omitempty"`
 	Language          string    `json:"language,omitempty"`
-	TextCID           []byte    `json:"text_cid,omitempty"`
+	TextCID           []byte    `json:"-"`
 	RaterStatus       string    `json:"rater_status"`
 	RaterHonestyScore float64   `json:"rater_honesty_score"`
+}
+
+// MarshalJSON renders TextCID as hex (matching the CommentSubmitResponse.CID
+// format and the GET /v1/peers/{id}/comments/{cid} URL parser).
+func (e PeerEntry) MarshalJSON() ([]byte, error) {
+	type alias PeerEntry
+	return json.Marshal(struct {
+		alias
+		TextCIDHex string `json:"text_cid,omitempty"`
+	}{
+		alias:      alias(e),
+		TextCIDHex: comments.CIDString(e.TextCID),
+	})
 }
 
 // GatherPeerEntries walks both IterateAllOwnEntries and

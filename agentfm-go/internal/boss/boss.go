@@ -93,6 +93,15 @@ type Boss struct {
 	// for the construction-time semantics.
 	reputationFloor float64
 
+	// startedAt records when this Boss was constructed. Used by the
+	// /v1/about endpoint to compute uptime_seconds.
+	startedAt time.Time
+
+	// eventBus is the in-process fan-out broker for mesh events. Used by
+	// the /v1/events SSE endpoint and populated by listenTelemetry /
+	// ledger callbacks. Always non-nil after NewWithOptions.
+	eventBus *EventBus
+
 	// menuPickerForTest overrides the pterm interactive-select in
 	// showPeerMenu. Set via SetMenuPickerForTest; nil in production.
 	menuPickerForTest func([]string) (string, error)
@@ -167,6 +176,8 @@ func NewWithOptions(node *network.MeshNode, opts Options) *Boss {
 		readStore:                opts.ReadStore,
 		commentsStore:            opts.CommentsStore,
 		completionRater:          opts.CompletionRater,
+		startedAt:                time.Now(),
+		eventBus:                 NewEventBus(),
 		// Resolve ReputationFloor once at construction. Nil = unconfigured →
 		// -1.0 (allow all). Non-nil pointer is used as-is, so an explicit
 		// --reputation-floor=0 cleanly means "refuse anyone with negative score."
@@ -270,12 +281,7 @@ func (b *Boss) listenTelemetry(ctx context.Context) {
 			}
 			var profile types.WorkerProfile
 			if err := json.Unmarshal(msg.Data, &profile); err == nil && profile.CPUCores > 0 {
-				b.mu.Lock()
-				b.activeWorkers[profile.PeerID] = profile
-				b.lastSeen[profile.PeerID] = time.Now()
-				n := len(b.activeWorkers)
-				b.mu.Unlock()
-				metrics.WorkersOnline.Set(float64(n))
+				b.handleTelemetryProfile(profile)
 			}
 		}
 	}
@@ -304,21 +310,50 @@ func (b *Boss) pruneDisconnectedWorkers() {
 	for peerIDStr := range b.activeWorkers {
 		pID, err := peer.Decode(peerIDStr)
 		if err != nil {
-			delete(b.activeWorkers, peerIDStr)
-			delete(b.lastSeen, peerIDStr)
+			b.evictWorkerLocked(peerIDStr)
 			continue
 		}
 		if b.node.Host.Network().Connectedness(pID) != netcore.Connected {
-			delete(b.activeWorkers, peerIDStr)
-			delete(b.lastSeen, peerIDStr)
+			b.evictWorkerLocked(peerIDStr)
 			continue
 		}
 		if seen, ok := b.lastSeen[peerIDStr]; ok && now.Sub(seen) > staleTelemetryTimeout {
-			delete(b.activeWorkers, peerIDStr)
-			delete(b.lastSeen, peerIDStr)
+			b.evictWorkerLocked(peerIDStr)
 		}
 	}
 	metrics.WorkersOnline.Set(float64(len(b.activeWorkers)))
+}
+
+// handleTelemetryProfile installs profile into activeWorkers and publishes
+// a worker_online SSE event on first sighting. Re-sightings (telemetry pulses
+// while the worker is already known) update the cached profile silently — the
+// event is a state-transition signal, not a heartbeat.
+func (b *Boss) handleTelemetryProfile(profile types.WorkerProfile) {
+	b.mu.Lock()
+	_, existed := b.activeWorkers[profile.PeerID]
+	b.activeWorkers[profile.PeerID] = profile
+	b.lastSeen[profile.PeerID] = time.Now()
+	n := len(b.activeWorkers)
+	b.mu.Unlock()
+	metrics.WorkersOnline.Set(float64(n))
+
+	if !existed {
+		var honesty float64
+		if b.reputationEngine != nil {
+			honesty = b.reputationEngine.Score(profile.PeerID)
+		}
+		b.publishWorkerOnline(profile.PeerID, profile.AgentName, honesty)
+	}
+}
+
+// evictWorkerLocked removes peerIDStr from activeWorkers + lastSeen and
+// publishes a worker_offline event. Caller MUST hold b.mu (write lock).
+// Safe to call under the lock because EventBus.Publish only enqueues on
+// buffered subscriber channels; it does not invoke handlers inline.
+func (b *Boss) evictWorkerLocked(peerIDStr string) {
+	delete(b.activeWorkers, peerIDStr)
+	delete(b.lastSeen, peerIDStr)
+	b.publishWorkerOffline(peerIDStr)
 }
 
 type timeoutReader struct {

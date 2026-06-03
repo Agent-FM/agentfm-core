@@ -90,12 +90,21 @@ func (b *Boss) handlePeers(w http.ResponseWriter, r *http.Request) {
 		b.handleLog(w, r)
 	case strings.HasSuffix(path, "/proof"):
 		b.handleProof(w, r)
+	case strings.HasSuffix(path, "/comments/self"):
+		// POST /v1/peers/{id}/comments/self submits a self-signed comment
+		// using the boss's own libp2p identity (no caller signature).
+		b.handleSelfComment(w, r)
 	case strings.HasSuffix(path, "/comments"):
 		// P4-3 — POST /v1/peers/{id}/comments submits a comment.
 		b.handleCommentSubmission(w, r)
 	case strings.Contains(path, "/comments/"):
-		// GET /v1/peers/{id}/comments/{cid} hydrates a comment body.
-		b.handleCommentBodyGet(w, r)
+		// GET /v1/peers/{id}/comments/{cid} — plain text body.
+		// GET /v1/peers/{id}/comments/{cid}.json — JSON-wrapped body.
+		if strings.HasSuffix(path, ".json") {
+			b.handleCommentBodyGetJSON(w, r)
+		} else {
+			b.handleCommentBodyGet(w, r)
+		}
 	case isPeerSummaryPath(path):
 		// /v1/peers/{id} with no trailing sub-resource.
 		b.handlePeerGet(w, r)
@@ -434,6 +443,8 @@ func countSubjectRatings(ctx context.Context, s *store.Store, subject []byte) (i
 type peerSummaryResponse struct {
 	PeerID               string       `json:"peer_id"`
 	AgentName            string       `json:"agent_name"`
+	Author               string       `json:"author,omitempty"`
+	Description          string       `json:"description,omitempty"`
 	Online               bool         `json:"online"`
 	LastSeen             *time.Time   `json:"last_seen,omitempty"`
 	HonestyScore         float64      `json:"honesty_score"`
@@ -530,6 +541,8 @@ func (b *Boss) handlePeerGet(w http.ResponseWriter, r *http.Request) {
 	if profile, ok := b.activeWorkers[peerIDStr]; ok {
 		resp.Online = true
 		resp.AgentName = profile.AgentName
+		resp.Author = profile.Author
+		resp.Description = profile.AgentDesc
 		resp.AdvertisedImageRef = profile.AgentImageRef
 		resp.AdvertisedImageDgst = profile.AgentImageDigest
 		resp.AdvertisedCapability = profile.AgentCapability

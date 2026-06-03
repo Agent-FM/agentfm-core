@@ -44,6 +44,7 @@ func main() {
 	// refuses to start without one of those when bind is non-loopback).
 	apiBind := flag.String("api-bind", "127.0.0.1", "Bind host for the API gateway (api mode). Loopback by default; pass 0.0.0.0 to expose off-host.")
 	apiPort := flag.String("apiport", "8080", "Port for the local API gateway (only used in api mode)")
+	ledgerPath := flag.String("ledger-path", "", "Override ledger SQLite path (default: ~/.agentfm/<mode>_ledger.db). Used by the desktop to scope a ledger to a single project.")
 
 	// Observability: Prometheus /metrics listen address. Default is loopback
 	// for safety; pass 0.0.0.0:<port> to expose to off-host scrapers.
@@ -136,9 +137,9 @@ func main() {
 	case "worker":
 		runWorkerMode(ctx, netCfg, cfg, defaultPromListen(*promListen, "127.0.0.1:9090"))
 	case "boss":
-		runBossMode(ctx, netCfg, *reputationFloor)
+		runBossMode(ctx, netCfg, *reputationFloor, *ledgerPath)
 	case "api":
-		runAPIMode(ctx, netCfg, *apiBind, *apiPort, *reputationFloor)
+		runAPIMode(ctx, netCfg, *apiBind, *apiPort, *reputationFloor, *ledgerPath)
 	default:
 		pterm.Error.Println("Invalid mode. Use 'boss', 'worker', 'relay', 'witness', 'api', 'test', or 'genkey'.")
 		os.Exit(1)
@@ -270,7 +271,7 @@ func defaultPromListen(flagValue, modeDefault string) string {
 }
 
 // runBossMode opens the interactive TUI for a human operator.
-func runBossMode(ctx context.Context, netCfg network.Config, reputationFloor float64) {
+func runBossMode(ctx context.Context, netCfg network.Config, reputationFloor float64, ledgerPath string) {
 	// Bind SIGINT/SIGTERM to the root ctx so Ctrl+C unwinds cleanly when
 	// the user is mid-task (NOT inside selectWorkerInteractive's
 	// keyboard.Listen, which catches Ctrl+C separately). Without this the
@@ -283,7 +284,7 @@ func runBossMode(ctx context.Context, netCfg network.Config, reputationFloor flo
 	if err != nil {
 		pterm.Fatal.Println(err)
 	}
-	bossOpts, cleanup := bossOptionsFromFlags(ctx, "boss", node, reputationFloor, "")
+	bossOpts, cleanup := bossOptionsFromFlags(ctx, "boss", node, reputationFloor, "", ledgerPath)
 	defer cleanup()
 	b := boss.NewWithOptions(node, bossOpts)
 	AttachBoss(b)
@@ -295,12 +296,12 @@ func runBossMode(ctx context.Context, netCfg network.Config, reputationFloor flo
 // exit code reflects whether the server came up cleanly. Errors include
 // startup-refusal (public bind without API keys) so a misconfigured
 // deployment fails loudly instead of silently exposing compute.
-func runAPIMode(ctx context.Context, netCfg network.Config, apiBind, apiPort string, reputationFloor float64) {
+func runAPIMode(ctx context.Context, netCfg network.Config, apiBind, apiPort string, reputationFloor float64, ledgerPath string) {
 	node, err := network.Setup(ctx, netCfg)
 	if err != nil {
 		pterm.Fatal.Println(err)
 	}
-	bossOpts, cleanup := bossOptionsFromFlags(ctx, "api", node, reputationFloor, "")
+	bossOpts, cleanup := bossOptionsFromFlags(ctx, "api", node, reputationFloor, "", ledgerPath)
 	defer cleanup()
 	b := boss.NewWithOptions(node, bossOpts)
 	AttachBoss(b)

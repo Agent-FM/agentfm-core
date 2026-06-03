@@ -138,9 +138,12 @@ func (b *Boss) StartAPIServer(bind, port string) error {
 	}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/about", protected("/v1/about", b.handleAbout))
+	mux.HandleFunc("/v1/events", protected("/v1/events", b.handleEvents))
 	mux.HandleFunc("/api/workers", protected("/api/workers", b.handleGetWorkers))
 	mux.HandleFunc("/api/execute", protected("/api/execute", b.handleExecuteTask))
 	mux.HandleFunc("/api/execute/async", protected("/api/execute/async", b.asyncExecuteHandler(ctx, &bgWG)))
+	mux.HandleFunc("/api/relay/test", protected("/api/relay/test", b.handleRelayTest))
 	mux.HandleFunc("/v1/models", protected("/v1/models", b.handleModels))
 	mux.HandleFunc("/v1/chat/completions", protected("/v1/chat/completions", b.handleChatCompletions))
 	mux.HandleFunc("/v1/completions", protected("/v1/completions", b.handleCompletions))
@@ -148,10 +151,11 @@ func (b *Boss) StartAPIServer(bind, port string) error {
 	// so a single registration covers all sub-routes; the handlers
 	// branch on the suffix internally.
 	mux.HandleFunc("/v1/peers/", protected("/v1/peers/", b.handlePeers))
-	// /metrics and /health are intentionally not wrapped in CORS or auth —
-	// Prometheus scrapers and LB health probes need neither, and exposing
-	// CORS on /metrics would be misleading.
-	mux.Handle("/metrics", metrics.Handler())
+	// /metrics and /health stay unauthenticated — Prometheus scrapers and LB
+	// health probes need both. /metrics is wrapped in CORS so the desktop
+	// renderer (Electron page, treated as a browser origin) can scrape it;
+	// Prometheus scrapers don't care about CORS headers either way.
+	mux.HandleFunc("/metrics", corsMiddleware(metrics.Handler().ServeHTTP))
 	mux.HandleFunc("/health", b.handleHealth)
 
 	// P4-5: peer reputation viewer. Unauthenticated — the same data
