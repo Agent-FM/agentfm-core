@@ -110,6 +110,10 @@ func newImpl(path string, key crypto.PrivKey, ps *pubsub.PubSub, opts Options) (
 		// P5-1: serve HeadFetchProtocol so a restarting boss can
 		// bound its catch-up window against the relay's signed head.
 		l.startHeadFetchHandler(opts.Host)
+		// Witness gap filler: serve InboxFetchProtocol so a fresh
+		// boss can pull third-party entries from a long-lived peer's
+		// inbox (LedgerFetchProtocol only serves OWN-authored entries).
+		l.startInboxFetchHandler(opts.Host)
 		l.fetchHost = opts.Host
 	}
 
@@ -644,6 +648,7 @@ func (l *ledgerImpl) Close() error {
 	if l.fetchHost != nil {
 		l.stopFetchHandler(l.fetchHost)
 		l.stopHeadFetchHandler(l.fetchHost)
+		l.stopInboxFetchHandler(l.fetchHost)
 		l.fetchHost = nil
 	}
 

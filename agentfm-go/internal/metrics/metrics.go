@@ -110,6 +110,17 @@ var ArtifactBytesSentTotal = prometheus.NewCounter(
 	},
 )
 
+// ArtifactsBuiltTotal counts artifact zips successfully received and
+// persisted by this node. Useful for "assets built" dashboards where
+// the byte counter doesn't tell the operator how many distinct
+// deliverables landed.
+var ArtifactsBuiltTotal = prometheus.NewCounter(
+	prometheus.CounterOpts{
+		Name: "agentfm_artifacts_built_total",
+		Help: "Cumulative artifact zips received and persisted.",
+	},
+)
+
 // StreamErrorsTotal counts failures on the custom libp2p protocols. The
 // reason label values are an enum (see Reason* constants); never pass a
 // raw error string here — it would explode cardinality.
@@ -149,6 +160,7 @@ func init() {
 		TaskDurationSeconds,
 		WorkersOnline,
 		ArtifactBytesSentTotal,
+		ArtifactsBuiltTotal,
 		StreamErrorsTotal,
 		DHTQueriesTotal,
 		AuthAttemptsTotal,

@@ -74,6 +74,7 @@ That's it. Files the agent drops into `/tmp/output` get zipped and shipped back 
 - **End-to-end encrypted P2P.** libp2p Noise streams between Boss and Worker. The Relay sees discovery metadata only; never prompt content.
 - **Bearer-token auth.** `AGENTFM_API_KEYS` enables per-request bearer validation, constant-time comparison, per-IP rate limiting on failed attempts. Refuses to start with public bind + no keys.
 - **Public mesh, private swarms, or solo-dev.** Same binary. Toggle PSK mode for fully isolated darknet meshes invisible to the public network.
+- **Witness replicas.** `agentfm -mode witness` runs a ledger-only daemon that persists every gossiped rating + comment to disk and serves them via `/agentfm/inbox-fetch/1.0.0`. A new boss joining a mesh where every boss has gone offline still recovers the ledger from any witness it can dial. No API, no podman; cheap to run alongside a relay on a VPS.
 - **Container sandboxing.** Every task runs in a fresh Podman container. SIGKILL'd the instant the stream dies. Resource budgets stop a noisy task from hurting its operator.
 - **Live artifact streaming.** Anything an agent writes to `/tmp/output` is auto-zipped, transferred, and extracted client-side. Zip-slip + zip-bomb defense baked in.
 - **Observability built in.** Prometheus metrics on every node (`/metrics`), structured slog JSON logs ready for Loki / ELK / Datadog, `/health` endpoint for load balancers.

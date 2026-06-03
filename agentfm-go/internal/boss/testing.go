@@ -123,6 +123,30 @@ func (m *mockReputationEngine) set(peerID string, score float64) {
 	m.mu.Unlock()
 }
 
+// handleAboutForTest exposes handleAbout without the full auth/CORS
+// middleware. Only for use in tests.
+func (b *Boss) handleAboutForTest(w http.ResponseWriter, r *http.Request) {
+	b.handleAbout(w, r)
+}
+
+// handleEventsForTest exposes handleEvents without the full auth/CORS
+// middleware. Only for use in tests.
+func (b *Boss) handleEventsForTest(w http.ResponseWriter, r *http.Request) {
+	b.handleEvents(w, r)
+}
+
+// handlePeersForTest exposes the umbrella /v1/peers/* handler without
+// the full middleware stack. Only for use in tests.
+func (b *Boss) handlePeersForTest(w http.ResponseWriter, r *http.Request) {
+	b.handlePeers(w, r)
+}
+
+// EventBus returns the boss's event bus so telemetry callbacks and
+// ledger callbacks can publish events into the SSE stream.
+func (b *Boss) EventBus() *EventBus {
+	return b.eventBus
+}
+
 // SetReputationScoreForTest injects a score for a given peer ID into a
 // mock reputation engine attached to the boss. If no mock engine is
 // present yet, one is created and installed. Only for use in tests.

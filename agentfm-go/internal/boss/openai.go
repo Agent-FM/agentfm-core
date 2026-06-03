@@ -74,6 +74,12 @@ type chatCompletionChunk struct {
 	Created int64             `json:"created"`
 	Model   string            `json:"model"`
 	Choices []chatChoiceDelta `json:"choices"`
+	// AgentfmPeerID and AgentfmTaskID are AgentFM extensions on top of the
+	// OpenAI SSE chunk shape so the desktop client can attribute artifacts
+	// to the worker that produced them. Standard OpenAI clients ignore
+	// unknown fields.
+	AgentfmPeerID string `json:"agentfm_peer_id,omitempty"`
+	AgentfmTaskID string `json:"agentfm_task_id,omitempty"`
 }
 
 type completionChoice struct {

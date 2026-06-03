@@ -9,6 +9,7 @@ Every role exposes Prometheus `/metrics` and structured `slog` logs. A single Pr
 | **Boss (api mode)** | `:8080/metrics` | same as `-apiport` | n/a — shares the API port |
 | **Worker** | `:9090/metrics` | `127.0.0.1` (loopback) | `-prom-listen 0.0.0.0:9090`; `-prom-listen -` to disable |
 | **Relay** | `:9091/metrics` | `127.0.0.1` (loopback) | same `-prom-listen` flag |
+| **Witness** | `:9092/metrics` | `127.0.0.1` (loopback) | same `-prom-listen` flag |
 
 ## Metric families
 

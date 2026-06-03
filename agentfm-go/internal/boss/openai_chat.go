@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"agentfm/internal/metrics"
 	"agentfm/internal/obs"
 
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -55,8 +56,14 @@ func (b *Boss) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	start := time.Now()
+	defer func() {
+		metrics.TaskDurationSeconds.Observe(time.Since(start).Seconds())
+	}()
+
 	ts := b.openTaskStream(r.Context(), w, peerID, prompt, taskID)
 	if ts == nil {
+		metrics.TasksTotal.WithLabelValues(metrics.StatusError).Inc()
 		if b.completionRater != nil {
 			b.completionRater.RecordOutcome(peerID, OutcomeFailure)
 		}
@@ -64,6 +71,11 @@ func (b *Boss) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() {
 		ts.close()
+		status := metrics.StatusError
+		if ts.success {
+			status = metrics.StatusOK
+		}
+		metrics.TasksTotal.WithLabelValues(status).Inc()
 		if b.completionRater != nil {
 			if ts.success {
 				b.completionRater.RecordOutcome(peerID, OutcomeSuccess)
@@ -100,8 +112,14 @@ func (b *Boss) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (b *Boss) streamChatCompletion(ctx context.Context, w http.ResponseWriter, peerID peer.ID, model, prompt, taskID string) {
+	start := time.Now()
+	defer func() {
+		metrics.TaskDurationSeconds.Observe(time.Since(start).Seconds())
+	}()
+
 	ts := b.openTaskStream(ctx, w, peerID, prompt, taskID)
 	if ts == nil {
+		metrics.TasksTotal.WithLabelValues(metrics.StatusError).Inc()
 		if b.completionRater != nil {
 			b.completionRater.RecordOutcome(peerID, OutcomeFailure)
 		}
@@ -109,6 +127,11 @@ func (b *Boss) streamChatCompletion(ctx context.Context, w http.ResponseWriter, 
 	}
 	defer func() {
 		ts.close()
+		status := metrics.StatusError
+		if ts.success {
+			status = metrics.StatusOK
+		}
+		metrics.TasksTotal.WithLabelValues(status).Inc()
 		if b.completionRater != nil {
 			if ts.success {
 				b.completionRater.RecordOutcome(peerID, OutcomeSuccess)
@@ -121,14 +144,17 @@ func (b *Boss) streamChatCompletion(ctx context.Context, w http.ResponseWriter, 
 	flush := setSSEHeaders(w)
 	id := newCompletionID("chatcmpl-")
 	created := time.Now().Unix()
+	peerIDStr := peerID.String()
 
 	emit := func(delta ChatMessage, finish *string) bool {
 		return writeSSEFrame(w, chatCompletionChunk{
-			ID:      id,
-			Object:  "chat.completion.chunk",
-			Created: created,
-			Model:   model,
-			Choices: []chatChoiceDelta{{Index: 0, Delta: delta, FinishReason: finish}},
+			ID:            id,
+			Object:        "chat.completion.chunk",
+			Created:       created,
+			Model:         model,
+			Choices:       []chatChoiceDelta{{Index: 0, Delta: delta, FinishReason: finish}},
+			AgentfmPeerID: peerIDStr,
+			AgentfmTaskID: taskID,
 		}, flush)
 	}
 

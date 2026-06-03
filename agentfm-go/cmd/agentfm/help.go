@@ -26,7 +26,7 @@ func setupHelpMenu() {
 
 		tableData := pterm.TableData{
 			{"FLAG", "TYPE", "DESCRIPTION", "DEFAULT"},
-			{pterm.Cyan("-mode"), pterm.LightMagenta("string"), "Node mode: 'boss', 'worker', 'relay', 'api', 'test', 'genkey'", pterm.Gray("none")},
+			{pterm.Cyan("-mode"), pterm.LightMagenta("string"), "Node mode: 'boss', 'worker', 'relay', 'witness', 'api', 'test', 'genkey'", pterm.Gray("none")},
 			{pterm.Cyan("-prompt"), pterm.LightMagenta("string"), "Text prompt to send to agent (only for -mode test)", pterm.Gray("none")},
 			{pterm.Cyan("-apiport"), pterm.LightMagenta("string"), "Port for the local API gateway", pterm.Gray("8080")},
 			{pterm.Cyan("-api-bind"), pterm.LightMagenta("string"), "Bind host for the API gateway (api mode)", pterm.Gray("127.0.0.1")},
@@ -82,18 +82,21 @@ func setupHelpMenu() {
 		pterm.Println(pterm.Yellow("6. Start a Dedicated Relay Node (VPS Lighthouse)"))
 		pterm.Println(pterm.White("   ./agentfm -mode relay -port 4001\n"))
 
-		pterm.Println(pterm.Yellow("7. Start an API Gateway (loopback by default — solo dev mode)"))
+		pterm.Println(pterm.Yellow("7. Start a Witness Node (Ledger-only replica; persists signed entries, no HTTP API, no podman)"))
+		pterm.Println(pterm.White("   ./agentfm -mode witness\n"))
+
+		pterm.Println(pterm.Yellow("8. Start an API Gateway (loopback by default — solo dev mode)"))
 		pterm.Println(pterm.White("   ./agentfm -mode api -apiport 8080\n"))
 
-		pterm.Println(pterm.Yellow("8. Start an API Gateway exposed off-host (requires API keys)"))
+		pterm.Println(pterm.Yellow("9. Start an API Gateway exposed off-host (requires API keys)"))
 		pterm.Println(pterm.White("   AGENTFM_API_KEYS=\"key1,key2\" \\"))
 		pterm.Println(pterm.White("     ./agentfm -mode api -api-bind 0.0.0.0 -apiport 8080\n"))
 
-		pterm.Println(pterm.Yellow("9. v1.3 — inspect a peer's reputation (verifiable agent mesh)"))
+		pterm.Println(pterm.Yellow("10. v1.3 — inspect a peer's reputation (verifiable agent mesh)"))
 		pterm.Println(pterm.White("   ./agentfm reputation show <peer_id>"))
 		pterm.Println(pterm.White("   ./agentfm reputation show -db /path/to/api_ledger.db <peer_id>\n"))
 
-		pterm.Println(pterm.Yellow("10. v1.3.1 — Boss with strict reputation floor (refuse low-trust peers)"))
+		pterm.Println(pterm.Yellow("11. v1.3.1 — Boss with strict reputation floor (refuse low-trust peers)"))
 		pterm.Println(pterm.White("    ./agentfm -mode api -apiport 8080 -reputation-floor -0.3\n"))
 
 		pterm.DefaultSection.Println("Environment variables")

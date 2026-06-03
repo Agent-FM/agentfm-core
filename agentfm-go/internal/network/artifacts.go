@@ -217,6 +217,7 @@ func HandleArtifactStream(stream network.Stream) {
 		return
 	}
 	success = true
+	metrics.ArtifactsBuiltTotal.Inc()
 	pterm.Success.Printfln("🎉 Transfer Complete! Securely saved %d bytes to %s", bytesRead, destPath)
 	fmt.Println()
 	pterm.Println(pterm.LightWhite("👉 Press [ENTER] to continue to the feedback menu."))
