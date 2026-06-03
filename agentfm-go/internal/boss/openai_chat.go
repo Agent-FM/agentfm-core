@@ -121,14 +121,17 @@ func (b *Boss) streamChatCompletion(ctx context.Context, w http.ResponseWriter, 
 	flush := setSSEHeaders(w)
 	id := newCompletionID("chatcmpl-")
 	created := time.Now().Unix()
+	peerIDStr := peerID.String()
 
 	emit := func(delta ChatMessage, finish *string) bool {
 		return writeSSEFrame(w, chatCompletionChunk{
-			ID:      id,
-			Object:  "chat.completion.chunk",
-			Created: created,
-			Model:   model,
-			Choices: []chatChoiceDelta{{Index: 0, Delta: delta, FinishReason: finish}},
+			ID:            id,
+			Object:        "chat.completion.chunk",
+			Created:       created,
+			Model:         model,
+			Choices:       []chatChoiceDelta{{Index: 0, Delta: delta, FinishReason: finish}},
+			AgentfmPeerID: peerIDStr,
+			AgentfmTaskID: taskID,
 		}, flush)
 	}
 
