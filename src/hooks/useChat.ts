@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { api, ApiError } from '../lib/api';
 import { loadSessions, saveSessions, newSession } from '../lib/sessions';
 import { useUIStore } from '../lib/store';
+import { usePeerIdentityCache } from '../lib/peerIdentityCache';
 import { stripAnsi } from '../lib/ansi';
 import type { ChatSession, ChatMessage } from '../types/chat';
 
@@ -11,25 +12,44 @@ export function useChat() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!activeProjectId) return;
+    let cancelled = false;
     setSessions([]);
     setActiveId(null);
+    setLoaded(false);
     loadSessions(activeProjectId).then((s) => {
-      setSessions(s);
-      if (s.length > 0) setActiveId(s[0].id);
+      if (cancelled) return;
+      if (s.length === 0) {
+        const fresh = newSession();
+        setSessions([fresh]);
+        setActiveId(fresh.id);
+      } else {
+        setSessions(s);
+        setActiveId(s[0].id);
+      }
+      setLoaded(true);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [activeProjectId]);
 
   useEffect(() => {
     if (!activeProjectId) return;
-    if (sessions.length === 0) return;
+    if (!loaded) return;
     saveSessions(activeProjectId, sessions);
-  }, [sessions, activeProjectId]);
+  }, [sessions, activeProjectId, loaded]);
 
   const active = sessions.find((s) => s.id === activeId);
 
@@ -46,15 +66,20 @@ export function useChat() {
 
   const deleteSession = useCallback(
     (id: string) => {
-      setSessions((prev) => prev.filter((s) => s.id !== id));
-      if (activeId === id) {
-        setActiveId(() => {
-          const remaining = sessions.filter((s) => s.id !== id);
-          return remaining[0]?.id ?? null;
-        });
-      }
+      setSessions((prev) => {
+        const remaining = prev.filter((s) => s.id !== id);
+        if (remaining.length === 0) {
+          const fresh = newSession();
+          setActiveId(fresh.id);
+          return [fresh];
+        }
+        if (activeId === id) {
+          setActiveId(remaining[0].id);
+        }
+        return remaining;
+      });
     },
-    [activeId, sessions],
+    [activeId],
   );
 
   const updateActive = useCallback(
@@ -71,6 +96,10 @@ export function useChat() {
   const send = useCallback(
     async (content: string) => {
       if (!active || !content.trim() || streaming) return;
+      if (!active.pinnedPeerId) {
+        setError('Pin an agent before sending a message.');
+        return;
+      }
       setError(null);
 
       const userMsg: ChatMessage = {
@@ -111,7 +140,7 @@ export function useChat() {
       const ctrl = new AbortController();
       abortRef.current = ctrl;
 
-      const model = active.pinnedPeerId ?? active.preferredModel;
+      const model = active.pinnedPeerId;
       const chatHistory = active.messages
         .map((m) => ({ role: m.role, content: m.content }))
         .concat({ role: 'user', content: content.trim() });
@@ -137,6 +166,7 @@ export function useChat() {
         let buffer = '';
         let assistantContent = '';
         let raterPeerId: string | undefined;
+        let taskId: string | undefined;
 
         // Throttled commit: streaming chats can emit hundreds of small SSE
         // lines a second. setSessions clones the full session tree on every
@@ -152,7 +182,12 @@ export function useChat() {
               if (s.id !== sessionId) return s;
               const msgs = s.messages.map((m) =>
                 m.id === assistantMsg.id
-                  ? { ...m, content: assistantContent, rater_peer_id: raterPeerId }
+                  ? {
+                      ...m,
+                      content: assistantContent,
+                      rater_peer_id: raterPeerId,
+                      task_id: taskId,
+                    }
                   : m,
               );
               return { ...s, messages: msgs, updatedAt: Date.now() };
@@ -188,6 +223,10 @@ export function useChat() {
                 raterPeerId = obj.agentfm_peer_id;
                 chunkChanged = true;
               }
+              if (!taskId && obj.agentfm_task_id) {
+                taskId = obj.agentfm_task_id;
+                chunkChanged = true;
+              }
             } catch {
               /* skip malformed */
             }
@@ -198,6 +237,53 @@ export function useChat() {
         // Final commit guarantees the last few characters land even if the
         // last rAF was already scheduled but not yet flushed.
         commit();
+
+        // Artifacts arrive on a separate libp2p channel after the SSE
+        // stream closes. Poll the boss-side artifact directory for up to
+        // 10s; if a zip lands, flip has_artifact on the assistant message
+        // so MessageBubble can render the "Show in Finder" card. We also
+        // drop a metadata sidecar so the Assets route can show the agent
+        // name + prompt for chat-originated tasks instead of "Unknown".
+        if (taskId) {
+          const tid = taskId;
+          const workerPeerId = raterPeerId ?? model;
+          const cache = usePeerIdentityCache.getState().byPeerId[workerPeerId];
+          const projectName = useUIStore.getState().activeProject()?.name;
+          ;(async () => {
+            for (let i = 0; i < 20; i++) {
+              try {
+                const exists = await window.api.app.checkArtifact(tid);
+                if (exists) {
+                  if (!mountedRef.current) return;
+                  setSessions((prev) =>
+                    prev.map((s) => {
+                      if (s.id !== sessionId) return s;
+                      const msgs = s.messages.map((m) =>
+                        m.id === assistantMsg.id ? { ...m, has_artifact: true } : m,
+                      );
+                      return { ...s, messages: msgs, updatedAt: Date.now() };
+                    }),
+                  );
+                  try {
+                    await window.api.app.writeArtifactMeta(tid, {
+                      prompt: content.trim(),
+                      agentName: cache?.name ?? undefined,
+                      agentDescription: cache?.description ?? undefined,
+                      agentPeerId: workerPeerId,
+                      projectName,
+                    });
+                  } catch {
+                    // best-effort
+                  }
+                  return;
+                }
+              } catch {
+                // ignore — keep polling
+              }
+              await new Promise((r) => setTimeout(r, 500));
+            }
+          })();
+        }
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
           const msg =
