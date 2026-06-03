@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, AlertOctagon } from 'lucide-react';
 import { usePeer, usePeerLog } from '../lib/query';
 import { useUIStore } from '../lib/store';
+import { usePeerIdentityCache } from '../lib/peerIdentityCache';
 import { SummaryCard } from '../components/peer/SummaryCard';
 import { TelemetryStrip } from '../components/peer/TelemetryStrip';
 import { Tabs } from '../components/peer/Tabs';
@@ -20,6 +21,7 @@ export default function PeerView() {
 
   const { data: summary, isPending: sPending, error: sErr } = usePeer(peerId);
   const { data: log, isPending: lPending, error: lErr } = usePeerLog(peerId, { limit: 100 });
+  const cached = usePeerIdentityCache((s) => (peerId ? s.byPeerId[peerId] : undefined));
 
   if (!peerId) {
     return <div className="p-7 text-bad">No peer id</div>;
@@ -40,25 +42,47 @@ export default function PeerView() {
   return (
     <div className="p-7 max-w-5xl">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => navigate('/radar')}
         className="inline-flex items-center gap-1.5 text-xs text-text-2 mb-3 hover:text-text-0"
       >
         <ArrowLeft size={14} />
-        <span>Back</span>
+        <span>Back to Radar</span>
       </button>
 
       <div className="flex justify-between items-start mb-2">
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="text-3xl font-semibold tracking-tight text-text-0">
-            {displayName({ ...summary, name: summary.agent_name, peer_id: summary.peer_id })}
+            {displayName({ ...summary, name: summary.agent_name, peer_id: summary.peer_id }, cached)}
           </h1>
-          <div className="font-mono text-[11px] text-text-2 mt-1 break-all">{summary.peer_id}</div>
+          <div className="font-mono text-[11px] text-text-2 mt-1 break-all">
+            {summary.peer_id}
+            {(summary.author?.trim() || cached?.author) && (
+              <>
+                {' · by '}
+                <span className="text-accent2-light font-semibold">
+                  {summary.author?.trim() || cached?.author}
+                </span>
+              </>
+            )}
+          </div>
+          {(summary.description?.trim() || cached?.description) && (
+            <p className="text-[14px] text-text-1 mt-3 leading-[1.55] whitespace-pre-line max-w-3xl">
+              {summary.description?.trim() || cached?.description}
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => navigate('/chat')}>Open in chat</Button>
+          <Button
+            disabled={!summary.online}
+            title={!summary.online ? 'Agent is offline' : undefined}
+            onClick={() => navigate('/chat')}
+          >
+            Open in chat
+          </Button>
           <Button
             variant="primary"
-            disabled={!summary.dispatch_allowed}
+            disabled={!summary.online || !summary.dispatch_allowed}
+            title={!summary.online ? 'Agent is offline' : undefined}
             onClick={() => openDispatch(summary.peer_id)}
           >
             Dispatch task
