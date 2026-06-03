@@ -56,3 +56,21 @@ test('dashboard tab is reachable and renders the TASKS section', async () => {
     expect(heroText).toMatch(/\d+/)
   }).toPass({ timeout: 15_000 })
 })
+
+test('dashboard surfaces assets built tile, success rate card, and freshness header', async () => {
+  await page.locator('a[href="#/dashboard"]').click()
+
+  await expect(
+    page.locator('text=Assets built').first(),
+  ).toBeVisible({ timeout: 10_000 })
+
+  await expect(
+    page.locator('text=Success rate').first(),
+  ).toBeVisible({ timeout: 10_000 })
+
+  await expect(
+    page
+      .locator('text=/connecting…|updated [\\d.]+s ago/')
+      .first(),
+  ).toBeVisible({ timeout: 10_000 })
+})
