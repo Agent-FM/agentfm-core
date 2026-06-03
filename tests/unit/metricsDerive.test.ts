@@ -79,3 +79,56 @@ describe('computeP95FromBuckets', () => {
     expect(p95).toBe(60)
   })
 })
+
+import { computeSuccessRateSeries } from '../../src/lib/metricsDerive'
+import { type RingBuffer } from '../../src/types/metrics'
+import { seriesKey } from '../../src/lib/metricsStore'
+
+function makeBuf(values: number[]): RingBuffer {
+  const buf = createRingBuffer()
+  let t = 1_000_000
+  for (const v of values) {
+    pushRing(buf, t, v)
+    t += 2000
+  }
+  return buf
+}
+
+describe('computeSuccessRateSeries', () => {
+  it('returns [] when no OK buffer exists', () => {
+    const map = new Map<string, RingBuffer>()
+    expect(computeSuccessRateSeries(map)).toEqual([])
+  })
+
+  it('returns all 1.0 when traffic is all OK', () => {
+    const map = new Map<string, RingBuffer>()
+    map.set(seriesKey('agentfm_tasks_total', { status: 'ok' }), makeBuf([0, 1, 2, 3]))
+    const got = computeSuccessRateSeries(map)
+    expect(got).toEqual([1, 1, 1, 1])
+  })
+
+  it('returns all 0.0 when traffic is all error after the first tick', () => {
+    const map = new Map<string, RingBuffer>()
+    map.set(seriesKey('agentfm_tasks_total', { status: 'ok' }), makeBuf([0, 0, 0, 0]))
+    map.set(seriesKey('agentfm_tasks_total', { status: 'error' }), makeBuf([0, 1, 2, 3]))
+    const got = computeSuccessRateSeries(map)
+    expect(got).toEqual([1, 0, 0, 0])
+  })
+
+  it('mixed series returns the expected ratio at each tick', () => {
+    const map = new Map<string, RingBuffer>()
+    map.set(seriesKey('agentfm_tasks_total', { status: 'ok' }), makeBuf([0, 3, 6]))
+    map.set(seriesKey('agentfm_tasks_total', { status: 'error' }), makeBuf([0, 1, 2]))
+    const got = computeSuccessRateSeries(map)
+    expect(got[0]).toBe(1)
+    expect(got[1]).toBeCloseTo(3 / 4, 5)
+    expect(got[2]).toBeCloseTo(6 / 8, 5)
+  })
+
+  it('returns 1.0 for ticks with zero denominator', () => {
+    const map = new Map<string, RingBuffer>()
+    map.set(seriesKey('agentfm_tasks_total', { status: 'ok' }), makeBuf([0, 0]))
+    const got = computeSuccessRateSeries(map)
+    expect(got).toEqual([1, 1])
+  })
+})

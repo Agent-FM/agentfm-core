@@ -1,5 +1,6 @@
 import type { RingBuffer } from '../types/metrics'
 import { latestValue, ringToArrays } from '../types/metrics'
+import { seriesKey } from './metricsStore'
 
 export function computeRate(buf: RingBuffer): number {
   if (buf.filled < 2) return 0
@@ -49,3 +50,32 @@ export function computeP95FromBuckets(buckets: HistogramBucket[]): number {
 }
 
 export { latestValue }
+
+const TASK_STATUSES = ['ok', 'error', 'rejected', 'timeout'] as const
+
+export function computeSuccessRateSeries(
+  buffers: Map<string, RingBuffer>,
+): number[] {
+  const okBuf = buffers.get(seriesKey('agentfm_tasks_total', { status: 'ok' }))
+  if (!okBuf) return []
+  const okValues = ringToArrays(okBuf).v
+  if (okValues.length === 0) return []
+
+  const otherValues = TASK_STATUSES.filter((s) => s !== 'ok').map((status) => {
+    const buf = buffers.get(seriesKey('agentfm_tasks_total', { status }))
+    if (!buf) return new Array<number>(okValues.length).fill(0)
+    return ringToArrays(buf).v
+  })
+
+  const out: number[] = []
+  for (let i = 0; i < okValues.length; i++) {
+    const ok = okValues[i] ?? 0
+    let other = 0
+    for (const series of otherValues) {
+      other += series[i] ?? 0
+    }
+    const denom = ok + other
+    out.push(denom === 0 ? 1 : ok / denom)
+  }
+  return out
+}
