@@ -74,7 +74,7 @@ export function AgentCard({ worker }: Props) {
             {author && (
               <>
                 {' · by '}
-                <span className="text-accent2-light font-semibold">{author}</span>
+                <span className="text-accent font-semibold">{author}</span>
               </>
             )}
           </div>
@@ -89,7 +89,7 @@ export function AgentCard({ worker }: Props) {
 
       <div className="flex flex-wrap gap-1.5 mb-3.5">
         <Badge tone={honestyTone(worker.honesty_score)} mono>
-          {worker.honesty_score >= 0 ? '+' : ''}{worker.honesty_score.toFixed(2)} rating
+          <span className="tabular-nums">{worker.honesty_score >= 0 ? '+' : ''}{worker.honesty_score.toFixed(2)}</span> rating
         </Badge>
         {isOffline && (
           <Badge tone="neutral" mono>{formatLastSeen(worker.last_seen)}</Badge>
@@ -99,14 +99,14 @@ export function AgentCard({ worker }: Props) {
       <div className="grid grid-cols-2 gap-3 p-3.5 bg-bg-0/55 rounded-xl border border-accent/10">
         <div>
           <div className="text-[10px] uppercase tracking-[0.14em] text-text-2 font-mono font-bold">Tasks</div>
-          <div className="font-mono text-[17px] font-semibold mt-1">
+          <div className="font-mono text-[17px] font-semibold mt-1 tabular-nums">
             <span className="text-accent">{worker.current_tasks}</span>
             <span className="text-text-2"> / {worker.max_tasks}</span>
           </div>
         </div>
         <div>
           <div className="text-[10px] uppercase tracking-[0.14em] text-text-2 font-mono font-bold">CPU</div>
-          <div className="font-mono text-[17px] font-semibold mt-1">{worker.cpu_usage_pct.toFixed(0)} %</div>
+          <div className="font-mono text-[17px] font-semibold mt-1 tabular-nums">{worker.cpu_usage_pct.toFixed(0)} %</div>
           <Meter value={worker.cpu_usage_pct} />
         </div>
       </div>
