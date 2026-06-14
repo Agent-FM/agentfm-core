@@ -9,21 +9,12 @@ export function RoutePage({ children, className = '' }: Props) {
   return (
     <div className={`relative overflow-hidden min-h-full h-full ${className}`}>
       <div
-        className="route-page__blobs absolute inset-0 pointer-events-none animate-drift-bg"
-        style={{
-          background:
-            'radial-gradient(circle at 15% 0%, rgba(34,211,238,.12), transparent 55%),' +
-            'radial-gradient(circle at 85% 100%, rgba(168,85,247,.14), transparent 55%)',
-        }}
+        className="absolute -top-1/4 -left-1/4 w-[70%] h-[70%] pointer-events-none animate-aurora rounded-full blur-3xl"
+        style={{ background: 'radial-gradient(circle, rgba(34,211,238,.10), transparent 60%)' }}
       />
       <div
-        className="route-page__grid absolute inset-0 pointer-events-none animate-mesh-grid opacity-80"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(34,211,238,.06) 1px, transparent 1px),' +
-            'linear-gradient(90deg, rgba(34,211,238,.06) 1px, transparent 1px)',
-          backgroundSize: '60px 60px',
-        }}
+        className="absolute -bottom-1/3 -right-1/4 w-[70%] h-[70%] pointer-events-none animate-aurora rounded-full blur-3xl"
+        style={{ background: 'radial-gradient(circle, rgba(255,255,255,.05), transparent 60%)', animationDelay: '-9s' }}
       />
       <div className="relative z-10 h-full overflow-auto">{children}</div>
     </div>
