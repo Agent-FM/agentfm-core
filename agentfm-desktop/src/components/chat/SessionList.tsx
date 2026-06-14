@@ -27,14 +27,11 @@ export function SessionList({ sessions, activeId, onSelect, onNew, onDelete }: P
   }
 
   return (
-    <aside className="w-60 bg-bg-1/60 border-r border-accent/[.12] p-3 flex flex-col overflow-auto" style={{backdropFilter:'blur(8px)'}}>
+    <aside className="w-60 bg-bg-1 border-r border-border-0 p-3 flex flex-col overflow-auto">
       <button
         onClick={onNew}
         className="w-full inline-flex items-center justify-center gap-1.5 py-3 rounded-xl
-          font-bold text-[14px] text-bg-0
-          bg-gradient-to-br from-accent to-accent2
-          shadow-[0_6px_20px_-6px_rgba(34,211,238,.6)]
-          hover:shadow-[0_6px_24px_-2px_rgba(34,211,238,.75)]
+          font-bold text-[14px] text-bg-0 bg-accent
           hover:brightness-110 transition-all"
       >
         <Plus size={14} strokeWidth={2.5} />
@@ -57,22 +54,16 @@ export function SessionList({ sessions, activeId, onSelect, onNew, onDelete }: P
                 return (
                   <div key={s.id} className="relative group">
                     {isActive && (
-                      <span
-                        className="absolute left-0 top-1 bottom-1 w-[3px] rounded-r-full"
-                        style={{
-                          background: 'linear-gradient(180deg, #22d3ee, #a855f7)',
-                          boxShadow: '0 0 8px rgba(34,211,238,.6)',
-                        }}
-                      />
+                      <span className="absolute left-0 top-1 bottom-1 w-[3px] rounded-r-full bg-accent" />
                     )}
                     <button
                       onClick={() => onSelect(s.id)}
-                      className={`w-full text-left pl-3 pr-2 py-2 rounded-md text-[14px] transition-all flex items-center gap-2
-                        ${isActive ? 'bg-accent/[.1] text-text-0' : 'text-text-1 hover:bg-bg-2 hover:translate-x-px'}`}
+                      className={`w-full text-left px-3 py-2 rounded-md text-[14px] transition-colors flex items-center gap-2
+                        ${isActive ? 'bg-accent-soft text-text-0' : 'text-text-1 hover:bg-bg-1'}`}
                     >
                       <div className="flex-1 min-w-0">
                         <div className="truncate font-medium">{s.title || 'Untitled'}</div>
-                        <div className="text-[10px] text-text-3 font-mono mt-0.5">{compactAge(s.updatedAt)} ago</div>
+                        <div className="text-[10px] text-text-3 font-mono mt-0.5 tabular-nums">{compactAge(s.updatedAt)} ago</div>
                       </div>
                       {onDelete && (
                         <span

@@ -39,12 +39,10 @@ export function Composer({ onSend, onStop, streaming, disabled }: Props) {
   const lineCount = text === '' ? 0 : text.split('\n').length
 
   return (
-    <div className="border-t border-border-0 px-4 py-4 bg-gradient-to-b from-transparent to-bg-1/40">
+    <div className="border-t border-border-0 px-4 py-4 bg-bg-0">
       <div
-        className={`relative flex items-end gap-3 bg-bg-1 border rounded-2xl transition-all ${
-          focused
-            ? 'border-accent/60 shadow-[0_0_0_3px_rgba(34,211,238,.12),0_4px_24px_-8px_rgba(34,211,238,.35)]'
-            : 'border-border-0 hover:border-border-1'
+        className={`relative flex items-end gap-3 bg-bg-1 border rounded-2xl transition-colors ${
+          focused ? 'border-accent/40' : 'border-border-0 hover:border-border-1'
         }`}
       >
         <textarea
@@ -61,7 +59,7 @@ export function Composer({ onSend, onStop, streaming, disabled }: Props) {
         />
         <div className="flex items-center gap-2 px-2 py-2">
           {lineCount > 1 && (
-            <span className="text-2xs font-mono text-text-3 select-none">
+            <span className="text-2xs font-mono text-text-3 select-none tabular-nums">
               {lineCount} lines
             </span>
           )}

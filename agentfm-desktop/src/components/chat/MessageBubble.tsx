@@ -16,7 +16,7 @@ export function MessageBubble({ msg, streaming }: { msg: ChatMessage; streaming?
       {isUser ? (
         <div
           className="px-4 py-3 rounded-[18px_18px_4px_18px] text-[15px] leading-[1.55] w-full
-            bg-gradient-to-br from-accent/[.18] to-accent/[.08] border border-accent/35 text-text-0"
+            bg-accent-soft border border-accent/20 text-text-0"
         >
           <div className="text-[10px] uppercase tracking-[0.14em] text-text-2 font-mono font-bold mb-1">
             YOU
@@ -26,21 +26,18 @@ export function MessageBubble({ msg, streaming }: { msg: ChatMessage; streaming?
           </div>
         </div>
       ) : (
-        <Card live className="rounded-[18px_18px_18px_4px] px-[18px] py-4 w-full">
+        <Card className="rounded-[18px_18px_18px_4px] px-[18px] py-4 w-full">
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] text-text-2 font-mono font-bold mb-2">
             <span>AGENT</span>
             {msg.rater_peer_id && (
-              <span className="font-mono text-accent2-light tracking-normal normal-case font-semibold">
+              <span className="font-mono text-accent tracking-normal normal-case font-semibold tabular-nums">
                 {shortenPeerID(msg.rater_peer_id, 6, 5)}
               </span>
             )}
-            <span className="ml-auto normal-case font-normal tracking-normal text-text-3 font-mono">
+            <span className="ml-auto normal-case font-normal tracking-normal text-text-3 font-mono tabular-nums">
               {streaming ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <span
-                    className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse-cyan"
-                    style={{ boxShadow: '0 0 6px #22d3ee' }}
-                  />
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
                   <span>streaming</span>
                 </span>
               ) : (
@@ -54,10 +51,7 @@ export function MessageBubble({ msg, streaming }: { msg: ChatMessage; streaming?
           >
             {msg.content}
             {streaming && (
-              <span
-                className="inline-block w-[3px] h-4 ml-0.5 align-middle bg-accent animate-blink-cursor"
-                style={{ boxShadow: '0 0 8px #22d3ee' }}
-              />
+              <span className="inline-block w-[3px] h-4 ml-0.5 align-middle bg-accent animate-pulse" />
             )}
           </div>
         </Card>
@@ -65,28 +59,22 @@ export function MessageBubble({ msg, streaming }: { msg: ChatMessage; streaming?
 
       {showArtifact && (
         <div
-          className="relative overflow-hidden flex items-center gap-3.5 w-full rounded-2xl px-3.5 py-3
-            border border-accent/35"
-          style={{
-            background:
-              'linear-gradient(135deg, rgba(34,211,238,.12), rgba(168,85,247,.12)), rgba(13,17,23,.9)',
-            boxShadow:
-              '0 0 0 1px rgba(34,211,238,.3), 0 0 24px -6px rgba(34,211,238,.45)',
-          }}
+          className="flex items-center gap-3.5 w-full rounded-2xl px-3.5 py-3
+            bg-accent-soft border border-accent/20"
         >
           <Avatar size="sm" emoji="📦" />
           <div className="flex-1 min-w-0">
             <div className="text-[10px] uppercase tracking-[0.14em] text-text-2 font-mono font-bold">
               Artifact ready
             </div>
-            <div className="text-[14px] font-mono font-semibold text-text-0 truncate" title={msg.task_id}>
+            <div className="text-[14px] font-mono font-semibold text-text-0 truncate tabular-nums" title={msg.task_id}>
               {msg.task_id}.zip
             </div>
           </div>
           <button
             onClick={() => { void window.api.app.openArtifact(msg.task_id!).catch(() => {}) }}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold
-              text-accent-high bg-accent/[.18] border border-accent/[.45] hover:bg-accent/[.28] transition-colors"
+              text-accent bg-accent-soft border border-accent/20 hover:bg-bg-1 transition-colors"
           >
             <ExternalLink size={11} />
             <span>Show in Finder</span>
@@ -98,8 +86,8 @@ export function MessageBubble({ msg, streaming }: { msg: ChatMessage; streaming?
         <button
           onClick={() => openFeedback(msg.rater_peer_id!, msg.task_id!)}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px]
-            text-text-1 hover:text-text-0 border border-accent/20 hover:border-accent/45
-            bg-bg-1 hover:bg-accent/[.06] transition-colors"
+            text-text-1 hover:text-text-0 border border-border-0
+            bg-bg-1 hover:bg-bg-2 transition-colors"
         >
           <MessageSquare size={11} />
           <span>Rate this response</span>
