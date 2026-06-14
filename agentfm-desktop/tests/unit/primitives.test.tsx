@@ -26,21 +26,20 @@ describe('SectionLabel', () => {
 })
 
 describe('HeroTitle', () => {
-  it('wraps the accent word in a shimmer span', () => {
+  it('wraps the accent word in an accent span, no shimmer', () => {
     const { container } = render(<HeroTitle accent="mesh">Your</HeroTitle>)
-    expect(container.querySelector('.hero-shimmer')).toBeInTheDocument()
-    expect(container.querySelector('.hero-shimmer')!.textContent).toBe('mesh')
+    const span = container.querySelector('[data-hero-accent]') as HTMLElement
+    expect(span.textContent).toBe('mesh')
+    expect(span.className).toMatch(/text-accent/)
+    expect(container.querySelector('.hero-shimmer')).toBeNull()
   })
 })
 
 describe('Avatar', () => {
-  it('renders the emoji prop', () => {
-    render(<Avatar emoji="🤖" />)
-    expect(screen.getByText('🤖')).toBeInTheDocument()
-  })
-  it('always includes the rotating conic halo', () => {
-    const { container } = render(<Avatar emoji="🤖" />)
-    expect(container.querySelector('.animate-halo-rotate')).toBeInTheDocument()
+  it('renders content without a rotating halo', () => {
+    const { container, getByText } = render(<Avatar>HR</Avatar>)
+    expect(getByText('HR')).toBeInTheDocument()
+    expect(container.querySelector('.animate-halo-rotate')).toBeNull()
   })
 })
 

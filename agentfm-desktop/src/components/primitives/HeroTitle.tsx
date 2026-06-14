@@ -8,23 +8,9 @@ interface Props {
 
 export function HeroTitle({ children, accent, trail }: Props) {
   return (
-    <h1
-      className="font-bold tracking-tight leading-[1.05]"
-      style={{ fontSize: '44px', letterSpacing: '-0.025em', margin: 0 }}
-    >
+    <h1 className="font-semibold tracking-tight leading-tight m-0" style={{ fontSize: '33px', letterSpacing: '-0.02em' }}>
       {children}{' '}
-      <span
-        className="hero-shimmer animate-text-shimmer"
-        style={{
-          background: 'linear-gradient(120deg, #22d3ee, #a855f7, #22d3ee)',
-          backgroundSize: '200% 100%',
-          WebkitBackgroundClip: 'text',
-          backgroundClip: 'text',
-          color: 'transparent',
-        }}
-      >
-        {accent}
-      </span>
+      <span data-hero-accent className="text-accent">{accent}</span>
       {trail ? <> {trail}</> : null}
     </h1>
   )
