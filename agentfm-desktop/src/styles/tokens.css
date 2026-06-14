@@ -1,15 +1,5 @@
 :root {
   --accent: #22d3ee;
-  --accent-fg: #07090d;
-  --accent-bg: #062a36;
-  --accent-2: #a855f7;
-  --accent-2-bg: #1f0a36;
-}
-
-[data-theme="light"] {
-  --accent: #06b6d4;
-  --accent-fg: #f3f6fa;
-  --accent-bg: #cffafe;
-  --accent-2: #7e22ce;
-  --accent-2-bg: #ede9fe;
+  --accent-fg: #06121a;
+  --accent-bg: rgba(34,211,238,0.12);
 }
