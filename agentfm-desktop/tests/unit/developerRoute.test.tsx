@@ -3,10 +3,10 @@ import { render } from '@testing-library/react'
 import Developer from '../../src/routes/Developer'
 
 describe('Developer route', () => {
-  it('renders the developer heading and lists a known endpoint', () => {
-    const { getAllByText } = render(<Developer />)
-    expect(getAllByText(/Developer/i).length).toBeGreaterThan(0)
-    // catalog-driven: /api/workers should appear in the endpoint list
+  it('renders heading, getting-started base url, and the endpoint list', () => {
+    const { getByText, getAllByText, container } = render(<Developer />)
+    expect(getByText('Developer API')).toBeTruthy()
+    expect(container.textContent).toContain('http://127.0.0.1')
     expect(getAllByText(/\/api\/workers/).length).toBeGreaterThan(0)
   })
 })
