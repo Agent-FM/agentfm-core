@@ -8,7 +8,7 @@ import { useUIStore } from '../lib/store'
 import { SectionLabel } from '../components/primitives/SectionLabel'
 import { NeonCard } from '../components/primitives/NeonCard'
 import { Avatar } from '../components/primitives/Avatar'
-import { GradientButton } from '../components/primitives/GradientButton'
+import { Button } from '../components/primitives/Button'
 import { shortenPeerID } from '../lib/peer'
 import { LogsModal } from '../components/status/LogsModal'
 
@@ -137,12 +137,12 @@ export default function Status() {
                 text-text-0 border border-accent/30 hover:border-accent/55 transition-colors">
               <RefreshCw size={12} /><span>Restart backend</span>
             </button>
-            <GradientButton onClick={() => navigate('/radar')}>
+            <Button variant="primary" onClick={() => navigate('/radar')}>
               <RadarIcon size={13} /><span>Open Radar</span>
-            </GradientButton>
-            <GradientButton variant="violet" onClick={() => navigate('/activity')}>
+            </Button>
+            <Button variant="primary" onClick={() => navigate('/activity')}>
               <ScrollText size={13} /><span>See my activity</span>
-            </GradientButton>
+            </Button>
           </div>
         </NeonCard>
       </div>

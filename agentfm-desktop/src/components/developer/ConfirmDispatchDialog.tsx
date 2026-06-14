@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import type { SideEffect } from '../../lib/apiCatalog'
 import { Button } from '../primitives/Button'
-import { GradientButton } from '../primitives/GradientButton'
 
 interface Props {
   sideEffect: Exclude<SideEffect, 'none'>
@@ -30,7 +29,7 @@ export function ConfirmDispatchDialog({ sideEffect, onConfirm, onCancel }: Props
         <p className="text-sm text-text-1 mb-4">{COPY[sideEffect]}</p>
         <div className="flex justify-end gap-2">
           <Button onClick={onCancel}>Cancel</Button>
-          <GradientButton onClick={onConfirm}>Send anyway</GradientButton>
+          <Button variant="primary" onClick={onConfirm}>Send anyway</Button>
         </div>
       </div>
     </div>

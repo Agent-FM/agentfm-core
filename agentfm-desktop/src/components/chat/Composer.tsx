@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { GradientButton } from '../primitives/GradientButton'
+import { Button } from '../primitives/Button'
 import { Zap, Square } from 'lucide-react'
 
 interface Props {
@@ -76,10 +76,10 @@ export function Composer({ onSend, onStop, streaming, disabled }: Props) {
               <span>Stop</span>
             </button>
           ) : (
-            <GradientButton onClick={submit} disabled={!canSend}>
+            <Button variant="primary" onClick={submit} disabled={!canSend}>
               <Zap size={12} />
               <span>Send</span>
-            </GradientButton>
+            </Button>
           )}
         </div>
       </div>

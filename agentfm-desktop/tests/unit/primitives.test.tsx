@@ -77,7 +77,6 @@ describe('Meter', () => {
 
 import { ProjectChip } from '../../src/components/primitives/ProjectChip'
 import { RelayPill } from '../../src/components/primitives/RelayPill'
-import { GradientButton } from '../../src/components/primitives/GradientButton'
 
 describe('ProjectChip', () => {
   it('renders the project name and a pulsing dot', () => {
@@ -96,19 +95,5 @@ describe('RelayPill', () => {
   it('omits the lock prefix when public', () => {
     render(<RelayPill peerId="12D3KooWPorLn55wwUdnBCipJMe4sFLUJEAESexeVtzYGTiTWw68" mode="public" />)
     expect(screen.queryByText(/🔒/)).toBeNull()
-  })
-})
-
-describe('GradientButton', () => {
-  it('renders children and is disabled when prop set', () => {
-    render(<GradientButton disabled>Send</GradientButton>)
-    const btn = screen.getByRole('button', { name: 'Send' })
-    expect(btn).toBeDisabled()
-  })
-  it('fires onClick when clicked', () => {
-    let count = 0
-    render(<GradientButton onClick={() => { count++ }}>Go</GradientButton>)
-    screen.getByRole('button', { name: 'Go' }).click()
-    expect(count).toBe(1)
   })
 })

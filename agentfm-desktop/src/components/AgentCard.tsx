@@ -3,7 +3,7 @@ import type { WorkerProfile } from '../types/api'
 import { NeonCard } from './primitives/NeonCard'
 import { Avatar } from './primitives/Avatar'
 import { Meter } from './primitives/Meter'
-import { GradientButton } from './primitives/GradientButton'
+import { Button } from './primitives/Button'
 import { Badge } from './primitives/Badge'
 import { shortenPeerID } from '../lib/peer'
 import { displayName } from '../lib/displayName'
@@ -147,14 +147,15 @@ export function AgentCard({ worker }: Props) {
               <MessageSquare size={13} />
               <span>Chat</span>
             </button>
-            <GradientButton
+            <Button
+              variant="primary"
               onClick={() => openDispatch(worker.peer_id)}
               disabled={!worker.dispatch_allowed}
               className="flex-1"
             >
               <Zap size={13} />
               <span>Dispatch</span>
-            </GradientButton>
+            </Button>
             <button
               onClick={() => navigate(`/peer/${worker.peer_id}`)}
               title="View history & comments"

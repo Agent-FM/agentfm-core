@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { ExternalLink, RefreshCw } from 'lucide-react'
 import { SectionLabel } from '../components/primitives/SectionLabel'
 import { HeroTitle } from '../components/primitives/HeroTitle'
-import { GradientButton } from '../components/primitives/GradientButton'
+import { Button } from '../components/primitives/Button'
 import { usePeerIdentityCache } from '../lib/peerIdentityCache'
 import { shortenPeerID } from '../lib/peer'
 import type { ArtifactListEntry } from '../../electron/preload'
@@ -202,7 +202,8 @@ export default function Assets() {
                 <div className="font-mono text-text-2 text-[12px] text-right">{formatBytes(it.sizeBytes)}</div>
                 <div className="font-mono text-text-2 text-[12px] text-right">{formatAge(it.mtime)}</div>
                 <div className="flex justify-end gap-1">
-                  <GradientButton
+                  <Button
+                    variant="primary"
                     onClick={() => {
                       void window.api.app.openArtifact(it.taskId).catch(() => {
                         toast.error('Could not open in Finder')
@@ -212,7 +213,7 @@ export default function Assets() {
                   >
                     <ExternalLink size={11} />
                     <span>Open</span>
-                  </GradientButton>
+                  </Button>
                 </div>
               </div>
             )

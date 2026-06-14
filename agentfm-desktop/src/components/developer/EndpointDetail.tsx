@@ -11,7 +11,6 @@ import { ResponsePanel } from './ResponsePanel'
 import { SnippetTabs } from './SnippetTabs'
 import { ConfirmDispatchDialog } from './ConfirmDispatchDialog'
 import { StreamingView } from '../StreamingView'
-import { GradientButton } from '../primitives/GradientButton'
 import { Button } from '../primitives/Button'
 
 interface Props {
@@ -97,9 +96,9 @@ export function EndpointDetail({ endpoint }: Props) {
         {isSse ? (
           <Button onClick={onSend}>{streaming ? 'Stop stream' : 'Start stream'}</Button>
         ) : (
-          <GradientButton onClick={onSend} disabled={loading}>
+          <Button variant="primary" onClick={onSend} disabled={loading}>
             {loading ? 'Sending…' : 'Send'}
-          </GradientButton>
+          </Button>
         )}
       </div>
 
