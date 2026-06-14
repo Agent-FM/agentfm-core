@@ -17,12 +17,12 @@ export function EntryRow({ entry, peerId }: Props) {
     <div className="relative pl-4 border-b border-border-0/40">
       <span
         className={`absolute left-0 top-2 bottom-2 w-[3px] rounded-full ${
-          entry.kind === 'Rating' ? 'bg-accent' : 'bg-accent2'
+          entry.kind === 'Rating' ? 'bg-accent' : 'bg-border-1'
         }`}
       />
       <div className="grid grid-cols-[80px_70px_1fr_70px] gap-3.5 py-2.5 items-center text-sm">
         <div className="text-[11px] uppercase tracking-wider text-text-2">{entry.kind}</div>
-        <div className="font-mono font-medium">
+        <div className="font-mono font-medium tabular-nums">
           {typeof entry.score === 'number' ? (
             <span
               className={
@@ -62,7 +62,7 @@ export function EntryRow({ entry, peerId }: Props) {
             />
           )}
         </div>
-        <div className="text-[11px] text-text-2 text-right font-mono">
+        <div className="text-[11px] text-text-2 text-right font-mono tabular-nums">
           {compactAge(entry.received_at)}
         </div>
       </div>

@@ -7,9 +7,9 @@ const OFFLINE_AFTER_MS = 30_000
 
 const CELLS: { metric: PeerMetric; label: string; color: string; fmt: (v: number) => string }[] = [
   { metric: 'cpu', label: 'CPU', color: '#22d3ee', fmt: (v) => `${Math.round(v)}%` },
-  { metric: 'gpu', label: 'GPU', color: '#a855f7', fmt: (v) => `${Math.round(v)}%` },
-  { metric: 'ram', label: 'RAM FREE', color: '#84cc16', fmt: (v) => `${v.toFixed(1)}G` },
-  { metric: 'queue', label: 'QUEUE', color: '#f43f5e', fmt: (v) => `${Math.round(v)}` },
+  { metric: 'gpu', label: 'GPU', color: '#67e8f9', fmt: (v) => `${Math.round(v)}%` },
+  { metric: 'ram', label: 'RAM FREE', color: '#34d399', fmt: (v) => `${v.toFixed(1)}G` },
+  { metric: 'queue', label: 'QUEUE', color: '#f59e0b', fmt: (v) => `${Math.round(v)}` },
 ]
 
 function formatAgo(ms: number): string {
@@ -28,7 +28,7 @@ export function TelemetryStrip({ peerId }: TelemetryStripProps) {
 
   if (!peerBufs || !lastTick) {
     return (
-      <div className="border border-violet-500/20 bg-violet-500/5 rounded-lg p-4 text-text-2 text-sm">
+      <div className="bg-bg-2 border border-border-0 rounded-[14px] p-4 text-text-2 text-sm">
         Waiting for telemetry beacon…
       </div>
     )
@@ -38,14 +38,13 @@ export function TelemetryStrip({ peerId }: TelemetryStripProps) {
   const offline = sinceLast > OFFLINE_AFTER_MS
 
   return (
-    <div className="border border-violet-500/20 bg-violet-500/5 rounded-lg p-3">
+    <div className="bg-bg-2 border border-border-0 rounded-[14px] p-3">
       <div className="flex items-center justify-between mb-2">
-        <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-text-2 flex items-center gap-1.5">
+        <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-text-2 flex items-center gap-1.5 tabular-nums">
           <span
             className={`inline-block w-1.5 h-1.5 rounded-full ${
               offline ? 'bg-text-2' : 'bg-ok'
             }`}
-            style={{ boxShadow: offline ? 'none' : '0 0 6px #84cc16' }}
           />
           {offline ? `OFFLINE — last seen ${formatAgo(sinceLast)} ago` : 'LIVE TELEMETRY · LAST 5 MIN'}
         </div>
@@ -56,12 +55,12 @@ export function TelemetryStrip({ peerId }: TelemetryStripProps) {
           const v = latestValue(buf) ?? 0
           const { v: values } = ringToArrays(buf)
           return (
-            <div key={c.metric} className="bg-bg-0/40 rounded-md p-2">
+            <div key={c.metric} className="bg-bg-1 border border-border-0 rounded-md p-2">
               <div className="text-[9px] font-mono uppercase tracking-wider text-text-2 mb-1">
                 {c.label}
               </div>
               <div
-                className="font-mono font-bold leading-none mb-1"
+                className="font-mono font-bold leading-none mb-1 tabular-nums"
                 style={{ fontSize: 16, color: c.color }}
               >
                 {c.fmt(v)}

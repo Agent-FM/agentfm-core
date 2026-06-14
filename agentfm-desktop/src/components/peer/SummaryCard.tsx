@@ -1,35 +1,39 @@
 import type { PeerSummary } from '../../types/api';
 import { shortenDigest, compactAge } from '../../lib/peer';
 import { Badge } from '../primitives/Badge';
+import { Card } from '../primitives/Card';
 
 export function SummaryCard({ data }: { data: PeerSummary }) {
   const score = data.honesty_score;
   return (
-    <div className="bg-bg-1 border border-border-0 rounded-lg p-5 grid grid-cols-3 gap-x-6 gap-y-4">
+    <Card className="grid grid-cols-3 gap-x-6 gap-y-4">
       <Field label="Rating">
         <div className="flex gap-1.5 flex-wrap items-center">
           {data.is_equivocator ? (
             <Badge tone="rose">⚠ equivocator</Badge>
           ) : (
             <Badge tone={score > 0.3 ? 'lime' : score < -0.5 ? 'rose' : 'neutral'} mono>
-              {score >= 0 ? '+' : ''}{score.toFixed(2)}
+              <span className="tabular-nums">
+                {score >= 0 ? '+' : ''}{score.toFixed(2)}
+              </span>{' '}
+              {score > 0.3 ? 'honest' : score < -0.5 ? 'flagged' : 'neutral'}
             </Badge>
           )}
         </div>
       </Field>
       <Field label="Status">
         {data.online ? (
-          <span className="text-sm text-accent">
+          <span className="text-sm text-accent tabular-nums">
             ✓ online{data.last_seen ? ' · last seen ' + compactAge(data.last_seen) + ' ago' : ''}
           </span>
         ) : (
-          <span className="text-sm text-text-2">
+          <span className="text-sm text-text-2 tabular-nums">
             offline{data.last_seen ? ' · last ' + compactAge(data.last_seen) + ' ago' : ''}
           </span>
         )}
       </Field>
       <Field label="Equivocator">
-        <span className={`text-sm ${data.is_equivocator ? 'text-bad' : 'text-text-1'}`}>
+        <span className={`text-sm tabular-nums ${data.is_equivocator ? 'text-bad' : 'text-text-1'}`}>
           {data.is_equivocator ? '⚠ yes — floored at -1.00' : 'no'}
         </span>
       </Field>
@@ -47,19 +51,19 @@ export function SummaryCard({ data }: { data: PeerSummary }) {
       )}
       {data.advertised_capability && (
         <Field label="Capability">
-          <Badge tone="violet" mono>{data.advertised_capability}</Badge>
+          <Badge tone="cyan" mono>{data.advertised_capability}</Badge>
         </Field>
       )}
       <Field label="Total entries">
-        <span className="text-sm text-text-0">{data.entries_count}</span>
+        <span className="text-sm text-text-0 tabular-nums">{data.entries_count}</span>
       </Field>
       <Field label="Verified raters">
-        <span className="text-sm text-text-1">
+        <span className="text-sm text-text-1 tabular-nums">
           {data.rater_summary?.verified_raters_count ?? 0} verified ·{' '}
           {data.rater_summary?.unverified_raters_count ?? 0} unverified
         </span>
       </Field>
-    </div>
+    </Card>
   );
 }
 

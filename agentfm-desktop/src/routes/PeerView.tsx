@@ -4,11 +4,13 @@ import { ArrowLeft, AlertOctagon } from 'lucide-react';
 import { usePeer, usePeerLog } from '../lib/query';
 import { useUIStore } from '../lib/store';
 import { usePeerIdentityCache } from '../lib/peerIdentityCache';
+import { motion } from 'framer-motion';
 import { SummaryCard } from '../components/peer/SummaryCard';
 import { TelemetryStrip } from '../components/peer/TelemetryStrip';
 import { Tabs } from '../components/peer/Tabs';
 import { EntryRow } from '../components/peer/EntryRow';
 import { Button } from '../components/primitives/Button';
+import { staggerItem } from '../lib/motion';
 import { displayName } from '../lib/displayName';
 
 type TabKind = 'all' | 'ratings' | 'comments';
@@ -24,15 +26,15 @@ export default function PeerView() {
   const cached = usePeerIdentityCache((s) => (peerId ? s.byPeerId[peerId] : undefined));
 
   if (!peerId) {
-    return <div className="p-7 text-bad">No peer id</div>;
+    return <div className="p-6 text-bad">No peer id</div>;
   }
   if (sPending || lPending) {
-    return <div className="p-7 text-text-2">Loading peer history…</div>;
+    return <div className="p-6 text-text-2">Loading peer history…</div>;
   }
   if (sErr || lErr) {
-    return <div className="p-7 text-bad">{(sErr || lErr)?.message}</div>;
+    return <div className="p-6 text-bad">{(sErr || lErr)?.message}</div>;
   }
-  if (!summary || !log) return <div className="p-7 text-text-2">No data.</div>;
+  if (!summary || !log) return <div className="p-6 text-text-2">No data.</div>;
 
   const allEntries = log.entries;
   const ratings = allEntries.filter((e) => e.kind === 'Rating');
@@ -40,7 +42,7 @@ export default function PeerView() {
   const view = tab === 'all' ? allEntries : tab === 'ratings' ? ratings : comments;
 
   return (
-    <div className="p-7 max-w-5xl">
+    <div className="p-6 max-w-5xl">
       <button
         onClick={() => navigate('/radar')}
         className="inline-flex items-center gap-1.5 text-xs text-text-2 mb-3 hover:text-text-0"
@@ -54,12 +56,12 @@ export default function PeerView() {
           <h1 className="text-3xl font-semibold tracking-tight text-text-0">
             {displayName({ ...summary, name: summary.agent_name, peer_id: summary.peer_id }, cached)}
           </h1>
-          <div className="font-mono text-[11px] text-text-2 mt-1 break-all">
+          <div className="font-mono text-[11px] text-text-2 mt-1 break-all tabular-nums">
             {summary.peer_id}
             {(summary.author?.trim() || cached?.author) && (
               <>
                 {' · by '}
-                <span className="text-accent2-light font-semibold">
+                <span className="text-accent font-semibold">
                   {summary.author?.trim() || cached?.author}
                 </span>
               </>
@@ -93,7 +95,7 @@ export default function PeerView() {
       {summary.is_equivocator && (
         <div
           role="alert"
-          className="my-4 border border-bad/40 bg-gradient-to-r from-bad/15 to-warn/8 rounded-xl p-5 flex gap-3"
+          className="mb-6 border border-bad/40 bg-bad/10 rounded-[14px] p-5 flex gap-3"
         >
           <AlertOctagon size={24} className="text-bad flex-none mt-0.5" />
           <div>
@@ -116,11 +118,11 @@ export default function PeerView() {
         </div>
       )}
 
-      <div className="my-4">
+      <div className="mb-6">
         <SummaryCard data={summary} />
       </div>
 
-      <div className="my-4">
+      <div className="mb-6">
         <TelemetryStrip peerId={summary.peer_id} />
       </div>
 
@@ -139,7 +141,9 @@ export default function PeerView() {
       ) : (
         <div>
           {view.map((e, i) => (
-            <EntryRow key={`${e.received_at}-${i}`} entry={e} peerId={summary.peer_id} />
+            <motion.div key={`${e.received_at}-${i}`} {...staggerItem(Math.min(i, 12))}>
+              <EntryRow entry={e} peerId={summary.peer_id} />
+            </motion.div>
           ))}
         </div>
       )}

@@ -21,13 +21,13 @@ export function Tabs<T extends string>({ options, value, onChange }: TabsProps<T
           >
             {o.label}
             {typeof o.count === 'number' && (
-              <span className="text-text-3 ml-1">· {o.count}</span>
+              <span className="text-text-3 ml-1 tabular-nums">· {o.count}</span>
             )}
             {isActive && (
               <motion.div
                 layoutId="peer-tab-indicator"
                 transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-                className="absolute bottom-0 left-1 right-1 h-[2px] bg-gradient-to-r from-accent to-accent2"
+                className="absolute bottom-0 left-1 right-1 h-[2px] bg-accent"
               />
             )}
           </button>
