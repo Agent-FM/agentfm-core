@@ -40,7 +40,10 @@ export const ROUTE_MANIFEST = [
   '/metrics',
 ] as const
 
-// Strip trailing :params and querystring to compare against ROUTE_MANIFEST.
+// Strip the querystring and everything from the first :param onward, then
+// compare against ROUTE_MANIFEST. Note: static suffixes after a :param
+// (e.g. the "comments/self" in /v1/peers/:peerId/comments/self) are
+// intentionally not validated by the drift guard.
 export function basePathOf(path: string): string {
   const noQuery = path.split('?')[0]
   const segs = noQuery.split('/').filter(Boolean)

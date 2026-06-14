@@ -23,13 +23,17 @@ describe('API_CATALOG', () => {
       }
       const bodies = ep.params.filter((p) => p.loc === 'body')
       expect(bodies.length).toBeLessThanOrEqual(1)
+      if (bodies.length === 1) {
+        expect(typeof bodies[0].example).toBe('object')
+        expect(bodies[0].example).not.toBeNull()
+      }
     }
   })
 
   it('drift guard: every catalog path maps onto a real Boss route prefix', () => {
     for (const ep of API_CATALOG) {
       const base = basePathOf(ep.path)
-      const known = ROUTE_MANIFEST.some((r) => base === r || base.startsWith(r))
+      const known = ROUTE_MANIFEST.some((r) => base === r || base.startsWith(r + '/'))
       expect(known, `${ep.path} (base ${base}) not in ROUTE_MANIFEST`).toBe(true)
     }
   })
