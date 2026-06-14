@@ -45,16 +45,14 @@ describe('Avatar', () => {
 })
 
 describe('Meter', () => {
-  it('clamps value to 0..100', () => {
+  it('renders a flat accent fill at the clamped width, no shimmer', () => {
     const { container, rerender } = render(<Meter value={150} />)
     const fill = container.querySelector<HTMLElement>('[data-meter-fill]')!
     expect(fill.style.width).toBe('100%')
+    expect(fill.className).toMatch(/bg-accent/)
+    expect(container.querySelector('.animate-meter-shimmer')).toBeNull()
     rerender(<Meter value={-20} />)
     expect(fill.style.width).toBe('0%')
-  })
-  it('renders the shimmer streak', () => {
-    const { container } = render(<Meter value={50} />)
-    expect(container.querySelector('.animate-meter-shimmer')).toBeInTheDocument()
   })
 })
 
