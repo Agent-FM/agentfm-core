@@ -10,10 +10,10 @@ import { Avatar } from '../../src/components/primitives/Avatar'
 import { Meter } from '../../src/components/primitives/Meter'
 
 describe('RoutePage', () => {
-  it('renders content and the two mesh background layers', () => {
+  it('renders content with the aurora + grid background layers', () => {
     const { container } = render(<RoutePage><div>hello</div></RoutePage>)
     expect(screen.getByText('hello')).toBeInTheDocument()
-    expect(container.querySelector('.route-page__blobs')).toBeInTheDocument()
+    expect(container.querySelectorAll('.animate-aurora').length).toBe(2)
     expect(container.querySelector('.route-page__grid')).toBeInTheDocument()
   })
 })
