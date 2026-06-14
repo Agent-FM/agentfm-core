@@ -12,7 +12,7 @@ import { createRingBuffer, latestValue, ringToArrays } from '../types/metrics'
 import { SparkLine } from '../components/charts/SparkLine'
 import { SectionLabel } from '../components/primitives/SectionLabel'
 import { HeroTitle } from '../components/primitives/HeroTitle'
-import { NeonCard } from '../components/primitives/NeonCard'
+import { Card } from '../components/primitives/Card'
 import { AnimatedNumber } from '../components/dashboard/AnimatedNumber'
 
 const STATUSES = ['ok', 'error', 'rejected', 'timeout'] as const
@@ -160,7 +160,7 @@ export default function Dashboard() {
         TASKS · {Math.round(totalTasks)} total · ▲ {tasksPerMin.toFixed(1)}/min
       </p>
 
-      <NeonCard className="p-5 mb-4">
+      <Card className="p-5 mb-4">
         <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-text-2 mb-2">
           Tasks · last 5 min
         </div>
@@ -175,7 +175,7 @@ export default function Dashboard() {
           ))}
         </div>
         <SparkLine values={heroValues} width={800} height={40} color="#22d3ee" />
-      </NeonCard>
+      </Card>
 
       <div className="grid grid-cols-3 gap-3.5 mb-4">
         <Tile
@@ -196,7 +196,7 @@ export default function Dashboard() {
           color="#22d3ee"
         />
         <Tile label="Sign-in attempts" value={`${Math.round(authAttemptsTotal)}`} color="#a855f7" />
-        <NeonCard className="p-4">
+        <Card className="p-4">
           <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-text-2 mb-2">
             Assets built
           </div>
@@ -204,8 +204,8 @@ export default function Dashboard() {
             <AnimatedNumber value={assetsBuiltCount} />
           </div>
           <SparkLine values={assetsBuiltValues} width={180} height={28} color="#22d3ee" />
-        </NeonCard>
-        <NeonCard className="p-4">
+        </Card>
+        <Card className="p-4">
           <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-text-2 mb-2">
             Errors by channel
           </div>
@@ -221,10 +221,10 @@ export default function Dashboard() {
               ))}
             </div>
           )}
-        </NeonCard>
+        </Card>
       </div>
 
-      <NeonCard className="p-5 mb-4">
+      <Card className="p-5 mb-4">
         <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-text-2 mb-2">
           Success rate · last 2 min
         </div>
@@ -243,7 +243,7 @@ export default function Dashboard() {
           height={40}
           color={successRateColor}
         />
-      </NeonCard>
+      </Card>
 
       <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-text-2 mb-2">
         Boss process health
@@ -279,7 +279,7 @@ function Tile({
   color: string
 }) {
   return (
-    <NeonCard className="p-4">
+    <Card className="p-4">
       <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-text-2 mb-2">
         {label}
       </div>
@@ -289,7 +289,7 @@ function Tile({
       {hint && (
         <div className="text-[11px] text-text-2 mt-2">{hint}</div>
       )}
-    </NeonCard>
+    </Card>
   )
 }
 

@@ -1,7 +1,7 @@
 import { ExternalLink, MessageSquare } from 'lucide-react'
 import type { ChatMessage } from '../../types/chat'
 import { shortenPeerID, compactAge } from '../../lib/peer'
-import { NeonCard } from '../primitives/NeonCard'
+import { Card } from '../primitives/Card'
 import { Avatar } from '../primitives/Avatar'
 import { useUIStore } from '../../lib/store'
 
@@ -26,7 +26,7 @@ export function MessageBubble({ msg, streaming }: { msg: ChatMessage; streaming?
           </div>
         </div>
       ) : (
-        <NeonCard breathing className="rounded-[18px_18px_18px_4px] px-[18px] py-4 w-full">
+        <Card live className="rounded-[18px_18px_18px_4px] px-[18px] py-4 w-full">
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] text-text-2 font-mono font-bold mb-2">
             <span>AGENT</span>
             {msg.rater_peer_id && (
@@ -60,7 +60,7 @@ export function MessageBubble({ msg, streaming }: { msg: ChatMessage; streaming?
               />
             )}
           </div>
-        </NeonCard>
+        </Card>
       )}
 
       {showArtifact && (

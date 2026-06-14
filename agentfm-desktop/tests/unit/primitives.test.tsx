@@ -5,7 +5,6 @@ afterEach(() => cleanup())
 import { RoutePage } from '../../src/components/primitives/RoutePage'
 import { SectionLabel } from '../../src/components/primitives/SectionLabel'
 import { HeroTitle } from '../../src/components/primitives/HeroTitle'
-import { NeonCard } from '../../src/components/primitives/NeonCard'
 import { Avatar } from '../../src/components/primitives/Avatar'
 import { Meter } from '../../src/components/primitives/Meter'
 
@@ -31,22 +30,6 @@ describe('HeroTitle', () => {
     const { container } = render(<HeroTitle accent="mesh">Your</HeroTitle>)
     expect(container.querySelector('.hero-shimmer')).toBeInTheDocument()
     expect(container.querySelector('.hero-shimmer')!.textContent).toBe('mesh')
-  })
-})
-
-describe('NeonCard', () => {
-  it('renders children and the top-sweep light bar always', () => {
-    const { container } = render(<NeonCard>hi</NeonCard>)
-    expect(screen.getByText('hi')).toBeInTheDocument()
-    expect(container.querySelector('.animate-top-sweep')).toBeInTheDocument()
-  })
-  it('adds glow-cycle when breathing', () => {
-    const { container } = render(<NeonCard breathing>hi</NeonCard>)
-    expect(container.querySelector('.animate-glow-cycle')).toBeInTheDocument()
-  })
-  it('omits glow-cycle when not breathing', () => {
-    const { container } = render(<NeonCard>hi</NeonCard>)
-    expect(container.querySelector('.animate-glow-cycle')).toBeNull()
   })
 })
 

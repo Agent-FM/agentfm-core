@@ -6,7 +6,7 @@ import { useUIStore } from '../lib/store'
 import { useAbout } from '../lib/query'
 import { useBackend } from '../hooks/useBackend'
 import { SectionLabel } from '../components/primitives/SectionLabel'
-import { NeonCard } from '../components/primitives/NeonCard'
+import { Card } from '../components/primitives/Card'
 import { Avatar } from '../components/primitives/Avatar'
 import { LogsModal } from '../components/status/LogsModal'
 
@@ -74,7 +74,7 @@ export default function Settings() {
         {/* BACKEND */}
         <section className="mb-7">
           <SectionLabel>BACKEND</SectionLabel>
-          <NeonCard className="p-5">
+          <Card className="p-5">
             <div className="flex items-center gap-3 text-[15px]">
               <span
                 className="w-2 h-2 rounded-full animate-pulse-cyan"
@@ -98,13 +98,13 @@ export default function Settings() {
                 font-semibold text-text-0 border border-accent/30 hover:border-accent/55
                 hover:shadow-[0_0_14px_-4px_rgba(34,211,238,.4)] transition-all"
             ><FileText size={12} /><span>View logs</span></button>
-          </NeonCard>
+          </Card>
         </section>
 
         {/* CONNECTION */}
         <section className="mb-7">
           <SectionLabel>CONNECTION</SectionLabel>
-          <NeonCard className="p-5">
+          <Card className="p-5">
             <div className="flex items-center gap-3.5 mb-4">
               <Avatar size="md" emoji={isPrivate ? '🔒' : '🌐'} />
               <div>
@@ -153,13 +153,13 @@ export default function Settings() {
                 ⚠ Changing the swarm key requires restarting the boss.
               </div>
             )}
-          </NeonCard>
+          </Card>
         </section>
 
         {/* THRESHOLD */}
         <section className="mb-7">
           <SectionLabel>AUTO-REFUSE THRESHOLD</SectionLabel>
-          <NeonCard className="p-5">
+          <Card className="p-5">
             <div className="text-[15px] text-text-1 leading-[1.5] mb-4">
               Workers with rating below{' '}
               <span
@@ -181,20 +181,20 @@ export default function Settings() {
               <span>−1.00 strict</span>
               <span>0.00 permissive</span>
             </div>
-          </NeonCard>
+          </Card>
         </section>
 
         {/* THIS BOSS */}
         <section className="mb-7">
           <SectionLabel>THIS BOSS</SectionLabel>
-          <NeonCard className="p-5 space-y-3">
+          <Card className="p-5 space-y-3">
             <TechRow k="Peer ID" v={about?.boss_peer_id ?? '…'} valueClass="text-accent-high"
                      onCopy={() => copy(about?.boss_peer_id ?? '', 'Peer ID')} />
             <TechRow k="Relay peer ID" v={about?.relay_peer_id || '(not connected)'} />
             <TechRow k="Backend version" v={about?.version ?? '…'} />
             <TechRow k="Reputation floor" v={active.reputationFloor.toFixed(2)} />
             <TechRow k="Ledger storage" v="~/.agentfm/" />
-          </NeonCard>
+          </Card>
         </section>
 
         {/* DANGER */}

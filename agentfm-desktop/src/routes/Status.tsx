@@ -6,7 +6,7 @@ import { useAbout } from '../lib/query'
 import { useBackend } from '../hooks/useBackend'
 import { useUIStore } from '../lib/store'
 import { SectionLabel } from '../components/primitives/SectionLabel'
-import { NeonCard } from '../components/primitives/NeonCard'
+import { Card } from '../components/primitives/Card'
 import { Avatar } from '../components/primitives/Avatar'
 import { Button } from '../components/primitives/Button'
 import { shortenPeerID } from '../lib/peer'
@@ -32,7 +32,7 @@ function StatCard({ label, emoji, value, valueTone, sub }: StatCardProps) {
     ok: '#84cc16', cyan: '#22d3ee', violet: '#a855f7', rose: '#f43f5e',
   }[valueTone]
   return (
-    <NeonCard breathing className="p-3">
+    <Card live className="p-3">
       <div className="flex items-center justify-between mb-2">
         <div className="font-mono uppercase font-bold text-text-2"
              style={{fontSize:10,letterSpacing:'0.14em'}}>{label}</div>
@@ -43,7 +43,7 @@ function StatCard({ label, emoji, value, valueTone, sub }: StatCardProps) {
         {value}
       </div>
       <div className="font-mono text-text-2 mt-1.5 truncate" style={{fontSize:11}}>{sub}</div>
-    </NeonCard>
+    </Card>
   )
 }
 
@@ -119,7 +119,7 @@ export default function Status() {
         </div>
 
         {/* Tech details */}
-        <NeonCard className="p-4">
+        <Card className="p-4">
           <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 mb-3">
             <TechRow k="Boss peer ID" v={about?.boss_peer_id ?? '…'} tone="cyan" />
             <TechRow k="Backend version" v={about?.version ?? '…'} />
@@ -144,7 +144,7 @@ export default function Status() {
               <ScrollText size={13} /><span>See my activity</span>
             </Button>
           </div>
-        </NeonCard>
+        </Card>
       </div>
       <LogsModal isOpen={showLogs} onClose={() => setShowLogs(false)} />
     </>

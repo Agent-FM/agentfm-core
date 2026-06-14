@@ -1,6 +1,6 @@
 import { Zap, MessageSquare, ScrollText } from 'lucide-react'
 import type { WorkerProfile } from '../types/api'
-import { NeonCard } from './primitives/NeonCard'
+import { Card } from './primitives/Card'
 import { Avatar } from './primitives/Avatar'
 import { Meter } from './primitives/Meter'
 import { Button } from './primitives/Button'
@@ -52,7 +52,7 @@ export function AgentCard({ worker }: Props) {
   const name = displayName(worker, cached)
 
   return (
-    <NeonCard breathing={!isOffline} className={`p-5 ${isOffline ? 'opacity-60 grayscale' : ''}`}>
+    <Card live={!isOffline} className={`p-5 ${isOffline ? 'opacity-60 grayscale' : ''}`}>
       <div className="flex items-center gap-3.5 mb-3">
         <Avatar size="lg" emoji={emojiFor(name)} />
         <div className="min-w-0 flex-1">
@@ -170,6 +170,6 @@ export function AgentCard({ worker }: Props) {
           </>
         )}
       </div>
-    </NeonCard>
+    </Card>
   )
 }
