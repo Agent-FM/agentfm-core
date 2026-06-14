@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { useQueries } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAbout, useWorkers, qk } from '../lib/query';
@@ -6,7 +7,9 @@ import { api } from '../lib/api';
 import { EntryRow } from '../components/peer/EntryRow';
 import type { PeerEntry } from '../types/api';
 import { usePeerName } from '../hooks/usePeerName';
-import { StatusDot } from '../components/primitives/StatusDot';
+import { Card } from '../components/primitives/Card';
+import { SectionLabel } from '../components/primitives/SectionLabel';
+import { staggerItem } from '../lib/motion';
 
 interface ActivityEntry {
   subject: string;
@@ -81,18 +84,17 @@ export default function Activity() {
   );
 
   return (
-    <div className="p-7 max-w-5xl">
+    <div className="p-6 max-w-5xl">
       <h1 className="text-2xl font-semibold tracking-tight text-text-0">My activity</h1>
-      <p className="text-sm text-text-2 mt-1 mb-5">
+      <p className="text-sm text-text-2 mt-1 mb-6">
         Every rating and comment <em>you</em> have signed and broadcast to the mesh.
         {someLoading && (
-          <span className="ml-2">refreshing across {peers.length} peers…</span>
+          <span className="ml-2 tabular-nums">refreshing across {peers.length} peers…</span>
         )}
       </p>
 
       {myEntries.length === 0 && !someLoading ? (
-        <div className="bg-bg-1 border border-border-0 rounded-lg p-8 text-center">
-          <div className="text-4xl mb-3 opacity-50">📜</div>
+        <div className="bg-bg-2 border border-border-0 rounded-lg p-8 text-center">
           <p className="text-text-1 font-medium">No outgoing entries yet.</p>
           <p className="text-sm text-text-2 mt-2">
             Leave feedback on a peer from their profile, or run a dispatch — entries you sign show
@@ -100,34 +102,41 @@ export default function Activity() {
           </p>
         </div>
       ) : (
-        <div className="space-y-5">
-          {orderedBuckets.map((b) => (
-            <section key={b}>
-              <h2 className="text-2xs uppercase tracking-wider text-text-2 mb-2 px-1 inline-flex items-center">
-                <StatusDot tone="cyan" size="sm" className="mr-2" />
-                {BUCKET_LABEL[b]}{' '}
-                <span className="text-text-3 normal-case ml-1">({grouped[b].length})</span>
-              </h2>
-              <div className="bg-bg-1 border border-border-0 rounded-lg p-3">
-                {grouped[b].map(({ subject, entry }, i) => (
-                  <div
-                    key={`${entry.received_at}-${i}`}
-                    className="last:border-0"
-                    style={{ borderBottom: '1px solid rgba(34,211,238,.08)' }}
-                  >
-                    <button
-                      onClick={() => navigate(`/peer/${subject}`)}
-                      className="block w-full text-left text-2xs text-text-2 px-1 pt-2.5 hover:text-accent"
+        <div className="space-y-6">
+          {(() => {
+            let rowIndex = 0;
+            return orderedBuckets.map((b) => (
+              <section key={b}>
+                <div className="mb-2 px-1 flex items-center gap-2">
+                  <SectionLabel tone="cyan">{BUCKET_LABEL[b]}</SectionLabel>
+                  <span className="text-2xs text-text-3 tabular-nums">({grouped[b].length})</span>
+                </div>
+                <Card density="compact" className="divide-y divide-border-0">
+                  {grouped[b].map(({ subject, entry }, i) => (
+                    <motion.div
+                      key={`${entry.received_at}-${i}`}
+                      className="px-4 py-3"
+                      {...staggerItem(Math.min(rowIndex++, 12))}
                     >
-                      about <span className="text-accent2-light hover:glow-text-violet transition-colors font-medium"><PeerName peerId={subject} /></span>
-                      <span className="ml-2 font-mono text-text-3">{subject.slice(0, 12)}…</span>
-                    </button>
-                    <EntryRow entry={entry} peerId={subject} />
-                  </div>
-                ))}
-              </div>
-            </section>
-          ))}
+                      <button
+                        onClick={() => navigate(`/peer/${subject}`)}
+                        className="block w-full text-left text-2xs text-text-2 hover:text-accent transition-colors"
+                      >
+                        about{' '}
+                        <span className="text-text-1 font-medium">
+                          <PeerName peerId={subject} />
+                        </span>
+                        <span className="ml-2 font-mono text-text-3 tabular-nums">
+                          {subject.slice(0, 12)}…
+                        </span>
+                      </button>
+                      <EntryRow entry={entry} peerId={subject} />
+                    </motion.div>
+                  ))}
+                </Card>
+              </section>
+            ));
+          })()}
         </div>
       )}
     </div>
