@@ -66,7 +66,6 @@ export function SettingsSheet() {
               <SegGroup
                 options={[
                   { value: 'dark', label: 'Dark' },
-                  { value: 'light', label: 'Light' },
                   { value: 'auto', label: 'Auto' },
                 ]}
                 value={theme}
