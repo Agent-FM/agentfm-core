@@ -21,6 +21,7 @@ export function EndpointList({ endpoints, selectedId, onSelect }: Props) {
               <button
                 key={ep.id}
                 onClick={() => onSelect(ep.id)}
+                aria-current={ep.id === selectedId ? 'page' : undefined}
                 className={`w-full text-left px-2 py-1.5 rounded-lg font-mono text-xs transition-colors ${
                   ep.id === selectedId ? 'bg-accent/15 text-text-0' : 'text-text-1 hover:bg-white/5'
                 }`}

@@ -50,4 +50,15 @@ describe('buildRequest', () => {
     const { init } = buildRequest(GET_EP, {}, 'http://h', 'secret')
     expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer secret')
   })
+
+  it('keeps falsy-but-valid query values like "0"', () => {
+    const ep: EndpointDef = {
+      id: 'q', group: 'AgentFM-native', method: 'GET', path: '/api/x',
+      summary: '', description: '',
+      params: [{ name: 'n', loc: 'query', required: false, example: '1', description: '' }],
+      exampleResponse: {}, sideEffect: 'none',
+    }
+    const { url } = buildRequest(ep, { n: '0' }, 'http://h')
+    expect(url).toBe('http://h/api/x?n=0')
+  })
 })

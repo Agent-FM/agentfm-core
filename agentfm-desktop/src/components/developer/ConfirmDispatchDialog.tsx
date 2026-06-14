@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import type { SideEffect } from '../../lib/apiCatalog'
 import { Button } from '../primitives/Button'
 import { GradientButton } from '../primitives/GradientButton'
@@ -14,10 +15,18 @@ const COPY: Record<Exclude<SideEffect, 'none'>, string> = {
 }
 
 export function ConfirmDispatchDialog({ sideEffect, onConfirm, onCancel }: Props) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onCancel}>
-      <div className="glass-strong rounded-2xl p-5 max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-semibold mb-2">Confirm request</h3>
+      <div className="glass-strong rounded-2xl p-5 max-w-md mx-4" role="dialog" aria-modal="true" aria-labelledby="confirm-dispatch-title" onClick={(e) => e.stopPropagation()}>
+        <h3 id="confirm-dispatch-title" className="text-lg font-semibold mb-2">Confirm request</h3>
         <p className="text-sm text-text-1 mb-4">{COPY[sideEffect]}</p>
         <div className="flex justify-end gap-2">
           <Button onClick={onCancel}>Cancel</Button>

@@ -1,5 +1,5 @@
 // src/components/developer/EndpointDetail.tsx
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { EndpointDef, FormValues } from '../../lib/apiCatalog'
 import { sendRequest } from '../../lib/apiExplorer'
 import type { ExplorerResult } from '../../lib/apiExplorer'
@@ -26,6 +26,9 @@ export function EndpointDetail({ endpoint }: Props) {
   const [stream, setStream] = useState('')
   const [streaming, setStreaming] = useState(false)
   const sseRef = useRef<SseHandle | null>(null)
+  const reqToken = useRef(0)
+
+  useEffect(() => () => { sseRef.current?.close() }, [])
 
   const isSse = endpoint.streaming === 'sse'
 
@@ -33,6 +36,7 @@ export function EndpointDetail({ endpoint }: Props) {
   const [lastId, setLastId] = useState(endpoint.id)
   if (lastId !== endpoint.id) {
     setLastId(endpoint.id)
+    reqToken.current++
     setValues({})
     setResult(null)
     setStream('')
@@ -58,9 +62,11 @@ export function EndpointDetail({ endpoint }: Props) {
   }
 
   async function fire() {
+    const myToken = ++reqToken.current
     setLoading(true)
     setConfirming(false)
     const r = await sendRequest(endpoint, values)
+    if (myToken !== reqToken.current) return
     setResult(r)
     setLoading(false)
   }

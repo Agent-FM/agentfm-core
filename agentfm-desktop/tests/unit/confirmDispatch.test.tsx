@@ -20,4 +20,11 @@ describe('ConfirmDispatchDialog', () => {
     )
     expect(getByText(/cryptographically signed/i)).toBeTruthy()
   })
+
+  it('calls onCancel when Escape is pressed', () => {
+    const onCancel = vi.fn()
+    render(<ConfirmDispatchDialog sideEffect="dispatch" onConfirm={() => {}} onCancel={onCancel} />)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onCancel).toHaveBeenCalled()
+  })
 })

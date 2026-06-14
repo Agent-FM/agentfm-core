@@ -29,7 +29,7 @@ export function buildRequest(
   for (const p of ep.params) {
     if (p.loc === 'query') {
       const v = values[p.name]
-      if (v) query.push(`${encodeURIComponent(p.name)}=${encodeURIComponent(v)}`)
+      if (v !== undefined && v !== '') query.push(`${encodeURIComponent(p.name)}=${encodeURIComponent(v)}`)
     } else if (p.loc === 'body') {
       bodyText = values[p.name] ?? JSON.stringify(p.example, null, 2)
     }
