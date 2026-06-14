@@ -36,10 +36,14 @@ describe('HeroTitle', () => {
 })
 
 describe('Avatar', () => {
-  it('renders content without a rotating halo', () => {
-    const { container, getByText } = render(<Avatar>HR</Avatar>)
-    expect(getByText('HR')).toBeInTheDocument()
+  it('renders an emoji without a rotating halo', () => {
+    const { container } = render(<Avatar emoji="🤖" />)
+    expect(screen.getByText('🤖')).toBeInTheDocument()
     expect(container.querySelector('.animate-halo-rotate')).toBeNull()
+  })
+  it('falls back to children when no emoji is given', () => {
+    render(<Avatar>HR</Avatar>)
+    expect(screen.getByText('HR')).toBeInTheDocument()
   })
 })
 
