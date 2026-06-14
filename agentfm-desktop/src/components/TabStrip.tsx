@@ -10,6 +10,7 @@ const tabs = [
   { to: '/assets', label: 'Assets' },
   { to: '/status', label: 'Status' },
   { to: '/settings', label: 'Settings' },
+  { to: '/developer', label: 'Developer' },
 ]
 
 export function TabStrip() {

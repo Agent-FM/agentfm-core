@@ -17,6 +17,7 @@ import Activity from './routes/Activity'
 import Status from './routes/Status'
 import Assets from './routes/Assets'
 import Settings from './routes/Settings'
+import Developer from './routes/Developer'
 import { useWorkerHistory } from './hooks/useWorkerHistory'
 
 export default function App() {
@@ -41,6 +42,7 @@ export default function App() {
               <Route path="assets" element={<Assets />} />
               <Route path="status" element={<Status />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="developer" element={<Developer />} />
             </Route>
           </Routes>
         </ErrorBoundary>
