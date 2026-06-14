@@ -33,5 +33,5 @@ export function AnimatedNumber({ value, format }: Props) {
   }, [value])
 
   const fmt = format ?? ((n: number) => Math.round(n).toString())
-  return <span>{fmt(display)}</span>
+  return <span className="tabular-nums">{fmt(display)}</span>
 }

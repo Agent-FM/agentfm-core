@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { motion } from 'framer-motion'
+import { staggerItem } from '../lib/motion'
 import { useMetricsPoll } from '../hooks/useMetricsPoll'
 import { useMetricsStore, seriesKey } from '../lib/metricsStore'
 import {
@@ -146,21 +148,22 @@ export default function Dashboard() {
   const heroValues = okBuf ? ringToArrays(okBuf).v : []
 
   return (
-    <div className="p-7 max-w-6xl">
+    <div className="p-6 max-w-6xl">
       <div className="flex justify-between items-center">
         <SectionLabel>DASHBOARD</SectionLabel>
-        <div className={`text-[11px] font-mono ${stale ? 'text-warn' : 'text-text-2'}`}>
+        <div className={`text-[11px] font-mono tabular-nums ${stale ? 'text-warn' : 'text-text-2'}`}>
           {lastTick === 0
             ? 'connecting…'
             : `updated ${(staleAgeMs / 1000).toFixed(1)}s ago`}
         </div>
       </div>
       <HeroTitle accent="mesh">Live</HeroTitle>
-      <p className="text-[16px] text-text-1 mt-2 mb-7">
-        TASKS · {Math.round(totalTasks)} total · ▲ {tasksPerMin.toFixed(1)}/min
+      <p className="text-[16px] text-text-1 mt-2 mb-6">
+        TASKS · <span className="tabular-nums">{Math.round(totalTasks)}</span> total · ▲{' '}
+        <span className="tabular-nums">{tasksPerMin.toFixed(1)}</span>/min
       </p>
 
-      <Card className="p-5 mb-4">
+      <Card className="p-5 mb-6">
         <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-text-2 mb-2">
           Tasks · last 5 min
         </div>
@@ -170,61 +173,76 @@ export default function Dashboard() {
         <div className="flex gap-4 text-xs font-mono mb-3">
           {taskCounts.map((t) => (
             <span key={t.status} style={{ color: STATUS_COLOR[t.status] }}>
-              {t.value} {t.status === 'ok' ? 'completed' : t.status}
+              <span className="tabular-nums">{t.value}</span>{' '}
+              {t.status === 'ok' ? 'completed' : t.status}
             </span>
           ))}
         </div>
         <SparkLine values={heroValues} width={800} height={40} color="#22d3ee" />
       </Card>
 
-      <div className="grid grid-cols-3 gap-3.5 mb-4">
-        <Tile
-          label="Typical task time"
-          value={`${p95Duration.toFixed(1)}s`}
-          hint="9 in 10 tasks finish faster"
-          color="#22d3ee"
-        />
-        <Tile label="Agents online" value={<AnimatedNumber value={workersOnline} />} color="#a855f7" />
-        <Tile label="Connection errors" value={`${Math.round(streamErrorsTotal)}`} color="#f43f5e" />
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <motion.div {...staggerItem(0)}>
+          <Tile
+            label="Typical task time"
+            value={<span className="tabular-nums">{`${p95Duration.toFixed(1)}s`}</span>}
+            hint="9 in 10 tasks finish faster"
+            color="#22d3ee"
+          />
+        </motion.div>
+        <motion.div {...staggerItem(1)}>
+          <Tile label="Agents online" value={<AnimatedNumber value={workersOnline} />} color="#a855f7" />
+        </motion.div>
+        <motion.div {...staggerItem(2)}>
+          <Tile label="Connection errors" value={<span className="tabular-nums">{Math.round(streamErrorsTotal)}</span>} color="#f43f5e" />
+        </motion.div>
       </div>
 
-      <div className="grid grid-cols-4 gap-3.5 mb-4">
-        <Tile
-          label="Output speed"
-          value={`${(artifactBytesPerSec / 1024).toFixed(1)} KB/s`}
-          hint="files sent back from agents"
-          color="#22d3ee"
-        />
-        <Tile label="Sign-in attempts" value={`${Math.round(authAttemptsTotal)}`} color="#a855f7" />
-        <Card className="p-4">
-          <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-text-2 mb-2">
-            Assets built
-          </div>
-          <div className="font-mono font-bold leading-none mb-2" style={{ fontSize: 28, color: '#22d3ee' }}>
-            <AnimatedNumber value={assetsBuiltCount} />
-          </div>
-          <SparkLine values={assetsBuiltValues} width={180} height={28} color="#22d3ee" />
-        </Card>
-        <Card className="p-4">
-          <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-text-2 mb-2">
-            Errors by channel
-          </div>
-          {errorsByProtocol.length === 0 ? (
-            <div className="font-mono text-text-2 text-xs">(none)</div>
-          ) : (
-            <div className="space-y-1">
-              {errorsByProtocol.map(([proto, n]) => (
-                <div key={proto} className="flex justify-between font-mono text-xs">
-                  <span className="text-text-1">{proto}</span>
-                  <span style={{ color: '#f43f5e' }}>{Math.round(n)}</span>
-                </div>
-              ))}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        <motion.div {...staggerItem(0)}>
+          <Tile
+            label="Output speed"
+            value={<span className="tabular-nums">{`${(artifactBytesPerSec / 1024).toFixed(1)} KB/s`}</span>}
+            hint="files sent back from agents"
+            color="#22d3ee"
+          />
+        </motion.div>
+        <motion.div {...staggerItem(1)}>
+          <Tile label="Sign-in attempts" value={<span className="tabular-nums">{Math.round(authAttemptsTotal)}</span>} color="#a855f7" />
+        </motion.div>
+        <motion.div {...staggerItem(2)}>
+          <Card className="p-4">
+            <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-text-2 mb-2">
+              Assets built
             </div>
-          )}
-        </Card>
+            <div className="font-mono font-bold leading-none mb-2" style={{ fontSize: 28, color: '#22d3ee' }}>
+              <AnimatedNumber value={assetsBuiltCount} />
+            </div>
+            <SparkLine values={assetsBuiltValues} width={180} height={28} color="#22d3ee" />
+          </Card>
+        </motion.div>
+        <motion.div {...staggerItem(3)}>
+          <Card className="p-4">
+            <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-text-2 mb-2">
+              Errors by channel
+            </div>
+            {errorsByProtocol.length === 0 ? (
+              <div className="font-mono text-text-2 text-xs">(none)</div>
+            ) : (
+              <div className="space-y-1">
+                {errorsByProtocol.map(([proto, n]) => (
+                  <div key={proto} className="flex justify-between font-mono text-xs">
+                    <span className="text-text-1">{proto}</span>
+                    <span className="tabular-nums" style={{ color: '#f43f5e' }}>{Math.round(n)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </motion.div>
       </div>
 
-      <Card className="p-5 mb-4">
+      <Card className="p-5 mb-6">
         <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-text-2 mb-2">
           Success rate · last 2 min
         </div>
@@ -248,20 +266,28 @@ export default function Dashboard() {
       <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-text-2 mb-2">
         Boss process health
       </div>
-      <div className="grid grid-cols-4 gap-3.5">
-        <Tile label="CPU load" value={`${cpuPct.toFixed(1)}%`} color="#84cc16" />
-        <Tile
-          label="Memory used"
-          value={`${(rssBytes / 1024 / 1024).toFixed(0)} MB`}
-          color="#84cc16"
-        />
-        <Tile label="Background tasks" value={`${Math.round(goroutines)}`} color="#84cc16" />
-        <Tile
-          label="Pause time"
-          value={`${(gcPauseP95 * 1000).toFixed(1)} ms`}
-          hint="cleanup pause on the boss"
-          color="#84cc16"
-        />
+      <div className="grid grid-cols-4 gap-4">
+        <motion.div {...staggerItem(0)}>
+          <Tile label="CPU load" value={<span className="tabular-nums">{`${cpuPct.toFixed(1)}%`}</span>} color="#84cc16" />
+        </motion.div>
+        <motion.div {...staggerItem(1)}>
+          <Tile
+            label="Memory used"
+            value={<span className="tabular-nums">{`${(rssBytes / 1024 / 1024).toFixed(0)} MB`}</span>}
+            color="#84cc16"
+          />
+        </motion.div>
+        <motion.div {...staggerItem(2)}>
+          <Tile label="Background tasks" value={<span className="tabular-nums">{Math.round(goroutines)}</span>} color="#84cc16" />
+        </motion.div>
+        <motion.div {...staggerItem(3)}>
+          <Tile
+            label="Pause time"
+            value={<span className="tabular-nums">{`${(gcPauseP95 * 1000).toFixed(1)} ms`}</span>}
+            hint="cleanup pause on the boss"
+            color="#84cc16"
+          />
+        </motion.div>
       </div>
     </div>
   )

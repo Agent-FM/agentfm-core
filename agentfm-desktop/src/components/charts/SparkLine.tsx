@@ -57,7 +57,7 @@ export function SparkLine({ values, width, height, color }: SparkLineProps) {
     ctx.lineTo(width, height)
     ctx.lineTo(0, height)
     ctx.closePath()
-    ctx.fillStyle = color + '22'
+    ctx.fillStyle = 'rgba(34,211,238,0.08)'
     ctx.fill()
 
     setTip(values.length >= 2 ? { x: lastX, y: lastY } : null)
@@ -69,10 +69,9 @@ export function SparkLine({ values, width, height, color }: SparkLineProps) {
       {tip && (
         <span
           aria-hidden
-          className="absolute w-1.5 h-1.5 rounded-full animate-pulse-cyan pointer-events-none"
+          className="absolute w-1.5 h-1.5 rounded-full pointer-events-none"
           style={{
             background: color,
-            boxShadow: `0 0 6px ${color}`,
             left: tip.x - 3,
             top: tip.y - 3,
           }}
