@@ -10,7 +10,7 @@ const GROUP_ORDER: EndpointGroup[] = ['OpenAI-compatible', 'AgentFM-native', 'Sy
 
 export function EndpointList({ endpoints, selectedId, onSelect }: Props) {
   return (
-    <nav className="glass rounded-2xl p-2 w-64 shrink-0 overflow-auto">
+    <nav className="bg-bg-2 border border-border-0 rounded-2xl p-2 w-64 shrink-0 overflow-auto">
       {GROUP_ORDER.map((group) => {
         const items = endpoints.filter((e) => e.group === group)
         if (!items.length) return null

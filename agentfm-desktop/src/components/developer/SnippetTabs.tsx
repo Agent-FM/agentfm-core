@@ -26,14 +26,14 @@ export function SnippetTabs({ endpoint, values, baseURL, apiKey }: Props) {
   const code = gen(active, endpoint, values, baseURL, apiKey)
 
   return (
-    <div className="glass rounded-2xl p-3">
+    <div className="bg-bg-2 border border-border-0 rounded-2xl p-3">
       <div className="flex gap-1 mb-2">
         {langs.map((l) => (
           <button
             key={l.id}
             onClick={() => setLang(l.id)}
             className={`px-3 py-1 rounded-lg text-xs transition-colors ${
-              l.id === active ? 'bg-accent/15 text-text-0' : 'text-text-2 hover:text-text-0'
+              l.id === active ? 'text-accent' : 'text-text-2 hover:text-text-0'
             }`}
           >
             {l.label}

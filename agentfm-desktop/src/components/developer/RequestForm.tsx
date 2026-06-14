@@ -25,7 +25,7 @@ export function RequestForm({ endpoint, values, onChange }: Props) {
             value={values[p.name] ?? ''}
             placeholder={String(p.example ?? '')}
             onChange={(e) => set(p.name, e.target.value)}
-            className="mt-1 w-full glass rounded-lg px-3 py-2 text-sm font-mono text-text-0 outline-none focus:border-accent/40"
+            className="mt-1 w-full bg-bg-1 border border-border-0 rounded-lg px-3 py-2 text-sm font-mono text-text-0 outline-none focus:border-accent/40"
           />
         </label>
       ))}
@@ -38,7 +38,7 @@ export function RequestForm({ endpoint, values, onChange }: Props) {
             value={values[bodyParam.name] ?? JSON.stringify(bodyParam.example, null, 2)}
             onChange={(e) => set(bodyParam.name, e.target.value)}
             spellCheck={false}
-            className="mt-1 w-full h-44 glass rounded-lg px-3 py-2 text-xs font-mono text-text-0 outline-none focus:border-accent/40"
+            className="mt-1 w-full h-44 bg-bg-1 border border-border-0 rounded-lg px-3 py-2 text-xs font-mono text-text-0 outline-none focus:border-accent/40"
           />
         </label>
       )}

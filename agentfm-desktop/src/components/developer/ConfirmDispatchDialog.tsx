@@ -24,7 +24,7 @@ export function ConfirmDispatchDialog({ sideEffect, onConfirm, onCancel }: Props
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onCancel}>
-      <div className="glass-strong rounded-2xl p-5 max-w-md mx-4" role="dialog" aria-modal="true" aria-labelledby="confirm-dispatch-title" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-bg-1 border border-border-1 rounded-2xl p-5 max-w-md mx-4" role="dialog" aria-modal="true" aria-labelledby="confirm-dispatch-title" onClick={(e) => e.stopPropagation()}>
         <h3 id="confirm-dispatch-title" className="text-lg font-semibold mb-2">Confirm request</h3>
         <p className="text-sm text-text-1 mb-4">{COPY[sideEffect]}</p>
         <div className="flex justify-end gap-2">
