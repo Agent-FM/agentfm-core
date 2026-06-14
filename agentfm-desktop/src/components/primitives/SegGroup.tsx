@@ -16,10 +16,10 @@ export function SegGroup<T extends string>({ options, value, onChange }: Props<T
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
-          className={`relative px-3 py-1 text-xs rounded transition-colors ${
+          className={`relative px-3 py-1 text-xs rounded border transition-colors ${
             o.value === value
-              ? 'text-accent gradient-border-cyan bg-accent-bg'
-              : 'text-text-2 hover:text-text-0'
+              ? 'text-accent border-accent/40 bg-accent-bg'
+              : 'text-text-2 border-transparent hover:text-text-0'
           }`}
         >
           {o.label}

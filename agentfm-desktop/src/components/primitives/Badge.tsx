@@ -12,7 +12,7 @@ interface Props {
 
 const TONES: Record<BadgeTone, string> = {
   cyan:    'bg-accent/15 border-accent/35 text-accent',
-  violet:  'bg-accent2/15 border-accent2/40 text-accent2-light',
+  violet:  'bg-accent/15 border-accent/40 text-accent',
   lime:    'bg-ok/15 border-ok/40 text-ok',
   amber:   'bg-warn/15 border-warn/40 text-warn',
   rose:    'bg-bad/15 border-bad/40 text-bad',

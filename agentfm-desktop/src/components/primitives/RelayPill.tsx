@@ -7,10 +7,10 @@ interface Props {
 
 export function RelayPill({ peerId, mode }: Props) {
   const isPrivate = mode === 'private'
-  const dotColor = isPrivate ? '#a855f7' : '#22d3ee'
-  const textColor = isPrivate ? '#d8b4fe' : '#a5f3fc'
-  const bg = isPrivate ? 'rgba(168,85,247,.06)' : 'rgba(34,211,238,.06)'
-  const border = isPrivate ? 'rgba(168,85,247,.25)' : 'rgba(34,211,238,.25)'
+  const dotColor = '#22d3ee'
+  const textColor = '#a5f3fc'
+  const bg = 'rgba(34,211,238,.06)'
+  const border = 'rgba(34,211,238,.25)'
   return (
     <div
       className="inline-flex items-center gap-1.5 font-mono"

@@ -18,10 +18,10 @@ describe('RoutePage', () => {
 })
 
 describe('SectionLabel', () => {
-  it('renders the label with the ▌ glyph', () => {
+  it('renders the label as an uppercase caption', () => {
     render(<SectionLabel>BACKEND</SectionLabel>)
-    const el = screen.getByText(/BACKEND/)
-    expect(el.textContent).toContain('▌')
+    const el = screen.getByText('BACKEND')
+    expect(el.className).toMatch(/uppercase/)
   })
 })
 

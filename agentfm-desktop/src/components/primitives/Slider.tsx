@@ -12,7 +12,7 @@ export function Slider({ min, max, step = 0.01, value, onChange }: Props) {
     <div className="relative w-full">
       <div className="h-1.5 rounded-full bg-bg-2 overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-accent to-accent2"
+          className="h-full bg-accent"
           style={{ width: `${pct}%` }}
         />
       </div>

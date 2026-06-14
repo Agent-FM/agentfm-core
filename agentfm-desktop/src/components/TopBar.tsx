@@ -35,18 +35,18 @@ export function TopBar() {
 
   return (
     <header
-      className={`h-12 bg-bg-0 flex items-center gap-4 px-4 select-none relative ${isMac ? 'pl-[92px]' : ''}`}
-      style={{
-        borderBottom: '1px solid transparent',
-        backgroundImage:
-          'linear-gradient(#07090d,#07090d), linear-gradient(90deg, rgba(34,211,238,.35) 0%, rgba(34,211,238,0) 50%, rgba(168,85,247,.25) 100%)',
-        backgroundOrigin: 'border-box',
-        backgroundClip: 'padding-box, border-box',
-        WebkitAppRegion: 'drag',
-      }}
+      className={`glass-bar h-14 flex items-center gap-4 px-4 select-none relative border-b border-white/10 ${isMac ? 'pl-[92px]' : ''}`}
+      style={{ WebkitAppRegion: 'drag' }}
     >
-      <div className="text-sm font-semibold tracking-tight">
-        Agent<span className="text-accent glow-text-cyan">FM</span>
+      <span
+        className="absolute inset-x-0 bottom-0 h-px pointer-events-none"
+        style={{
+          background:
+            'linear-gradient(90deg, rgba(34,211,238,.45) 0%, rgba(34,211,238,0) 100%)',
+        }}
+      />
+      <div className="text-base font-semibold tracking-tight">
+        Agent<span className="text-accent">FM</span>
       </div>
       {active && (
         <div style={noDrag}>

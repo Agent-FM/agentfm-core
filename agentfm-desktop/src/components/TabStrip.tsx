@@ -35,7 +35,7 @@ export function TabStrip() {
               <motion.div
                 layoutId="tab-indicator"
                 transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-                className="absolute bottom-0 left-2 right-2 h-[2px] bg-gradient-to-r from-accent to-accent2"
+                className="absolute bottom-0 left-2 right-2 h-[2px] bg-accent"
               />
             )}
           </NavLink>
