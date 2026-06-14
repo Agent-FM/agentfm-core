@@ -221,3 +221,5 @@ export const API_CATALOG: EndpointDef[] = [
     sideEffect: 'signed',
   },
 ]
+
+export type FormValues = Record<string, string>
