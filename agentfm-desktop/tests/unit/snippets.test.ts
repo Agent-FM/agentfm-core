@@ -27,9 +27,19 @@ describe('snippets', () => {
     expect(s).toContain("fetch('http://127.0.0.1:8080/api/workers'")
   })
 
-  it('python snippet uses requests', () => {
+  it('python snippet uses requests with the right method and url', () => {
     const s = genPython(WORKERS, {}, 'http://127.0.0.1:8080')
     expect(s).toContain('import requests')
+    expect(s).toContain('requests.get(')
+    expect(s).toContain("'http://127.0.0.1:8080/api/workers'")
+  })
+
+  it('python POST body is parsed via json.loads (valid Python for true/false/null)', () => {
+    const s = genPython(CHAT, { body: '{"model":"llama3.2","stream":false}' }, 'http://127.0.0.1:8080')
+    expect(s).toContain('import requests, json')
+    expect(s).toContain(`json.loads('''{"model":"llama3.2","stream":false}''')`)
+    // raw JSON must NOT be passed directly as a Python literal
+    expect(s).not.toContain('json={"model"')
   })
 
   it('openai snippet is only meaningful for OpenAI-compatible endpoints', () => {

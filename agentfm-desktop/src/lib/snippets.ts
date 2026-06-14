@@ -32,10 +32,11 @@ export function genFetch(ep: EndpointDef, values: FormValues, baseURL: string, a
 export function genPython(ep: EndpointDef, values: FormValues, baseURL: string, apiKey?: string): string {
   const { url, init } = buildRequest(ep, values, baseURL, apiKey)
   const fn = ep.method === 'GET' ? 'get' : 'post'
+  const imports = init.body ? 'import requests, json' : 'import requests'
   const args = [`'${url}'`]
-  if (init.body) args.push(`json=${init.body}`)
+  if (init.body) args.push(`json=json.loads('''${init.body}''')`)
   if (apiKey) args.push(`headers={'Authorization': 'Bearer ${apiKey}'}`)
-  return `import requests\nres = requests.${fn}(${args.join(', ')})\nprint(res.text)`
+  return `${imports}\nres = requests.${fn}(${args.join(', ')})\nprint(res.text)`
 }
 
 export function genOpenAI(ep: EndpointDef, values: FormValues, baseURL: string, apiKey?: string): string {
