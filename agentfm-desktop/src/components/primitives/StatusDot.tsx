@@ -18,9 +18,7 @@ interface Props {
 
 export function StatusDot({ tone = 'cyan', pulse = false, size = 'md', className }: Props) {
   const dim = size === 'sm' ? 'w-1.5 h-1.5' : 'w-2 h-2'
-  const animation =
-    pulse && tone === 'cyan'   ? 'animate-pulse-cyan' :
-    pulse && tone === 'violet' ? 'animate-pulse-cyan' : ''
+  const animation = pulse ? 'animate-pulse-cyan' : ''
   return (
     <span className={`inline-block rounded-full ${dim} ${COLOR[tone]} ${animation} ${className ?? ''}`} />
   )

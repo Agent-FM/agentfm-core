@@ -23,6 +23,11 @@ describe('SectionLabel', () => {
     const el = screen.getByText('BACKEND')
     expect(el.className).toMatch(/uppercase/)
   })
+  it('applies text-bad when tone is rose', () => {
+    render(<SectionLabel tone="rose">DANGER ZONE</SectionLabel>)
+    const el = screen.getByText('DANGER ZONE')
+    expect(el.className).toMatch(/text-bad/)
+  })
 })
 
 describe('HeroTitle', () => {

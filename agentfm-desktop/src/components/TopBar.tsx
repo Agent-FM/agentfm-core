@@ -35,7 +35,7 @@ export function TopBar() {
 
   return (
     <header
-      className={`glass-bar h-14 flex items-center gap-4 px-4 select-none relative border-b border-white/10 ${isMac ? 'pl-[92px]' : ''}`}
+      className={`glass-bar h-14 flex items-center gap-4 px-4 select-none relative ${isMac ? 'pl-[92px]' : ''}`}
       style={{ WebkitAppRegion: 'drag' }}
     >
       <span
