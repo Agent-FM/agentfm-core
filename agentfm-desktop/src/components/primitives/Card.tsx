@@ -17,11 +17,15 @@ const PADDING: Record<Density, string> = {
 export function Card({ density = 'default', live = false, children, className, ...rest }: Props) {
   return (
     <div
-      className={`relative bg-bg-1 border border-border-0 rounded-xl transition-all ${PADDING[density]} ${live ? 'neon-glow-cyan' : 'hover:border-accent/30'} ${className ?? ''}`}
+      className={`relative rounded-[14px] bg-bg-2 border transition-all duration-200 ${PADDING[density]} ${
+        live
+          ? 'border-accent/40 shadow-card-hover'
+          : 'border-border-0 shadow-card hover:border-border-1 hover:shadow-card-hover hover:-translate-y-0.5'
+      } ${className ?? ''}`}
       {...rest}
     >
       {live && (
-        <span className="absolute -top-px -left-px w-2 h-2 rounded-full bg-accent shadow-[0_0_8px_#22d3ee] animate-pulse-cyan" />
+        <span data-live-dot className="absolute top-3 right-3 w-2 h-2 rounded-full bg-accent" />
       )}
       {children}
     </div>
