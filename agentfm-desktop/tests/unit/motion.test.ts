@@ -1,26 +1,25 @@
 import { describe, it, expect } from 'vitest'
-import { fast, spring, entrance, lift } from '../../src/lib/motion'
+import { expoOut, entrance, lift, staggerItem, spring } from '../../src/lib/motion'
 
-describe('motion presets', () => {
-  it('fast is a short ease-out', () => {
-    expect(fast.duration).toBe(0.15)
-    expect(fast.ease).toEqual([0.4, 0, 0.2, 1])
+describe('motion tokens', () => {
+  it('exposes the expo-out easing curve', () => {
+    expect(expoOut).toEqual([0.16, 1, 0.3, 1])
   })
-
-  it('spring uses Framer-style config', () => {
-    expect(spring.type).toBe('spring')
-    expect(spring.stiffness).toBe(320)
-    expect(spring.damping).toBe(28)
-  })
-
-  it('entrance has initial/animate/transition shape', () => {
+  it('entrance rises and fades in with expo-out', () => {
     expect(entrance.initial).toEqual({ opacity: 0, y: 6 })
     expect(entrance.animate).toEqual({ opacity: 1, y: 0 })
-    expect(entrance.transition.type).toBe('spring')
+    expect(entrance.transition.ease).toEqual([0.16, 1, 0.3, 1])
   })
-
-  it('lift exposes whileHover and whileTap', () => {
-    expect(lift.whileHover).toEqual({ y: -2 })
-    expect(lift.whileTap).toEqual({ scale: 0.98 })
+  it('lift taps to 0.97 via spring', () => {
+    expect(lift.whileTap).toEqual({ scale: 0.97 })
+    expect(lift.transition.type).toBe('spring')
+  })
+  it('staggerItem delays by 40ms per index', () => {
+    expect(staggerItem(0).transition.delay).toBeCloseTo(0)
+    expect(staggerItem(3).transition.delay).toBeCloseTo(0.12)
+    expect(staggerItem(2).initial).toEqual({ opacity: 0, y: 8 })
+  })
+  it('still exports spring for existing callers', () => {
+    expect(spring.type).toBe('spring')
   })
 })
