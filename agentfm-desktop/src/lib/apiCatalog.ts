@@ -135,7 +135,7 @@ export const API_CATALOG: EndpointDef[] = [
     params: [
       { name: 'body', loc: 'body', required: true, example: { multiaddr: '/ip4/127.0.0.1/tcp/4015/p2p/12D3Koo…' }, description: 'Relay multiaddr to probe.' },
     ],
-    exampleResponse: { reachable: true, rtt_ms: 12 },
+    exampleResponse: { ok: true, peer_id: '12D3KooW…' },
     sideEffect: 'none',
   },
   {
