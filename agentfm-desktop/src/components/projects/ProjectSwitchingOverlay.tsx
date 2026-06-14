@@ -20,7 +20,7 @@ export function ProjectSwitchingOverlay() {
                 transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
                 className="absolute inset-0"
                 style={{
-                  background: 'conic-gradient(from 0deg, transparent 0%, #22d3ee 30%, #a855f7 70%, transparent 100%)',
+                  background: 'conic-gradient(from 0deg, transparent 0%, #22d3ee 30%, #22d3ee 70%, transparent 100%)',
                   borderRadius: '50%',
                   mask: 'radial-gradient(transparent 60%, black 62%)',
                   WebkitMask: 'radial-gradient(transparent 60%, black 62%)',
@@ -28,7 +28,7 @@ export function ProjectSwitchingOverlay() {
               />
             </div>
             <div className="mt-5 text-text-1 text-base">
-              Switching to <span className="text-accent glow-text-cyan font-semibold">{active?.name ?? '…'}</span>…
+              Switching to <span className="text-accent font-semibold">{active?.name ?? '…'}</span>…
             </div>
             <div className="mt-1 text-2xs text-text-2 font-mono">restarting backend with the new relay</div>
           </div>

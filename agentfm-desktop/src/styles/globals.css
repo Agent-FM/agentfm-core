@@ -70,72 +70,6 @@ body {
   animation: sheen 6s ease-in-out infinite;
 }
 
-.neon-glow-cyan   { box-shadow: 0 0 0 1px rgba(34,211,238,.3), 0 0 18px -2px rgba(34,211,238,.35); }
-.neon-glow-violet { box-shadow: 0 0 0 1px rgba(168,85,247,.3), 0 0 18px -2px rgba(168,85,247,.35); }
-.neon-glow-rose   { box-shadow: 0 0 0 1px rgba(244,63,94,.3), 0 0 18px -2px rgba(244,63,94,.35); }
-
-.glow-text-cyan   { text-shadow: 0 0 8px rgba(34,211,238,.5); }
-.glow-text-violet { text-shadow: 0 0 8px rgba(168,85,247,.5); }
-
-.gradient-border-cyan {
-  position: relative;
-}
-.gradient-border-cyan::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  padding: 1px;
-  border-radius: inherit;
-  background: linear-gradient(135deg, #22d3ee, #a855f7);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-  pointer-events: none;
-}
-
-.scanlines {
-  background-image: repeating-linear-gradient(
-    0deg,
-    rgba(34,211,238,.04) 0px,
-    rgba(34,211,238,.04) 1px,
-    transparent 1px,
-    transparent 3px
-  );
-}
-
-/* ---------- Cyber-mesh redesign keyframes (2026-05-20) ---------- */
-@keyframes drift-bg {
-  0%, 100% { transform: translate(0, 0); }
-  50%      { transform: translate(28px, -18px); }
-}
-@keyframes mesh-grid {
-  0%   { background-position: 0 0; }
-  100% { background-position: 60px 60px; }
-}
-@keyframes glow-cycle {
-  0%, 100% { box-shadow: 0 0 0 1px rgba(34,211,238,.35), 0 0 28px -6px rgba(34,211,238,.45); }
-  50%      { box-shadow: 0 0 0 1px rgba(168,85,247,.35), 0 0 32px -6px rgba(168,85,247,.5); }
-}
-@keyframes top-sweep {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-@keyframes halo-rotate {
-  0%   { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-@keyframes meter-shimmer {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-@keyframes text-shimmer {
-  0%, 100% { background-position: 0% 50%; }
-  50%      { background-position: 100% 50%; }
-}
-@keyframes blink-cursor {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: .15; }
-}
 @keyframes radar-sweep {
   0%   { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
@@ -151,13 +85,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-pulse-cyan, .animate-pulse-violet, .animate-pulse-rose,
+  .animate-pulse-cyan,
   .animate-shimmer, .animate-drift, .animate-float,
   .animate-blink, .animate-pulse,
-  .animate-drift-bg, .animate-mesh-grid, .animate-glow-cycle,
-  .animate-top-sweep, .animate-top-sweep-slow,
-  .animate-halo-rotate, .animate-meter-shimmer,
-  .animate-text-shimmer, .animate-blink-cursor, .animate-radar-sweep,
+  .animate-radar-sweep,
   .animate-sheen, .animate-aurora {
     animation: none !important;
   }

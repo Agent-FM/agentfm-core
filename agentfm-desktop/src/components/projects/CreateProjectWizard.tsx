@@ -132,7 +132,7 @@ export function CreateProjectWizard() {
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.96, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 380, damping: 28 }}
-            className="w-[520px] bg-bg-1 border border-border-0 rounded-xl p-7 shadow-2xl neon-glow-cyan max-h-[90vh] overflow-y-auto"
+            className="w-[520px] bg-bg-1 border border-border-0 rounded-xl p-7 shadow-2xl max-h-[90vh] overflow-y-auto"
           >
             <div className="flex justify-between items-start mb-5">
               <div>
@@ -154,7 +154,7 @@ export function CreateProjectWizard() {
                 onClick={() => { setMode('public'); setUseDefault(true) }}
                 className={`flex items-start gap-2 border rounded-xl p-3 text-left transition-all ${
                   mode === 'public'
-                    ? 'border-accent/40 bg-accent/8 neon-glow-cyan'
+                    ? 'border-accent/40 bg-accent/8'
                     : 'border-border-0 bg-bg-2 hover:border-border-1'
                 }`}
               >
@@ -169,11 +169,11 @@ export function CreateProjectWizard() {
                 onClick={() => { setMode('private'); setUseDefault(false) }}
                 className={`flex items-start gap-2 border rounded-xl p-3 text-left transition-all ${
                   mode === 'private'
-                    ? 'border-accent2/40 bg-accent2/8'
+                    ? 'border-accent/40 bg-accent/8'
                     : 'border-border-0 bg-bg-2 hover:border-border-1'
                 }`}
               >
-                <Lock size={16} className={mode === 'private' ? 'text-accent2-light' : 'text-text-2'} />
+                <Lock size={16} className={mode === 'private' ? 'text-accent-light' : 'text-text-2'} />
                 <div>
                   <div className="text-sm text-text-0">Private</div>
                   <div className="text-2xs text-text-2 mt-0.5">PSK-gated swarm.</div>
@@ -184,7 +184,7 @@ export function CreateProjectWizard() {
             {mode === 'public' ? (
               <>
                 <label className="block text-xs uppercase tracking-wider text-text-2 mb-1.5">Relay</label>
-                <label className={`block border rounded-xl p-3 mb-2 cursor-pointer transition-all ${useDefault ? 'border-accent/40 bg-accent/8 neon-glow-cyan' : 'border-border-0 bg-bg-2 hover:border-border-1'}`}>
+                <label className={`block border rounded-xl p-3 mb-2 cursor-pointer transition-all ${useDefault ? 'border-accent/40 bg-accent/8' : 'border-border-0 bg-bg-2 hover:border-border-1'}`}>
                   <div className="flex items-start gap-2">
                     <input type="radio" checked={useDefault} onChange={() => setUseDefault(true)} className="mt-1 accent-accent" />
                     <div>
@@ -193,7 +193,7 @@ export function CreateProjectWizard() {
                     </div>
                   </div>
                 </label>
-                <label className={`block border rounded-xl p-3 cursor-pointer transition-all ${!useDefault ? 'border-accent/40 bg-accent/8 neon-glow-cyan' : 'border-border-0 bg-bg-2 hover:border-border-1'}`}>
+                <label className={`block border rounded-xl p-3 cursor-pointer transition-all ${!useDefault ? 'border-accent/40 bg-accent/8' : 'border-border-0 bg-bg-2 hover:border-border-1'}`}>
                   <div className="flex items-start gap-2">
                     <input type="radio" checked={!useDefault} onChange={() => setUseDefault(false)} className="mt-1 accent-accent" />
                     <div className="flex-1">
@@ -240,7 +240,7 @@ export function CreateProjectWizard() {
                     type="button"
                     onClick={generateKey}
                     title="Generate a fresh swarm key"
-                    className="inline-flex items-center gap-1 px-2.5 rounded-md text-xs text-text-0 border border-accent2/30 hover:border-accent2/55 bg-accent2/5"
+                    className="inline-flex items-center gap-1 px-2.5 rounded-md text-xs text-text-0 border border-accent/30 hover:border-accent/55 bg-accent/5"
                   >
                     <Shuffle size={12} /> Generate
                   </button>

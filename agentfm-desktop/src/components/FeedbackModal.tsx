@@ -91,7 +91,7 @@ export function FeedbackModal() {
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 380, damping: 28 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-[480px] bg-bg-1 border border-border-0 rounded-2xl p-7 shadow-2xl neon-glow-cyan"
+            className="w-[480px] bg-bg-1 border border-border-0 rounded-2xl p-7 shadow-2xl"
           >
             <div className="flex justify-between items-start mb-4">
               <div>

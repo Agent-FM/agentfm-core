@@ -21,7 +21,7 @@ const STATUSES = ['ok', 'error', 'rejected', 'timeout'] as const
 const STATUS_COLOR: Record<(typeof STATUSES)[number], string> = {
   ok: '#84cc16',
   error: '#f43f5e',
-  rejected: '#a855f7',
+  rejected: '#22d3ee',
   timeout: '#fbbf24',
 }
 
@@ -191,7 +191,7 @@ export default function Dashboard() {
           />
         </motion.div>
         <motion.div {...staggerItem(1)}>
-          <Tile label="Agents online" value={<AnimatedNumber value={workersOnline} />} color="#a855f7" />
+          <Tile label="Agents online" value={<AnimatedNumber value={workersOnline} />} color="#22d3ee" />
         </motion.div>
         <motion.div {...staggerItem(2)}>
           <Tile label="Connection errors" value={<span className="tabular-nums">{Math.round(streamErrorsTotal)}</span>} color="#f43f5e" />
@@ -208,7 +208,7 @@ export default function Dashboard() {
           />
         </motion.div>
         <motion.div {...staggerItem(1)}>
-          <Tile label="Sign-in attempts" value={<span className="tabular-nums">{Math.round(authAttemptsTotal)}</span>} color="#a855f7" />
+          <Tile label="Sign-in attempts" value={<span className="tabular-nums">{Math.round(authAttemptsTotal)}</span>} color="#22d3ee" />
         </motion.div>
         <motion.div {...staggerItem(2)}>
           <Card className="p-4">

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { toast } from 'sonner'
-import { ChevronDown, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, Plus, Trash2, Folder } from 'lucide-react'
 import { useUIStore } from '../../lib/store'
 
 export function ProjectDropdown() {
@@ -47,8 +47,8 @@ export function ProjectDropdown() {
         onClick={() => setOpen((v) => !v)}
         className="relative inline-flex items-center gap-2 bg-bg-1 hover:bg-bg-2 border border-border-0 rounded-full pl-3 pr-2 py-1.5 text-xs text-text-1 transition-colors"
       >
-        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-gradient-to-b from-accent to-accent2 rounded-full" />
-        <span>📁</span>
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-accent rounded-full" />
+        <Folder size={14} className="text-text-2" />
         <span className="font-medium text-text-0 max-w-[200px] truncate">{active.name}</span>
         <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.18 }}>
           <ChevronDown size={14} className="text-text-2" />
@@ -62,7 +62,7 @@ export function ProjectDropdown() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-            className="absolute top-full mt-2 left-0 bg-bg-1 border border-border-0 rounded-xl shadow-2xl w-80 overflow-hidden z-50 neon-glow-cyan"
+            className="absolute top-full mt-2 left-0 bg-bg-1 border border-border-0 rounded-xl shadow-2xl w-80 overflow-hidden z-50"
           >
             <div className="max-h-72 overflow-auto">
               {projects.map((p) => {
@@ -79,7 +79,7 @@ export function ProjectDropdown() {
                     }`}
                   >
                     {isActive && <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-accent" />}
-                    <span>📁</span>
+                    <Folder size={14} className="text-text-2" />
                     <span className="font-medium truncate">{p.name}</span>
                   </button>
                 )

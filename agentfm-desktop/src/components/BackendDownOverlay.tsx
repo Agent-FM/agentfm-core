@@ -34,7 +34,7 @@ export function BackendDownOverlay({ show }: { show: boolean }) {
           className="fixed inset-0 z-[90] flex items-center justify-center bg-gradient-to-b from-bad/15 to-bg-0 backdrop-blur-md p-8"
         >
           <div className="max-w-xl w-full text-center">
-            <AlertOctagon size={80} className="text-bad mx-auto animate-pulse-rose" />
+            <AlertOctagon size={80} className="text-bad mx-auto animate-pulse" />
             <h2 className="text-2xl font-semibold tracking-tight text-text-0 mt-4">Backend stopped</h2>
             <p className="text-text-2 mb-6 mt-2">
               The bundled agentfm backend isn't responding. You can view logs to diagnose, or
