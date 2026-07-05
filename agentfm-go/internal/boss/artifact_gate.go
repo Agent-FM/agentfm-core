@@ -25,7 +25,6 @@ type artifactExpectation struct {
 // registration.
 func (b *Boss) expectArtifact(taskID string, worker peer.ID) {
 	b.artifactMu.Lock()
-	defer b.artifactMu.Unlock()
 	if b.artifactExpect == nil {
 		b.artifactExpect = make(map[string]artifactExpectation)
 	}
@@ -38,6 +37,9 @@ func (b *Boss) expectArtifact(taskID string, worker peer.ID) {
 		worker:  worker,
 		expires: time.Now().Add(artifactExpectTTL),
 	}
+	b.artifactMu.Unlock()
+
+	b.writeArtifactIdentitySidecar(taskID, worker)
 }
 
 // authorizeArtifact reports whether an inbound artifact stream for taskID
