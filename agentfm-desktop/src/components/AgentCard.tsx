@@ -11,6 +11,8 @@ import { displayName } from '../lib/displayName'
 import { useUIStore } from '../lib/store'
 import { usePeerIdentityCache } from '../lib/peerIdentityCache'
 import { useNavigate } from 'react-router-dom'
+import { StarRow } from './primitives/StarRow'
+import { starsFromScore } from '../lib/stars'
 
 interface Props {
   worker: WorkerProfile
@@ -102,7 +104,8 @@ export function AgentCard({ worker }: Props) {
 
       <div className="flex flex-wrap gap-1.5 mb-3.5">
         <Badge tone={honestyTone(worker.honesty_score)} mono>
-          <span className="tabular-nums">{worker.honesty_score >= 0 ? '+' : ''}{worker.honesty_score.toFixed(2)}</span> rating
+          <StarRow value={starsFromScore(worker.honesty_score)} size={12} />
+          <span className="tabular-nums ml-1.5">{worker.honesty_score >= 0 ? '+' : ''}{worker.honesty_score.toFixed(2)}</span>
         </Badge>
         {isOffline && (
           <Badge tone="neutral" mono>{formatLastSeen(worker.last_seen)}</Badge>

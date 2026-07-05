@@ -7,6 +7,8 @@ import { toast } from 'sonner';
 import { api, ApiError } from '../lib/api';
 import { qk } from '../lib/query';
 import { X, Send } from 'lucide-react'
+import { StarRow } from './primitives/StarRow'
+import { starsFromScore } from '../lib/stars'
 
 export function FeedbackModal() {
   const isOpen = useUIStore((s) => s.isFeedbackOpen);
@@ -120,6 +122,9 @@ export function FeedbackModal() {
               Rating{' '}
               <span className="text-text-3 normal-case">(optional)</span>
             </label>
+            <div className="mb-2">
+              <StarRow value={hasRating ? starsFromScore(rating) : 0} size={18} />
+            </div>
             <div className="flex items-center gap-3">
               <input
                 type="range"
