@@ -1,6 +1,8 @@
 import type { PeerEntry } from '../../types/api';
 import { compactAge } from '../../lib/peer';
 import { CommentBody } from './CommentBody';
+import { StarRow } from '../primitives/StarRow';
+import { starsFromScore } from '../../lib/stars';
 
 interface Props {
   entry: PeerEntry;
@@ -19,22 +21,25 @@ export function EntryRow({ entry, peerId }: Props) {
           entry.kind === 'Rating' ? 'bg-accent' : 'bg-border-1'
         }`}
       />
-      <div className="grid grid-cols-[80px_70px_1fr_70px] gap-3.5 py-2.5 items-start text-sm">
+      <div className="grid grid-cols-[80px_84px_1fr_70px] gap-3.5 py-2.5 items-start text-sm">
         <div className="text-[11px] uppercase tracking-wider text-text-2 pt-0.5">{entry.kind}</div>
         <div className="font-mono font-medium tabular-nums pt-0.5">
           {typeof entry.score === 'number' ? (
-            <span
-              className={
-                entry.score > 0
-                  ? 'text-accent'
-                  : entry.score < 0
-                    ? 'text-bad'
-                    : 'text-text-1'
-              }
-            >
-              {entry.score > 0 ? '+' : ''}
-              {entry.score.toFixed(2)}
-            </span>
+            <div className="flex flex-col gap-0.5">
+              <span
+                className={
+                  entry.score > 0
+                    ? 'text-accent'
+                    : entry.score < 0
+                      ? 'text-bad'
+                      : 'text-text-1'
+                }
+              >
+                {entry.score > 0 ? '+' : ''}
+                {entry.score.toFixed(2)}
+              </span>
+              <StarRow value={starsFromScore(entry.score)} size={10} />
+            </div>
           ) : (
             <span className="text-text-3">—</span>
           )}

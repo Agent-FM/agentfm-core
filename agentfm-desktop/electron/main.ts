@@ -67,10 +67,16 @@ app.whenReady().then(async () => {
     if (dockIcon) app.dock.setIcon(dockIcon)
   }
 
+  const projects = settingsStore.get('projects') ?? []
+  const activeProject = projects.find((p) => p.id === settingsStore.get('activeProjectId'))
+
   backend = new BackendManager({
     apiPort: settingsStore.get('apiPort'),
-    reputationFloor: settingsStore.get('reputationFloor'),
-    relayMultiaddr: settingsStore.get('relayMultiaddr') ?? undefined,
+    reputationFloor: activeProject?.reputationFloor ?? settingsStore.get('reputationFloor'),
+    relayMultiaddr: (activeProject?.relayMultiaddr ?? settingsStore.get('relayMultiaddr')) ?? undefined,
+    projectId: activeProject?.id,
+    swarmKey:
+      activeProject?.connectionMode === 'private' ? activeProject.swarmKey ?? undefined : undefined,
   })
 
   registerIPC(backend)

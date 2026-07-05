@@ -1,7 +1,11 @@
 import type { PeerSummary } from '../../types/api';
-import { shortenDigest, compactAge } from '../../lib/peer';
+import { compactAge } from '../../lib/peer';
 import { Badge } from '../primitives/Badge';
 import { Card } from '../primitives/Card';
+import { StarRow } from '../primitives/StarRow';
+import { starsFromScore } from '../../lib/stars';
+import { Copy } from 'lucide-react';
+import { toast } from 'sonner';
 
 export function SummaryCard({ data }: { data: PeerSummary }) {
   const score = data.honesty_score;
@@ -12,12 +16,15 @@ export function SummaryCard({ data }: { data: PeerSummary }) {
           {data.is_equivocator ? (
             <Badge tone="rose">⚠ equivocator</Badge>
           ) : (
-            <Badge tone={score > 0.3 ? 'lime' : score < -0.5 ? 'rose' : 'neutral'} mono>
-              <span className="tabular-nums">
-                {score >= 0 ? '+' : ''}{score.toFixed(2)}
-              </span>{' '}
-              {score > 0.3 ? 'honest' : score < -0.5 ? 'flagged' : 'neutral'}
-            </Badge>
+            <>
+              <StarRow value={starsFromScore(score)} size={15} />
+              <Badge tone={score > 0.3 ? 'lime' : score < -0.5 ? 'rose' : 'neutral'} mono>
+                <span className="tabular-nums">
+                  {score >= 0 ? '+' : ''}{score.toFixed(2)}
+                </span>{' '}
+                {score > 0.3 ? 'honest' : score < -0.5 ? 'flagged' : 'neutral'}
+              </Badge>
+            </>
           )}
         </div>
       </Field>
@@ -44,9 +51,24 @@ export function SummaryCard({ data }: { data: PeerSummary }) {
       )}
       {data.advertised_image_digest && (
         <Field label="Digest">
-          <code className="text-xs text-text-0 font-mono">
-            {shortenDigest(data.advertised_image_digest, 12)}
-          </code>
+          <button
+            onClick={() =>
+              navigator.clipboard
+                .writeText(data.advertised_image_digest as string)
+                .then(() => toast.success('Digest copied'))
+                .catch(() => toast.error('Copy failed'))
+            }
+            title={`${data.advertised_image_digest} — click to copy`}
+            className="group/dg inline-flex items-start gap-1 text-left"
+          >
+            <code className="text-xs text-text-0 font-mono break-all">
+              {data.advertised_image_digest}
+            </code>
+            <Copy
+              size={11}
+              className="mt-0.5 shrink-0 opacity-0 group-hover/dg:opacity-60 transition-opacity"
+            />
+          </button>
         </Field>
       )}
       {data.advertised_capability && (
