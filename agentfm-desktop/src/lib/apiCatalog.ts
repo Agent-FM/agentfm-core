@@ -532,6 +532,7 @@ export const API_CATALOG: EndpointDef[] = [
     exampleResponse: 'Reliable worker, fast turnaround.',
     responseFields: [{ name: '(body)', type: 'text/plain', description: 'The raw comment text.' }],
     errors: [{ status: '404', when: 'No comment body stored for that CID.' }],
+    notes: 'Returns the raw body as text/plain; charset=utf-8. For a structured envelope, use the .json variant.',
     sideEffect: 'none',
   },
   {
@@ -550,12 +551,14 @@ export const API_CATALOG: EndpointDef[] = [
       { name: 'peerId', loc: 'path', required: true, example: '12D3KooW…', description: 'Peer the comment is about.' },
       { name: 'cid', loc: 'path', required: true, example: 'bafy…', description: 'Content id of the comment. Get it from GET /v1/peers/:peerId/log — each Comment entry carries a text_cid field; pass that value here.' },
     ],
-    exampleResponse: { cid: 'bafy…', body: 'Reliable worker, fast turnaround.' },
+    exampleResponse: { cid: 'bafy…', body: 'Reliable worker, fast turnaround.', language: 'en' },
     responseFields: [
       { name: 'cid', type: 'string', description: 'The requested content id.' },
       { name: 'body', type: 'string', description: 'The comment text.' },
+      { name: 'language', type: 'string', description: 'BCP-47-ish language tag for the body.' },
     ],
     errors: [{ status: '404', when: 'No comment body stored for that CID.' }],
+    notes: 'Content-Type is application/json, unlike the plain /comments/:cid variant which returns text/plain.',
     sideEffect: 'none',
   },
   {
