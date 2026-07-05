@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -89,9 +91,16 @@ func (b *Boss) handleRelayTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Bounded dial. 5s is enough for a healthy lighthouse on the open
-	// internet; anything slower is effectively unreachable from a
-	// desktop boss anyway.
+	if b.node.Host.Network().Connectedness(info.ID) == network.Connected {
+		writeJSON(w, http.StatusOK, relayTestResponse{
+			OK:     true,
+			PeerID: info.ID.String(),
+		})
+		return
+	}
+
+	b.node.Host.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.TempAddrTTL)
+
 	dialCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
