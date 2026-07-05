@@ -6,40 +6,6 @@ import (
 	"agentfm/test/testutil"
 )
 
-// TestTruncateWords is a table-driven sweep over the whitespace edge cases
-// that trip up naïve string.Split approaches. The method is called on every
-// telemetry tick so any regression would immediately pollute the radar UI.
-func TestTruncateWords(t *testing.T) {
-	t.Parallel()
-	w := &Worker{}
-
-	cases := []struct {
-		name     string
-		text     string
-		maxWords int
-		want     string
-	}{
-		{"empty", "", 5, ""},
-		{"below limit", "one two three", 5, "one two three"},
-		{"at exact limit", "one two three", 3, "one two three"},
-		{"above limit", "one two three four five six", 3, "one two three..."},
-		{"single word trim", "one two three", 1, "one..."},
-		{"collapses multi-space", "one   two   three", 2, "one two..."},
-		{"leading/trailing whitespace", "  one two three  ", 2, "one two..."},
-		{"maxWords zero", "one two three", 0, "..."},
-	}
-	for _, tc := range cases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			got := w.truncateWords(tc.text, tc.maxWords)
-			if got != tc.want {
-				t.Errorf("truncateWords(%q, %d) = %q, want %q", tc.text, tc.maxWords, got, tc.want)
-			}
-		})
-	}
-}
-
 // --- getGPUStats -----------------------------------------------------------
 //
 // getGPUStats shells out to `nvidia-smi` via PATH. The tests below install

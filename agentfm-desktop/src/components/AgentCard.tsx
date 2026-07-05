@@ -96,9 +96,23 @@ export function AgentCard({ worker }: Props) {
         </div>
       </div>
 
-      {description && (
-        <div className="text-[13px] text-text-1 mb-3.5 leading-[1.5] whitespace-pre-line">
-          {description}
+      <div className="text-[13px] mb-2 leading-[1.5] whitespace-pre-line">
+        {description
+          ? <span className="text-text-1">{description}</span>
+          : <span className="text-text-3 italic">No description provided</span>}
+      </div>
+      {(worker.agent_capability || worker.model) && (
+        <div className="flex flex-wrap gap-1.5 mb-3.5">
+          {worker.agent_capability && (
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-text-2 border border-text-2/25 rounded-full px-2 py-0.5">
+              {worker.agent_capability}
+            </span>
+          )}
+          {worker.model && (
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-text-2 border border-text-2/25 rounded-full px-2 py-0.5">
+              {worker.model}
+            </span>
+          )}
         </div>
       )}
 
