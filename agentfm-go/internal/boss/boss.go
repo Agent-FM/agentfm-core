@@ -47,6 +47,13 @@ type Boss struct {
 	// ticker) but written only when a telemetry pulse arrives. Pure-read
 	// call sites use RLock so concurrent API hits don't serialise.
 	mu sync.RWMutex
+	// artifactExpect maps dispatched taskIDs to the worker peer allowed
+	// to deliver agentfm_artifacts/<taskID>.zip. Guarded by artifactMu
+	// (not b.mu — the artifact gate is touched on every inbound artifact
+	// stream and must not contend with telemetry/API reads).
+	artifactMu     sync.Mutex
+	artifactExpect map[string]artifactExpectation
+
 	// asyncSlots gates spawn of background goroutines from
 	// /api/execute/async. Buffered to MaxInflightAsyncTasks; non-blocking
 	// send returns 503 to the client when full.
@@ -196,7 +203,7 @@ func NewWithOptions(node *network.MeshNode, opts Options) *Boss {
 }
 
 func (b *Boss) Run(ctx context.Context) {
-	b.node.Host.SetStreamHandler(network.ArtifactProtocol, network.HandleArtifactStream)
+	b.node.Host.SetStreamHandler(network.ArtifactProtocol, network.NewArtifactStreamHandler(b.authorizeArtifact))
 
 	time.Sleep(1 * time.Second)
 

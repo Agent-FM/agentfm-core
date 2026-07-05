@@ -3,12 +3,12 @@ import { render } from '@testing-library/react'
 import { Button } from '../../src/components/primitives/Button'
 
 describe('Button', () => {
-  it('primary uses the solid accent background and dark fg', () => {
+  it('primary uses the brand orange gradient and dark fg', () => {
     const { container } = render(<Button variant="primary">Go</Button>)
     const cls = (container.firstChild as HTMLElement).className
-    expect(cls).toMatch(/bg-accent\b/)
+    expect(cls).toMatch(/from-accent-light/)
+    expect(cls).toMatch(/to-accent\b/)
     expect(cls).toMatch(/text-accent-fg/)
-    expect(cls).not.toMatch(/gradient/)
   })
   it('secondary uses a surface + hairline border', () => {
     const { container } = render(<Button variant="secondary">Go</Button>)

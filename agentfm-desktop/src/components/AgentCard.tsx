@@ -1,4 +1,5 @@
-import { Zap, MessageSquare, ScrollText } from 'lucide-react'
+import { Zap, ScrollText, Copy } from 'lucide-react'
+import { toast } from 'sonner'
 import type { WorkerProfile } from '../types/api'
 import { Card } from './primitives/Card'
 import { Avatar } from './primitives/Avatar'
@@ -70,7 +71,19 @@ export function AgentCard({ worker }: Props) {
             )}
           </div>
           <div className="text-[13px] text-text-2 font-mono mt-0.5">
-            {shortenPeerID(worker.peer_id, 6, 5)}
+            <button
+              onClick={() =>
+                navigator.clipboard
+                  .writeText(worker.peer_id)
+                  .then(() => toast.success('Peer ID copied'))
+                  .catch(() => toast.error('Copy failed'))
+              }
+              title={`${worker.peer_id} — click to copy`}
+              className="group/id inline-flex items-center gap-1 hover:text-text-1 transition-colors"
+            >
+              {shortenPeerID(worker.peer_id, 6, 5)}
+              <Copy size={11} className="opacity-0 group-hover/id:opacity-60 transition-opacity" />
+            </button>
             {author && (
               <>
                 {' · by '}
@@ -113,62 +126,36 @@ export function AgentCard({ worker }: Props) {
 
       <div className="flex gap-2 mt-4">
         {isOffline ? (
-          <>
-            <button
-              disabled
-              title="Agent is offline"
-              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5
-                rounded-xl text-[13px] font-semibold text-text-3 bg-transparent
-                border border-text-2/15 cursor-not-allowed"
-            >
-              <Zap size={13} />
-              <span>Dispatch</span>
-            </button>
-            <button
-              onClick={() => navigate(`/peer/${worker.peer_id}`)}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5
-                rounded-xl text-[13px] font-semibold text-text-0 bg-transparent
-                border border-accent/30 hover:border-accent/55 hover:shadow-[0_0_14px_-4px_rgba(34,211,238,.4)]
-                transition-all"
-            >
-              <ScrollText size={13} />
-              <span>History</span>
-            </button>
-          </>
+          <button
+            disabled
+            title="Agent is offline"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5
+              rounded-xl text-[13px] font-semibold text-text-3 bg-transparent
+              border border-text-2/15 cursor-not-allowed"
+          >
+            <Zap size={13} />
+            <span>Dispatch</span>
+          </button>
         ) : (
-          <>
-            <button
-              onClick={() => navigate('/chat')}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5
-                rounded-xl text-[13px] font-semibold text-text-0 bg-transparent
-                border border-accent/30 hover:border-accent/55 hover:shadow-[0_0_14px_-4px_rgba(34,211,238,.4)]
-                transition-all"
-            >
-              <MessageSquare size={13} />
-              <span>Chat</span>
-            </button>
-            <Button
-              variant="primary"
-              onClick={() => openDispatch(worker.peer_id)}
-              disabled={!worker.dispatch_allowed}
-              className="flex-1"
-            >
-              <Zap size={13} />
-              <span>Dispatch</span>
-            </Button>
-            <button
-              onClick={() => navigate(`/peer/${worker.peer_id}`)}
-              title="View history & comments"
-              aria-label="View history"
-              className="inline-flex items-center justify-center w-10 px-0 py-2.5
-                rounded-xl text-text-0 bg-transparent
-                border border-accent/30 hover:border-accent/55 hover:shadow-[0_0_14px_-4px_rgba(34,211,238,.4)]
-                transition-all"
-            >
-              <ScrollText size={14} />
-            </button>
-          </>
+          <Button
+            variant="primary"
+            onClick={() => openDispatch(worker.peer_id)}
+            disabled={!worker.dispatch_allowed}
+            className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold"
+          >
+            <Zap size={13} />
+            <span>Dispatch</span>
+          </Button>
         )}
+        <Button
+          variant="outline"
+          onClick={() => navigate(`/peer/${worker.peer_id}`)}
+          title="View history & comments"
+          className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold"
+        >
+          <ScrollText size={13} />
+          <span>History</span>
+        </Button>
       </div>
     </Card>
   )

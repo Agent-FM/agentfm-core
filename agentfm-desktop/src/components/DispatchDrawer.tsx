@@ -90,7 +90,7 @@ export function DispatchDrawer() {
             exit={{ x: '100%' }}
             transition={{ type: 'spring', stiffness: 280, damping: 30 }}
             className="fixed right-0 top-10 bottom-0 w-[52%] min-w-[480px] bg-bg-1 border-l border-accent/15 overflow-auto p-6 z-50"
-            style={{ boxShadow: '-24px 0 48px -16px rgba(34,211,238,.15)' }}
+            style={{ boxShadow: '-24px 0 48px -16px rgba(247,147,30,.15)' }}
             onKeyDown={handleKey}
           >
             {/* Header */}

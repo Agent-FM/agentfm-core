@@ -117,7 +117,7 @@ func (b *Boss) StartAPIServer(bind, port string) error {
 	// process exit.
 	var bgWG sync.WaitGroup
 
-	b.node.Host.SetStreamHandler(network.ArtifactProtocol, network.HandleArtifactStream)
+	b.node.Host.SetStreamHandler(network.ArtifactProtocol, network.NewArtifactStreamHandler(b.authorizeArtifact))
 	bgWG.Add(1)
 	go func() {
 		defer bgWG.Done()

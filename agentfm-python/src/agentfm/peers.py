@@ -15,6 +15,8 @@ from typing import List, Optional
 
 import httpx
 
+from ._transport import raise_for_response
+
 
 @dataclass(frozen=True)
 class KnownPeer:
@@ -128,13 +130,13 @@ class PeersNamespace:
         """GET /api/workers — optionally include offline peers."""
         params = {"include_offline": "true"} if include_offline else None
         r = self._http.get("/api/workers", params=params)
-        r.raise_for_status()
+        raise_for_response(r)
         return [_from_known_peer(a) for a in r.json().get("agents", [])]
 
     def get(self, peer_id: str) -> PeerSummary:
         """GET /v1/peers/{peer_id} — single-peer summary."""
         r = self._http.get(f"/v1/peers/{peer_id}")
-        r.raise_for_status()
+        raise_for_response(r)
         return _from_peer_summary(r.json())
 
     def log(self, peer_id: str, *, limit: int = 50, offset: int = 0) -> List[PeerEntry]:
@@ -143,13 +145,13 @@ class PeersNamespace:
             f"/v1/peers/{peer_id}/log",
             params={"limit": limit, "offset": offset},
         )
-        r.raise_for_status()
+        raise_for_response(r)
         return [_from_peer_entry(e) for e in r.json().get("entries", [])]
 
     def comment_body(self, peer_id: str, cid: str) -> str:
         """GET /v1/peers/{peer_id}/comments/{cid} — hydrate comment body."""
         r = self._http.get(f"/v1/peers/{peer_id}/comments/{cid}")
-        r.raise_for_status()
+        raise_for_response(r)
         return r.text
 
 
@@ -163,13 +165,13 @@ class AsyncPeersNamespace:
         """GET /api/workers — optionally include offline peers."""
         params = {"include_offline": "true"} if include_offline else None
         r = await self._http.get("/api/workers", params=params)
-        r.raise_for_status()
+        raise_for_response(r)
         return [_from_known_peer(a) for a in r.json().get("agents", [])]
 
     async def get(self, peer_id: str) -> PeerSummary:
         """GET /v1/peers/{peer_id} — single-peer summary."""
         r = await self._http.get(f"/v1/peers/{peer_id}")
-        r.raise_for_status()
+        raise_for_response(r)
         return _from_peer_summary(r.json())
 
     async def log(self, peer_id: str, *, limit: int = 50, offset: int = 0) -> List[PeerEntry]:
@@ -178,13 +180,13 @@ class AsyncPeersNamespace:
             f"/v1/peers/{peer_id}/log",
             params={"limit": limit, "offset": offset},
         )
-        r.raise_for_status()
+        raise_for_response(r)
         return [_from_peer_entry(e) for e in r.json().get("entries", [])]
 
     async def comment_body(self, peer_id: str, cid: str) -> str:
         """GET /v1/peers/{peer_id}/comments/{cid} — hydrate comment body."""
         r = await self._http.get(f"/v1/peers/{peer_id}/comments/{cid}")
-        r.raise_for_status()
+        raise_for_response(r)
         return r.text
 
 

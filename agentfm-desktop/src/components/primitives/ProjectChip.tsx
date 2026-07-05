@@ -14,7 +14,7 @@ export function ProjectChip({ name, onClick }: Props) {
     >
       <span
         className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse-cyan"
-        style={{ boxShadow: '0 0 8px #22d3ee' }}
+        style={{ boxShadow: '0 0 8px #F7931E' }}
       />
       <span className="text-text-0">{name}</span>
       <ChevronDown size={12} className="text-text-2" />

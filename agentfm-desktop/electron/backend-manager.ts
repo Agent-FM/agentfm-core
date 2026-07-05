@@ -65,10 +65,14 @@ export class BackendManager extends EventEmitter {
   }
 
   getArtifactPath(taskId: string): string {
+    if (!SAFE_TASK_ID.test(taskId)) {
+      throw new Error(`unsafe taskId: ${JSON.stringify(taskId)}`)
+    }
     return join(this.artifactsDir, 'agentfm_artifacts', taskId + '.zip')
   }
 
   artifactExists(taskId: string): boolean {
+    if (!SAFE_TASK_ID.test(taskId)) return false
     return existsSync(this.getArtifactPath(taskId))
   }
 

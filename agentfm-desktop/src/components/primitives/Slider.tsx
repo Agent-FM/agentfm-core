@@ -26,7 +26,7 @@ export function Slider({ min, max, step = 0.01, value, onChange }: Props) {
         className="absolute inset-0 w-full opacity-0 cursor-pointer"
       />
       <div
-        className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-accent border border-accent-fg shadow-[0_0_8px_#22d3ee] pointer-events-none"
+        className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-accent border border-accent-fg shadow-[0_0_8px_#F7931E] pointer-events-none"
         style={{ left: `calc(${pct}% - 6px)` }}
       />
     </div>

@@ -2,7 +2,7 @@ import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { BackendManager } from './backend-manager'
-import { registerIPC } from './ipc'
+import { registerIPC, isSafeExternalUrl } from './ipc'
 import { settingsStore } from './store'
 
 let backend: BackendManager | null = null
@@ -16,7 +16,9 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    backgroundColor: '#0b0d10',
+    backgroundColor: process.platform === 'darwin' ? '#00000000' : '#0a0e16',
+    vibrancy: process.platform === 'darwin' ? 'under-window' : undefined,
+    visualEffectState: 'active',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -30,7 +32,7 @@ function createWindow(): void {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    if (isSafeExternalUrl(details.url)) shell.openExternal(details.url)
     return { action: 'deny' }
   })
 

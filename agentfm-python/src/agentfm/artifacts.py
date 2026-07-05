@@ -51,10 +51,18 @@ class ArtifactManager:
         """Return the most recently modified ``.zip`` in the watch dir, or None."""
         if not self.watch_dir.exists():
             return None
-        candidates = [p for p in self.watch_dir.glob("*.zip") if p.is_file()]
-        if not candidates:
-            return None
-        return max(candidates, key=lambda p: p.stat().st_mtime)
+        best: Path | None = None
+        best_mtime = float("-inf")
+        for p in self.watch_dir.glob("*.zip"):
+            try:
+                if not p.is_file():
+                    continue
+                mtime = p.stat().st_mtime
+            except OSError:
+                continue
+            if mtime > best_mtime:
+                best, best_mtime = p, mtime
+        return best
 
     def wait_for_new_zip(
         self,
@@ -71,11 +79,15 @@ class ArtifactManager:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             zip_path = self.latest_zip()
-            if zip_path is not None and zip_path.stat().st_mtime > since:
-                size = zip_path.stat().st_size
-                time.sleep(stable_for)
-                if size > 0 and zip_path.stat().st_size == size:
-                    return zip_path
+            if zip_path is not None:
+                try:
+                    if zip_path.stat().st_mtime > since:
+                        size = zip_path.stat().st_size
+                        time.sleep(stable_for)
+                        if size > 0 and zip_path.stat().st_size == size:
+                            return zip_path
+                except OSError:
+                    pass
             time.sleep(poll_interval)
         return None
 
@@ -135,8 +147,6 @@ class ArtifactManager:
         will race for "the latest zip" and clobber each other's artifacts.
         Prefer :meth:`collect_for_task` when a task ID is available.
         """
-        if not self.watch_dir.exists():
-            return []
         zip_path = self.wait_for_new_zip(since=since, timeout=timeout)
         if zip_path is None:
             return []
@@ -155,11 +165,14 @@ class ArtifactManager:
         target = self.watch_dir / f"{task_id}.zip"
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            if target.exists() and target.is_file():
-                size = target.stat().st_size
-                time.sleep(stable_for)
-                if size > 0 and target.stat().st_size == size:
-                    return target
+            try:
+                if target.is_file():
+                    size = target.stat().st_size
+                    time.sleep(stable_for)
+                    if size > 0 and target.stat().st_size == size:
+                        return target
+            except OSError:
+                pass
             time.sleep(poll_interval)
         return None
 
@@ -168,10 +181,9 @@ class ArtifactManager:
 
         Concurrency-safe: each call polls for a specific filename, so parallel
         ``tasks.run`` invocations cannot steal each other's artifacts. Returns
-        ``[]`` if no matching zip arrives within ``timeout`` or if
-        ``watch_dir`` does not exist.
+        ``[]`` if no matching zip arrives within ``timeout``.
         """
-        if not self.watch_dir.exists() or not task_id:
+        if not task_id:
             return []
         zip_path = self.wait_for_task_zip(task_id, timeout=timeout)
         if zip_path is None:

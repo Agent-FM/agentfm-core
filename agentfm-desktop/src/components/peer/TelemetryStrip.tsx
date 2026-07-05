@@ -6,8 +6,8 @@ import type { PeerMetric } from '../../lib/metricsStore'
 const OFFLINE_AFTER_MS = 30_000
 
 const CELLS: { metric: PeerMetric; label: string; color: string; fmt: (v: number) => string }[] = [
-  { metric: 'cpu', label: 'CPU', color: '#22d3ee', fmt: (v) => `${Math.round(v)}%` },
-  { metric: 'gpu', label: 'GPU', color: '#67e8f9', fmt: (v) => `${Math.round(v)}%` },
+  { metric: 'cpu', label: 'CPU', color: '#F7931E', fmt: (v) => `${Math.round(v)}%` },
+  { metric: 'gpu', label: 'GPU', color: '#FBBF6B', fmt: (v) => `${Math.round(v)}%` },
   { metric: 'ram', label: 'RAM FREE', color: '#34d399', fmt: (v) => `${v.toFixed(1)}G` },
   { metric: 'queue', label: 'QUEUE', color: '#f59e0b', fmt: (v) => `${Math.round(v)}` },
 ]

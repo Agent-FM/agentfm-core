@@ -19,15 +19,15 @@ export function TabStrip() {
   if (!active) return null
 
   return (
-    <div className="border-b border-border-0 bg-bg-0 px-3 flex gap-1 relative">
+    <div className="border-b border-border-0 bg-bg-0 px-3 flex gap-1 relative overflow-x-auto no-scrollbar">
       {tabs.map((t) => {
         const isActive = location.pathname === t.to || (t.to === '/chat' && location.pathname.startsWith('/chat'))
         return (
           <NavLink
             key={t.to}
             to={t.to}
-            className={`relative px-4 py-2.5 text-[14px] transition-colors ${
-              isActive ? 'text-text-0 font-semibold' : 'text-text-2 hover:text-text-0'
+            className={`relative shrink-0 whitespace-nowrap rounded-lg px-4 py-2.5 text-[14px] transition-colors ${
+              isActive ? 'text-accent font-semibold' : 'text-text-2 hover:text-text-0 hover:bg-white/[0.03]'
             }`}
           >
             {t.label}

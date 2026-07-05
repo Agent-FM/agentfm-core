@@ -1,6 +1,17 @@
 import { ipcMain, shell, BrowserWindow } from 'electron'
+import { resolve, sep } from 'node:path'
 import { BackendManager } from './backend-manager'
 import { settingsStore } from './store'
+
+const SAFE_EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:'])
+
+export function isSafeExternalUrl(url: string): boolean {
+  try {
+    return SAFE_EXTERNAL_PROTOCOLS.has(new URL(url).protocol)
+  } catch {
+    return false
+  }
+}
 
 export function registerIPC(backend: BackendManager): void {
   // Backend controls
@@ -17,15 +28,25 @@ export function registerIPC(backend: BackendManager): void {
     settingsStore.delete(key as never)
   })
 
-  // Shell helpers
-  ipcMain.handle('app:openExternal', (_event, url: string) => shell.openExternal(url))
-  ipcMain.handle('app:showItemInFolder', (_event, path: string) => shell.showItemInFolder(path))
+  // Shell helpers. Both are renderer-reachable, so treat their arguments as
+  // untrusted: openExternal is limited to web/mail schemes (file:, smb: etc.
+  // would open local content), showItemInFolder to the workspace dir.
+  ipcMain.handle('app:openExternal', (_event, url: string) => {
+    if (!isSafeExternalUrl(url)) return
+    return shell.openExternal(url)
+  })
+  ipcMain.handle('app:showItemInFolder', (_event, path: string) => {
+    if (typeof path !== 'string') return
+    const resolved = resolve(path)
+    if (!resolved.startsWith(backend.artifactsDir + sep)) return
+    shell.showItemInFolder(resolved)
+  })
 
   // Artifact helpers
   ipcMain.handle('app:checkArtifact', (_event, taskId: string) => backend.artifactExists(taskId))
   ipcMain.handle('app:openArtifact', (_event, taskId: string) => {
-    const artifactPath = backend.getArtifactPath(taskId)
-    if (backend.artifactExists(taskId)) shell.showItemInFolder(artifactPath)
+    if (!backend.artifactExists(taskId)) return
+    shell.showItemInFolder(backend.getArtifactPath(taskId))
   })
   ipcMain.handle('app:listArtifacts', () => backend.listArtifacts())
   ipcMain.handle('app:writeArtifactMeta', (_event, taskId: string, meta: unknown) => {

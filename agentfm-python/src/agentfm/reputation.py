@@ -28,6 +28,8 @@ from typing import Any, Callable, List, Optional
 
 import httpx
 
+from ._transport import raise_for_response
+
 # Signer takes the 32-byte SHA-256 digest of the canonical Comment
 # bytes and returns the Ed25519 signature. The host caller is
 # responsible for matching the libp2p key whose PeerID is the
@@ -119,7 +121,7 @@ class _ReputationNamespace:
     def get(self, peer_id: str) -> ReputationScore:
         """GET /v1/peers/{peer_id}/reputation."""
         resp = self._http.get(f"/v1/peers/{peer_id}/reputation")
-        resp.raise_for_status()
+        raise_for_response(resp)
         body = resp.json()
         return ReputationScore(
             peer_id=body.get("peer_id", peer_id),
@@ -145,7 +147,7 @@ class _ReputationNamespace:
         if kind:
             params["kind"] = kind
         resp = self._http.get(f"/v1/peers/{peer_id}/log", params=params)
-        resp.raise_for_status()
+        raise_for_response(resp)
         body = resp.json()
         entries = [LogEntry(**e) for e in body.get("entries") or []]
         head_dict = body.get("head")
@@ -157,7 +159,7 @@ class _ReputationNamespace:
         resp = self._http.get(
             f"/v1/peers/{peer_id}/proof", params={"entry": entry_hash}
         )
-        resp.raise_for_status()
+        raise_for_response(resp)
         body = resp.json()
         return InclusionProof(
             entry_hash=body["entry_hash"],
@@ -205,7 +207,7 @@ class _ReputationNamespace:
         resp = self._http.post(
             f"/v1/peers/{subject_peer_id}/comments", json=body
         )
-        resp.raise_for_status()
+        raise_for_response(resp)
         out = resp.json()
         return CommentReceipt(cid=out["cid"], ledger_hash=out["ledger_hash"])
 

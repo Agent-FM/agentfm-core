@@ -194,3 +194,15 @@ def test_canonical_digest_differs_on_field_change():
         )
         kwargs.update(fields)
         assert _canonical_digest(**kwargs) != base
+
+
+def test_reputation_get_500_raises_agentfm_error():
+    import pytest
+
+    from agentfm.exceptions import AgentFMError
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="boom")
+
+    with pytest.raises(AgentFMError):
+        _ReputationNamespace(_http_with_handler(handler)).get("12D3Koo")

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { toast } from 'sonner'
-import { ChevronDown, Plus, Trash2, Folder } from 'lucide-react'
+import { ChevronDown, Plus, Trash2, Folder, Globe, Lock } from 'lucide-react'
 import { useUIStore } from '../../lib/store'
 
 export function ProjectDropdown() {
@@ -62,11 +62,15 @@ export function ProjectDropdown() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-            className="absolute top-full mt-2 left-0 bg-bg-1 border border-border-0 rounded-xl shadow-2xl w-80 overflow-hidden z-50"
+            className="absolute top-full mt-2 left-0 w-80 overflow-hidden rounded-2xl border border-border-1 bg-bg-1 shadow-[0_24px_60px_-12px_rgba(0,0,0,.7)] z-50 ring-1 ring-black/40"
           >
-            <div className="max-h-72 overflow-auto">
+            <div className="px-3 pt-3 pb-1.5 text-[10px] font-mono font-bold uppercase tracking-[0.16em] text-text-2">
+              Projects
+            </div>
+            <div className="max-h-72 overflow-auto px-1.5 pb-1.5">
               {projects.map((p) => {
                 const isActive = p.id === activeId
+                const isPrivate = p.connectionMode === 'private'
                 return (
                   <button
                     key={p.id}
@@ -74,32 +78,50 @@ export function ProjectDropdown() {
                       setOpen(false)
                       switchProject(p.id)
                     }}
-                    className={`relative w-full text-left px-3 py-2.5 text-xs flex items-center gap-2 transition-colors ${
-                      isActive ? 'text-accent bg-accent/8' : 'text-text-1 hover:bg-bg-2 hover:text-text-0'
+                    className={`relative w-full text-left px-2.5 py-2.5 rounded-xl flex items-center gap-2.5 transition-colors ${
+                      isActive ? 'bg-accent/12 text-text-0' : 'text-text-1 hover:bg-bg-2 hover:text-text-0'
                     }`}
                   >
-                    {isActive && <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-accent" />}
-                    <Folder size={14} className="text-text-2" />
-                    <span className="font-medium truncate">{p.name}</span>
+                    <span
+                      className={`flex items-center justify-center w-7 h-7 rounded-lg shrink-0 ${
+                        isActive ? 'bg-accent/20 text-accent' : 'bg-bg-2 text-text-2'
+                      }`}
+                    >
+                      <Folder size={14} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-medium truncate">{p.name}</span>
+                      <span className="flex items-center gap-1 text-[10px] text-text-2 mt-0.5">
+                        {isPrivate ? <Lock size={9} /> : <Globe size={9} />}
+                        <span className="uppercase tracking-wide">{isPrivate ? 'Private swarm' : 'Public mesh'}</span>
+                      </span>
+                    </span>
+                    {isActive && <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0 shadow-[0_0_8px_#F7931E]" />}
                   </button>
                 )
               })}
             </div>
-            <div className="border-t border-border-0" />
-            <button
-              onClick={() => { setOpen(false); openWizard() }}
-              className="w-full text-left px-3 py-2.5 text-xs text-accent hover:bg-accent/10 inline-flex items-center gap-2"
-            >
-              <Plus size={14} />
-              <span className="font-medium">New project</span>
-            </button>
-            <button
-              onClick={handleDelete}
-              className="w-full text-left px-3 py-2.5 text-xs text-bad hover:bg-bad/10 inline-flex items-center gap-2"
-            >
-              <Trash2 size={14} />
-              <span>Delete "{active.name}"</span>
-            </button>
+            <div className="h-px bg-border-0" />
+            <div className="p-1.5">
+              <button
+                onClick={() => { setOpen(false); openWizard() }}
+                className="w-full text-left px-2.5 py-2.5 rounded-xl text-[13px] text-accent hover:bg-accent/10 inline-flex items-center gap-2.5 transition-colors"
+              >
+                <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-accent/15 shrink-0">
+                  <Plus size={14} />
+                </span>
+                <span className="font-medium">New project</span>
+              </button>
+              <button
+                onClick={handleDelete}
+                className="w-full text-left px-2.5 py-2.5 rounded-xl text-[13px] text-bad hover:bg-bad/10 inline-flex items-center gap-2.5 transition-colors"
+              >
+                <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-bad/12 shrink-0">
+                  <Trash2 size={14} />
+                </span>
+                <span className="truncate">Delete "{active.name}"</span>
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

@@ -1,13 +1,14 @@
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { openEventStream } from '../lib/sse'
+import { getApiBaseURL } from '../lib/api'
 import { qk } from '../lib/query'
 
 export function useEventStream() {
   const qc = useQueryClient()
 
   useEffect(() => {
-    const handle = openEventStream('http://127.0.0.1:8080/v1/events', {
+    const handle = openEventStream(`${getApiBaseURL()}/v1/events`, {
       onEvent: (type, data) => {
         switch (type) {
           case 'worker_online':

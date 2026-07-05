@@ -21,7 +21,7 @@ const STATUSES = ['ok', 'error', 'rejected', 'timeout'] as const
 const STATUS_COLOR: Record<(typeof STATUSES)[number], string> = {
   ok: '#84cc16',
   error: '#f43f5e',
-  rejected: '#22d3ee',
+  rejected: '#F7931E',
   timeout: '#fbbf24',
 }
 
@@ -80,11 +80,6 @@ export default function Dashboard() {
     return n
   }, [bossSeries])
 
-  const artifactBytesPerSec = useMemo(() => {
-    const buf = bossSeries.get(seriesKey('agentfm_artifact_bytes_sent_total', {}))
-    return buf ? computeRate(buf) : 0
-  }, [bossSeries])
-
   const cpuPct = useMemo(() => {
     const buf = bossSeries.get(seriesKey('process_cpu_seconds_total', {}))
     return buf ? computeRate(buf) * 100 : 0
@@ -94,15 +89,6 @@ export default function Dashboard() {
     latestValue(bossSeries.get(seriesKey('process_resident_memory_bytes', {})) ?? emptyBuf()) ?? 0
   const goroutines =
     latestValue(bossSeries.get(seriesKey('go_goroutines', {})) ?? emptyBuf()) ?? 0
-
-  const authAttemptsTotal = useMemo(() => {
-    let n = 0
-    for (const [k, buf] of bossSeries) {
-      if (!k.startsWith('agentfm_auth_attempts_total{')) continue
-      n += latestValue(buf) ?? 0
-    }
-    return n
-  }, [bossSeries])
 
   const gcPauseP95 = useMemo(() => {
     for (const [k, buf] of bossSeries) {
@@ -178,7 +164,7 @@ export default function Dashboard() {
             </span>
           ))}
         </div>
-        <SparkLine values={heroValues} width={800} height={40} color="#22d3ee" />
+        <SparkLine values={heroValues} width={800} height={40} color="#F7931E" />
       </Card>
 
       <div className="grid grid-cols-3 gap-4 mb-6">
@@ -187,41 +173,30 @@ export default function Dashboard() {
             label="Typical task time"
             value={<span className="tabular-nums">{`${p95Duration.toFixed(1)}s`}</span>}
             hint="9 in 10 tasks finish faster"
-            color="#22d3ee"
+            color="#F7931E"
           />
         </motion.div>
         <motion.div {...staggerItem(1)}>
-          <Tile label="Agents online" value={<AnimatedNumber value={workersOnline} />} color="#22d3ee" />
+          <Tile label="Agents online" value={<AnimatedNumber value={workersOnline} />} color="#F7931E" />
         </motion.div>
         <motion.div {...staggerItem(2)}>
           <Tile label="Connection errors" value={<span className="tabular-nums">{Math.round(streamErrorsTotal)}</span>} color="#f43f5e" />
         </motion.div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 gap-4 mb-6">
         <motion.div {...staggerItem(0)}>
-          <Tile
-            label="Output speed"
-            value={<span className="tabular-nums">{`${(artifactBytesPerSec / 1024).toFixed(1)} KB/s`}</span>}
-            hint="files sent back from agents"
-            color="#22d3ee"
-          />
-        </motion.div>
-        <motion.div {...staggerItem(1)}>
-          <Tile label="Sign-in attempts" value={<span className="tabular-nums">{Math.round(authAttemptsTotal)}</span>} color="#22d3ee" />
-        </motion.div>
-        <motion.div {...staggerItem(2)}>
           <Card className="p-4">
             <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-text-2 mb-2">
               Assets built
             </div>
-            <div className="font-mono font-bold leading-none mb-2" style={{ fontSize: 28, color: '#22d3ee' }}>
+            <div className="font-mono font-bold leading-none mb-2" style={{ fontSize: 28, color: '#F7931E' }}>
               <AnimatedNumber value={assetsBuiltCount} />
             </div>
-            <SparkLine values={assetsBuiltValues} width={180} height={28} color="#22d3ee" />
+            <SparkLine values={assetsBuiltValues} width={180} height={28} color="#F7931E" />
           </Card>
         </motion.div>
-        <motion.div {...staggerItem(3)}>
+        <motion.div {...staggerItem(1)}>
           <Card className="p-4">
             <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-text-2 mb-2">
               Errors by channel

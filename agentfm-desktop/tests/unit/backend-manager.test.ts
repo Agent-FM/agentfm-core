@@ -218,3 +218,29 @@ describe('BackendManager', () => {
     expect(mockSpawn).toHaveBeenCalledOnce()
   })
 })
+
+describe('artifact path validation', () => {
+  it('getArtifactPath rejects path-traversal taskIds', async () => {
+    const { BackendManager } = await import('../../electron/backend-manager')
+    const mgr = new BackendManager({ apiPort: 8080, reputationFloor: -0.5 })
+    expect(() => mgr.getArtifactPath('../../etc/passwd')).toThrow()
+    expect(() => mgr.getArtifactPath('a/b')).toThrow()
+    expect(() => mgr.getArtifactPath('')).toThrow()
+  })
+
+  it('artifactExists returns false for invalid taskIds without touching disk', async () => {
+    const { BackendManager } = await import('../../electron/backend-manager')
+    const mgr = new BackendManager({ apiPort: 8080, reputationFloor: -0.5 })
+    const fsMod = await import('node:fs')
+    const existsSpy = vi.mocked(fsMod.existsSync)
+    existsSpy.mockClear()
+    expect(mgr.artifactExists('../../etc/passwd')).toBe(false)
+    expect(existsSpy).not.toHaveBeenCalled()
+  })
+
+  it('accepts well-formed taskIds', async () => {
+    const { BackendManager } = await import('../../electron/backend-manager')
+    const mgr = new BackendManager({ apiPort: 8080, reputationFloor: -0.5 })
+    expect(mgr.getArtifactPath('task_abc-123.v2')).toContain('task_abc-123.v2.zip')
+  })
+})

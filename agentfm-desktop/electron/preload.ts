@@ -16,6 +16,7 @@ export interface ArtifactListEntry {
 }
 
 const api = {
+  platform: process.platform,
   backend: {
     health: () => ipcRenderer.invoke('backend:health'),
     restart: (cfg?: unknown) => ipcRenderer.invoke('backend:restart', cfg),

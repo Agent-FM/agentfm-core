@@ -37,6 +37,10 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover { background: theme('colors.text.3'); }
 
+/* Hide scrollbar where we want a clean overflow (e.g. tab strip) */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
 /* ---------- Glassmorphism surfaces (2026-06-14 redesign) ---------- */
 .glass {
   background: linear-gradient(150deg, rgba(255,255,255,.06), rgba(255,255,255,.02));

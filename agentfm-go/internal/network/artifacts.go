@@ -100,7 +100,23 @@ func (pw *progressWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
+// NewArtifactStreamHandler returns the artifact-protocol stream handler.
+// When authorize is non-nil it is consulted with the sanitized task ID and
+// the remote peer before any bytes are written to disk; a false return
+// resets the stream. This binds inbound artifacts to tasks the local node
+// actually dispatched — without it any mesh peer could overwrite or
+// pre-seed agentfm_artifacts/<taskID>.zip for tasks it never ran.
+func NewArtifactStreamHandler(authorize func(taskID string, from peer.ID) bool) network.StreamHandler {
+	return func(stream network.Stream) {
+		handleArtifactStream(stream, authorize)
+	}
+}
+
 func HandleArtifactStream(stream network.Stream) {
+	handleArtifactStream(stream, nil)
+}
+
+func handleArtifactStream(stream network.Stream, authorize func(taskID string, from peer.ID) bool) {
 	success := false
 	defer func() {
 		if success {
@@ -164,6 +180,16 @@ func HandleArtifactStream(stream network.Stream) {
 	safeTaskID := filepath.Base(filepath.Clean(taskID))
 	if !SafeTaskIDPattern.MatchString(safeTaskID) {
 		safeTaskID = fmt.Sprintf("fallback_%d", time.Now().UnixNano())
+	}
+
+	if authorize != nil && !authorize(safeTaskID, stream.Conn().RemotePeer()) {
+		metrics.StreamErrorsTotal.WithLabelValues(metrics.ProtocolArtifacts, metrics.ReasonDecode).Inc()
+		slog.Warn("refusing unexpected artifact stream",
+			slog.String("task_id", safeTaskID),
+			slog.String("remote_peer", stream.Conn().RemotePeer().String()),
+			slog.String(obs.FieldProtocol, "artifacts"),
+		)
+		return
 	}
 
 	if err := os.MkdirAll("./agentfm_artifacts", 0755); err != nil {

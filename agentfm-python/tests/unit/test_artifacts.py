@@ -194,3 +194,110 @@ def test_extract_zip_bomb_partial_file_is_unlinked(tmp_path: Path):
     assert not (extract_dir / "huge_overflows.bin").exists(), (
         "partial entry must be unlinked after budget overflow"
     )
+
+
+def test_wait_for_task_zip_survives_concurrent_deletion(tmp_path: Path, monkeypatch):
+    """A zip deleted between the exists() check and stat() must not raise.
+
+    Reproduces the TOCTOU window: the Go daemon (or another collector)
+    unlinks the zip during the stable_for sleep; the follow-up stat() would
+    raise FileNotFoundError and crash tasks.run().
+    """
+    watch = tmp_path / "watch"
+    watch.mkdir()
+    target = _make_zip(watch / "task_x.zip", {"a.txt": b"hi"})
+
+    real_sleep = time.sleep
+
+    def deleting_sleep(seconds: float) -> None:
+        target.unlink(missing_ok=True)
+        real_sleep(0)
+
+    monkeypatch.setattr("agentfm.artifacts.time.sleep", deleting_sleep)
+    mgr = ArtifactManager(watch_dir=watch, extract_dir=tmp_path / "out")
+    assert mgr.wait_for_task_zip("task_x", timeout=0.5) is None
+
+
+def test_wait_for_new_zip_survives_concurrent_deletion(tmp_path: Path, monkeypatch):
+    watch = tmp_path / "watch"
+    watch.mkdir()
+    target = _make_zip(watch / "fresh.zip", {"a.txt": b"hi"})
+
+    real_sleep = time.sleep
+
+    def deleting_sleep(seconds: float) -> None:
+        target.unlink(missing_ok=True)
+        real_sleep(0)
+
+    monkeypatch.setattr("agentfm.artifacts.time.sleep", deleting_sleep)
+    mgr = ArtifactManager(watch_dir=watch, extract_dir=tmp_path / "out")
+    assert mgr.wait_for_new_zip(since=0.0, timeout=0.5) is None
+
+
+def test_latest_zip_survives_concurrent_deletion(tmp_path: Path, monkeypatch):
+    """A candidate deleted between glob() and stat() must be skipped."""
+    watch = tmp_path / "watch"
+    watch.mkdir()
+    _make_zip(watch / "stays.zip", {"a.txt": b"hi"})
+    ghost = _make_zip(watch / "ghost.zip", {"b.txt": b"yo"})
+
+    real_stat = Path.stat
+
+    def flaky_stat(self: Path, **kwargs):
+        if self.name == "ghost.zip":
+            raise FileNotFoundError(str(self))
+        return real_stat(self, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", flaky_stat)
+    mgr = ArtifactManager(watch_dir=watch, extract_dir=tmp_path / "out")
+    got = mgr.latest_zip()
+    assert got is not None and got.name == "stays.zip"
+
+
+def test_collect_for_task_waits_for_dir_created_after_call(tmp_path: Path):
+    """The artifact zip (and its parent dir) arrive AFTER collect starts.
+
+    Reproduces the live e2e race: tasks.run() finishes streaming stdout and
+    calls collect_for_task() before the worker's out-of-band artifact stream
+    has landed, so agentfm_artifacts/ does not exist yet at call time. The
+    collector must keep polling until the dir+zip appear, not bail to [].
+    """
+    import threading
+
+    watch = tmp_path / "agentfm_artifacts"  # deliberately absent at call time
+    mgr = ArtifactManager(watch_dir=watch, extract_dir=tmp_path / "out")
+
+    def deliver_later():
+        time.sleep(0.6)
+        watch.mkdir(parents=True, exist_ok=True)
+        _make_zip(watch / "task_xyz.zip", {"result.txt": b"ok"})
+
+    t = threading.Thread(target=deliver_later)
+    t.start()
+    try:
+        files = mgr.collect_for_task("task_xyz", timeout=5.0)
+    finally:
+        t.join()
+
+    assert [p.name for p in files] == ["result.txt"]
+
+
+def test_collect_since_waits_for_dir_created_after_call(tmp_path: Path):
+    import threading
+
+    watch = tmp_path / "agentfm_artifacts"
+    mgr = ArtifactManager(watch_dir=watch, extract_dir=tmp_path / "out")
+
+    def deliver_later():
+        time.sleep(0.6)
+        watch.mkdir(parents=True, exist_ok=True)
+        _make_zip(watch / "fresh.zip", {"a.txt": b"hi"})
+
+    t = threading.Thread(target=deliver_later)
+    t.start()
+    try:
+        files = mgr.collect_since(since=0.0, timeout=5.0)
+    finally:
+        t.join()
+
+    assert [p.name for p in files] == ["a.txt"]

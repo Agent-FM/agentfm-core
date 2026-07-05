@@ -57,7 +57,7 @@ export function SparkLine({ values, width, height, color }: SparkLineProps) {
     ctx.lineTo(width, height)
     ctx.lineTo(0, height)
     ctx.closePath()
-    ctx.fillStyle = 'rgba(34,211,238,0.08)'
+    ctx.fillStyle = 'rgba(247,147,30,0.08)'
     ctx.fill()
 
     setTip(values.length >= 2 ? { x: lastX, y: lastY } : null)

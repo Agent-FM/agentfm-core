@@ -15,7 +15,7 @@ export function Shell() {
   const active = useUIStore((s) => s.activeProject())
 
   return (
-    <div className="h-screen flex flex-col bg-bg-0 text-text-0 font-sans">
+    <div className="h-screen flex flex-col bg-transparent text-text-0 font-sans">
       <TopBar />
       <TabStrip />
       <main className="flex-1 overflow-hidden flex flex-col">

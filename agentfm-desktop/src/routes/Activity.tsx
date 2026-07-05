@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { EntryRow } from '../components/peer/EntryRow';
 import type { PeerEntry } from '../types/api';
 import { usePeerName } from '../hooks/usePeerName';
+import { shortenPeerID } from '../lib/peer';
 import { Card } from '../components/primitives/Card';
 import { SectionLabel } from '../components/primitives/SectionLabel';
 import { staggerItem } from '../lib/motion';
@@ -118,18 +119,33 @@ export default function Activity() {
                       className="px-4 py-3"
                       {...staggerItem(Math.min(rowIndex++, 12))}
                     >
-                      <button
-                        onClick={() => navigate(`/peer/${subject}`)}
-                        className="block w-full text-left text-2xs text-text-2 hover:text-accent transition-colors"
-                      >
-                        about{' '}
-                        <span className="text-text-1 font-medium">
-                          <PeerName peerId={subject} />
-                        </span>
-                        <span className="ml-2 font-mono text-text-3 tabular-nums">
-                          {subject.slice(0, 12)}…
-                        </span>
-                      </button>
+                      <div className="text-2xs">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className="inline-flex items-center gap-1 rounded bg-accent/12 text-accent px-1.5 py-0.5"
+                            title={me ?? 'this boss'}
+                          >
+                            <span className="font-bold">YOU</span>
+                            <span className="font-mono opacity-80">boss · {me ? shortenPeerID(me, 6, 4) : '…'}</span>
+                          </span>
+                          <span className="text-text-2">
+                            {entry.kind === 'Comment' ? 'commented on' : 'rated'}
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded bg-bg-2 border border-border-0 text-text-1 px-1.5 py-0.5">
+                            <span className="font-bold text-text-2">PEER</span>
+                            <span className="font-medium">
+                              <PeerName peerId={subject} />
+                            </span>
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => navigate(`/peer/${subject}`)}
+                          className="mt-1 block text-left font-mono text-text-3 break-all hover:text-accent transition-colors"
+                          title={`${subject} — open profile`}
+                        >
+                          {subject}
+                        </button>
+                      </div>
                       <EntryRow entry={entry} peerId={subject} />
                     </motion.div>
                   ))}

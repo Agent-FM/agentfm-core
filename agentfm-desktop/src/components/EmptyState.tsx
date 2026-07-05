@@ -12,7 +12,7 @@ export function EmptyState() {
         className="absolute inset-0 pointer-events-none animate-drift"
         style={{
           background:
-            'radial-gradient(circle at 20% 0%, rgba(34,211,238,.18), transparent 45%), radial-gradient(circle at 80% 100%, rgba(34,211,238,.14), transparent 45%)',
+            'radial-gradient(circle at 20% 0%, rgba(247,147,30,.18), transparent 45%), radial-gradient(circle at 80% 100%, rgba(247,147,30,.14), transparent 45%)',
         }}
       />
       <motion.div

@@ -26,10 +26,9 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => { await app?.close() })
 
-test('AgentFM wordmark shows with glow on FM', async () => {
-  const fm = page.locator('header span.text-accent.glow-text-cyan')
-  await expect(fm).toBeVisible()
-  await expect(fm).toContainText('FM')
+test('AgentFM wordmark logo is shown in the header', async () => {
+  const logo = page.locator('header img[alt="AgentFM"]')
+  await expect(logo).toBeVisible()
 })
 
 test('active tab is bolded after Cmd+2 navigation', async () => {
