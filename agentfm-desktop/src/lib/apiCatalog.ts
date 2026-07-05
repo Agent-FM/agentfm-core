@@ -424,19 +424,20 @@ export const API_CATALOG: EndpointDef[] = [
       offset: 0,
       returned: 2,
       entries: [
-        { received_at: '2026-06-20T15:50:00Z', kind: 'Rating', rater_peer_id: '12D3KooW…', rater_status: 'verified', rater_honesty_score: 0.42, score: 0.3 },
-        { received_at: '2026-06-20T15:49:00Z', kind: 'Comment', rater_peer_id: '12D3KooW…', rater_status: 'verified', rater_honesty_score: 0.42, language: 'en', text_cid: 'a1b2c3…' },
+        { received_at: '2026-06-20T15:50:00Z', kind: 'Rating', entry_hash: '9f2c4e…(64 hex)', rater_peer_id: '12D3KooW…', rater_status: 'verified', rater_honesty_score: 0.42, score: 0.3 },
+        { received_at: '2026-06-20T15:49:00Z', kind: 'Comment', entry_hash: '7a1b8d…(64 hex)', rater_peer_id: '12D3KooW…', rater_status: 'verified', rater_honesty_score: 0.42, language: 'en', text_cid: 'a1b2c3…' },
       ],
     },
     responseFields: [
       { name: 'subject / limit / offset / returned', type: 'mixed', description: 'Echoed query plus how many entries this page returned.' },
       { name: 'entries[].kind', type: 'string', description: '"Rating" or "Comment".' },
+      { name: 'entries[].entry_hash', type: 'string (hex)', description: 'Hex leaf hash of the entry — pass directly to GET /v1/peers/:peerId/proof?entry=<entry_hash> to fetch its Merkle inclusion proof.' },
       { name: 'entries[].rater_peer_id', type: 'string', description: 'Who signed the entry.' },
       { name: 'entries[].rater_status / rater_honesty_score', type: 'string / number', description: 'Whether the rater is verified, and their trust score.' },
       { name: 'entries[].score', type: 'number', description: 'Numeric rating (Rating entries; omitted for comment-only).' },
       { name: 'entries[].text_cid', type: 'string (hex)', description: 'Comment entries only — the cid of the comment body. Pass it to GET /comments/:cid to fetch the text.' },
     ],
-    notes: 'This is the only HTTP endpoint that surfaces a comment’s text_cid. Note it does NOT include a per-entry leaf hash, so it cannot supply the `entry` parameter for /proof (see that endpoint).',
+    notes: 'This is the only HTTP endpoint that surfaces a comment’s text_cid. Each entry also carries its entry_hash (the Merkle leaf hash) — pass it to GET /proof?entry= to obtain that entry’s inclusion proof.',
     sideEffect: 'none',
   },
   {
@@ -453,7 +454,7 @@ export const API_CATALOG: EndpointDef[] = [
     auth: AUTH_LOOPBACK,
     params: [
       { name: 'peerId', loc: 'path', required: true, example: '12D3KooW…', description: 'Target peer id.' },
-      { name: 'entry', loc: 'query', required: true, example: '9f2c4e…(64 hex)', description: 'A 64-character hex leaf hash of the entry to prove. NOTE: no HTTP endpoint currently returns these leaf hashes (/log omits them). Obtain the hash by computing SHA-256 over the entry’s canonical signed bytes, or via the P2P ledger-fetch protocol.' },
+      { name: 'entry', loc: 'query', required: true, example: '9f2c4e…(64 hex)', description: 'A 64-character hex leaf hash of the entry to prove. Get it from GET /v1/peers/:peerId/log — each entry now carries an entry_hash field; pass that value here.' },
     ],
     exampleResponse: {
       entry_hash: '9f2c4e…',
@@ -474,7 +475,7 @@ export const API_CATALOG: EndpointDef[] = [
       { status: '404', when: 'No entry with that hash exists in the peer’s log (entry_not_found).' },
       { status: '503', when: 'Ledger not wired on this boss (ledger_unavailable).' },
     ],
-    notes: 'There is currently no HTTP way to discover an entry’s leaf hash (/log returns rater/score/text_cid but not the hash). Until such an endpoint exists, the hash must be computed client-side or fetched over the P2P ledger protocol.',
+    notes: 'Discover an entry’s leaf hash from GET /v1/peers/:peerId/log — each entry carries an entry_hash field you can pass straight to ?entry=. Computing SHA-256 over the entry’s canonical signed bytes, or fetching over the P2P ledger protocol, remain alternatives.',
     sideEffect: 'none',
   },
   {

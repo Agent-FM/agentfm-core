@@ -13,6 +13,7 @@ package boss
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ import (
 	"sort"
 	"time"
 
+	"agentfm/internal/ledger"
 	"agentfm/internal/ledger/comments"
 	pb "agentfm/internal/ledger/pb"
 	"agentfm/internal/ledger/store"
@@ -37,6 +39,7 @@ import (
 type PeerEntry struct {
 	ReceivedAt        time.Time `json:"received_at"`
 	Kind              string    `json:"kind"` // "Rating" | "Comment"
+	EntryHash         string    `json:"entry_hash,omitempty"`
 	Rater             peer.ID   `json:"rater_peer_id"`
 	Dimension         string    `json:"dimension,omitempty"`
 	Score             float64   `json:"score,omitempty"`
@@ -80,6 +83,8 @@ func GatherPeerEntries(ctx context.Context, s *store.Store, subject peer.ID, lim
 			return
 		}
 		receivedAt := time.Unix(0, receivedAtNs)
+		leaf := ledger.EntryHash(&signed)
+		entryHashHex := hex.EncodeToString(leaf[:])
 		switch body := signed.GetBody().(type) {
 		case *pb.SignedEntry_Rating:
 			r := body.Rating
@@ -92,6 +97,7 @@ func GatherPeerEntries(ctx context.Context, s *store.Store, subject peer.ID, lim
 			entries = append(entries, PeerEntry{
 				ReceivedAt: receivedAt,
 				Kind:       "Rating",
+				EntryHash:  entryHashHex,
 				Rater:      peer.ID(r.RaterPeerId),
 				Dimension:  r.Dimension,
 				Score:      r.Score,
@@ -108,6 +114,7 @@ func GatherPeerEntries(ctx context.Context, s *store.Store, subject peer.ID, lim
 			entries = append(entries, PeerEntry{
 				ReceivedAt: receivedAt,
 				Kind:       "Comment",
+				EntryHash:  entryHashHex,
 				Rater:      peer.ID(c.RaterPeerId),
 				Language:   c.Language,
 				TextCID:    c.TextCid,
