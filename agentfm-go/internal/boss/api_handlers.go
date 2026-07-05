@@ -62,6 +62,9 @@ func (b *Boss) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
 		// keys (e.g. legacy or test-injected IDs) resolve correctly.
 		b.mu.RLock()
 		profile, hasProfile := b.activeWorkers[kp.PeerIDStr]
+		if !hasProfile {
+			profile, hasProfile = b.lastProfile[kp.PeerIDStr]
+		}
 		b.mu.RUnlock()
 		if !hasProfile {
 			profile = types.WorkerProfile{PeerID: kp.PeerIDStr}

@@ -42,6 +42,7 @@ type Boss struct {
 	node          *network.MeshNode
 	activeWorkers map[string]types.WorkerProfile
 	lastSeen      map[string]time.Time
+	lastProfile   map[string]types.WorkerProfile
 	// RWMutex because the activeWorkers/lastSeen maps are read heavily
 	// (HTTP /api/workers, /api/execute, /api/execute/async, the TUI redraw
 	// ticker) but written only when a telemetry pulse arrives. Pure-read
@@ -177,6 +178,7 @@ func NewWithOptions(node *network.MeshNode, opts Options) *Boss {
 		node:                     node,
 		activeWorkers:            make(map[string]types.WorkerProfile),
 		lastSeen:                 make(map[string]time.Time),
+		lastProfile:              make(map[string]types.WorkerProfile),
 		asyncSlots:               make(chan struct{}, MaxInflightAsyncTasks),
 		ledger:                   opts.Ledger,
 		commentSubmissionHandler: opts.CommentSubmissionHandler,
@@ -340,6 +342,7 @@ func (b *Boss) handleTelemetryProfile(profile types.WorkerProfile) {
 	_, existed := b.activeWorkers[profile.PeerID]
 	b.activeWorkers[profile.PeerID] = profile
 	b.lastSeen[profile.PeerID] = time.Now()
+	b.lastProfile[profile.PeerID] = profile
 	n := len(b.activeWorkers)
 	b.mu.Unlock()
 	metrics.WorkersOnline.Set(float64(n))
