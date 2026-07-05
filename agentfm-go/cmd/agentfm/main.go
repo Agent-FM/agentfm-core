@@ -35,6 +35,7 @@ func main() {
 	// Private Swarm & Network Flags
 	swarmKey := flag.String("swarmkey", "", "Path to private swarm.key file (optional)")
 	bootstrap := flag.String("bootstrap", "", "Custom bootstrap multiaddr (required for remote private swarms)")
+	identity := flag.String("identity", "", "Path to the worker's persistent libp2p identity key (default: ~/.agentfm/worker_identity_<agent>.key)")
 	port := flag.Int("port", 0, "Listen port (0 for random. Relays should use 4001)")
 
 	// API Gateway bind + port. Default bind is loopback so a fresh install
@@ -118,6 +119,14 @@ func main() {
 		SwarmKeyPath: *swarmKey,
 		ListenPort:   *port,
 		BootstrapURL: *bootstrap,
+	}
+
+	if *mode == "worker" {
+		idPath, err := resolveWorkerIdentityPath(cfg.AgentName, *identity)
+		if err != nil {
+			pterm.Fatal.Printfln("❌ Failed to resolve worker identity path: %v", err)
+		}
+		netCfg.IdentityPath = idPath
 	}
 
 	// Set up the structured logger BEFORE any role-specific code runs so

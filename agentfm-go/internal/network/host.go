@@ -62,13 +62,6 @@ func LoadOrGenerateIdentity(keyPath string) (crypto.PrivKey, error) {
 	return priv, nil
 }
 
-// loadOrGenerateIdentity preserves the legacy package-internal call sites
-// (createHost) that pass a mode string and want the .agentfm_<mode>_identity.key
-// naming convention. New callers should use LoadOrGenerateIdentity directly.
-func loadOrGenerateIdentity(mode string) (crypto.PrivKey, error) {
-	return LoadOrGenerateIdentity(fmt.Sprintf(".agentfm_%s_identity.key", mode))
-}
-
 // createHost assembles the libp2p Host with the correct options for this
 // role: PSK for private swarms, circuit relay in the right direction,
 // NAT port mapping, and the AutoNAT reachability probe for non-relay
@@ -81,7 +74,11 @@ func createHost(cfg Config, bootstrapAddr string) (host.Host, error) {
 		fmt.Sprintf("/ip6/::/tcp/%d", cfg.ListenPort),
 	}
 
-	privKey, err := loadOrGenerateIdentity(cfg.Mode)
+	identityPath := cfg.IdentityPath
+	if identityPath == "" {
+		identityPath = fmt.Sprintf(".agentfm_%s_identity.key", cfg.Mode)
+	}
+	privKey, err := LoadOrGenerateIdentity(identityPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load identity: %w", err)
 	}
