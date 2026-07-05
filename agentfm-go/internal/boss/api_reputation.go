@@ -260,6 +260,9 @@ func (b *Boss) handleLog(w http.ResponseWriter, r *http.Request) {
 		Returned int         `json:"returned"`
 		Entries  []PeerEntry `json:"entries"`
 	}
+	if page == nil {
+		page = []PeerEntry{}
+	}
 	writeJSON(w, http.StatusOK, peerLogResponse{
 		Subject:  peerIDStr,
 		Limit:    limit,

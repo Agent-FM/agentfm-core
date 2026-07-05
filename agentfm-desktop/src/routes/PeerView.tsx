@@ -36,7 +36,7 @@ export default function PeerView() {
   }
   if (!summary || !log) return <div className="p-6 text-text-2">No data.</div>;
 
-  const allEntries = log.entries;
+  const allEntries = log.entries ?? [];
   const ratings = allEntries.filter((e) => e.kind === 'Rating');
   const comments = allEntries.filter((e) => e.kind === 'Comment');
   const view = tab === 'all' ? allEntries : tab === 'ratings' ? ratings : comments;
