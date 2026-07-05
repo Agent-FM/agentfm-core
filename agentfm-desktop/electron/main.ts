@@ -1,5 +1,6 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, shell, nativeImage } from 'electron'
 import { join } from 'path'
+import { existsSync } from 'fs'
 import { is } from '@electron-toolkit/utils'
 import { BackendManager } from './backend-manager'
 import { registerIPC, isSafeExternalUrl } from './ipc'
@@ -7,13 +8,29 @@ import { settingsStore } from './store'
 
 let backend: BackendManager | null = null
 
+function resolveAppIcon(): Electron.NativeImage | undefined {
+  const candidates = [
+    join(__dirname, '../../build/icon.png'),
+    join(process.resourcesPath, 'build', 'icon.png'),
+  ]
+  for (const path of candidates) {
+    if (existsSync(path)) {
+      const img = nativeImage.createFromPath(path)
+      if (!img.isEmpty()) return img
+    }
+  }
+  return undefined
+}
+
 function createWindow(): void {
+  const appIcon = resolveAppIcon()
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 900,
     minHeight: 600,
     show: false,
+    icon: appIcon,
     autoHideMenuBar: true,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     backgroundColor: process.platform === 'darwin' ? '#00000000' : '#0a0e16',
@@ -45,6 +62,11 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
+  if (process.platform === 'darwin' && app.dock) {
+    const dockIcon = resolveAppIcon()
+    if (dockIcon) app.dock.setIcon(dockIcon)
+  }
+
   backend = new BackendManager({
     apiPort: settingsStore.get('apiPort'),
     reputationFloor: settingsStore.get('reputationFloor'),
