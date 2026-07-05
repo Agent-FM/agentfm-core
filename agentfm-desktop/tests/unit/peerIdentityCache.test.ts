@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { usePeerIdentityCache } from './peerIdentityCache'
+import { usePeerIdentityCache } from '../../src/lib/peerIdentityCache'
 
 describe('peerIdentityCache persistence', () => {
   beforeEach(() => {
