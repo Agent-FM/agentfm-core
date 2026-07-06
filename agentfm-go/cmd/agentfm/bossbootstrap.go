@@ -115,7 +115,8 @@ func bossOptionsFromFlags(
 		// public lighthouse; cheap insurance on a 30s budget.
 		time.Sleep(2 * time.Second)
 
-		bgCtx := context.Background()
+		bgCtx, bgCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer bgCancel()
 
 		if err := ledger.CatchUp(bgCtx, l, node.Host, node.RelayPeerID); err != nil {
 			slog.Warn("boss bootstrap: own-log catch-up against relay failed",
