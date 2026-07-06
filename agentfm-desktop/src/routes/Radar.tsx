@@ -6,15 +6,21 @@ import { HeroTitle } from '../components/primitives/HeroTitle'
 import { AgentCard } from '../components/AgentCard'
 import { useWorkers } from '../lib/query'
 import { useUIStore } from '../lib/store'
+import { usePeerIdentityCache } from '../lib/peerIdentityCache'
+import { hasResolvableName } from '../lib/displayName'
 import { EmptyRadar } from '../components/EmptyRadar'
 import { staggerItem } from '../lib/motion'
 
 export default function Radar() {
   const { data, isPending, error } = useWorkers(true)
-  const agents = data?.agents ?? []
+  const cache = usePeerIdentityCache((s) => s.byPeerId)
   const searchTerm = useUIStore((s) => s.searchTerm)
   const filterTrustedOnly = useUIStore((s) => s.filterTrustedOnly)
   const [hideOffline, setHideOffline] = useState(false)
+
+  const agents = (data?.agents ?? []).filter(
+    (a) => a.online || hasResolvableName(a, cache[a.peer_id]),
+  )
 
   const filtered = agents.filter((a) => {
     if (hideOffline && !a.online) return false

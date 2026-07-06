@@ -8,6 +8,17 @@ interface NameSource {
   peer_id: string
 }
 
+export function hasResolvableName(w: NameSource, cached?: PeerIdentity): boolean {
+  return !!(
+    w.name?.trim() ||
+    cached?.name?.trim() ||
+    w.agent_capability?.trim() ||
+    cached?.agent_capability?.trim() ||
+    w.agent_image_ref?.trim() ||
+    cached?.agent_image_ref?.trim()
+  )
+}
+
 export function displayName(w: NameSource, cached?: PeerIdentity): string {
   if (w.name && w.name.trim()) return w.name.trim()
   if (cached?.name && cached.name.trim()) return cached.name.trim()
