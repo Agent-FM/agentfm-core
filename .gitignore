@@ -36,3 +36,12 @@ graphify-out
 superpowers
 walkthrough
 .superpowers
+
+# Build artifacts (ship via GitHub Releases, not VCS)
+agentfm-go/dist/
+agentfm-go/agentfm
+agentfm-go/relay
+
+# Python bytecode
+__pycache__/
+*.pyc
