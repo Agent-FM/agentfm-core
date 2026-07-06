@@ -43,6 +43,9 @@ type Boss struct {
 	activeWorkers map[string]types.WorkerProfile
 	lastSeen      map[string]time.Time
 	lastProfile   map[string]types.WorkerProfile
+
+	readRecomputeMu   sync.Mutex
+	lastReadRecompute time.Time
 	// RWMutex because the activeWorkers/lastSeen maps are read heavily
 	// (HTTP /api/workers, /api/execute, /api/execute/async, the TUI redraw
 	// ticker) but written only when a telemetry pulse arrives. Pure-read
