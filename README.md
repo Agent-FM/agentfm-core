@@ -123,6 +123,23 @@ Tighten the dispatch gate with `--reputation-floor=-0.3`, or run a fully isolate
 
 ---
 
+## Modes — one binary, `-mode` picks the role
+
+Every role ships in the same `agentfm` binary, and each has its own flags (`agentfm --help` for the full list). `-swarmkey` + `-bootstrap` make any of them join a private swarm.
+
+| Mode | Role | Example |
+|---|---|---|
+| `worker` | Run your agent in a Podman sandbox | `agentfm -mode worker -agentdir ./a -image a:v1 -agent "My Agent" -model llama3.2 -maxtasks 4` |
+| `api` | Headless HTTP + OpenAI gateway | `agentfm -mode api -apiport 8080 -reputation-floor -0.3` |
+| `boss` | Interactive TUI dispatcher | `agentfm -mode boss` |
+| `relay` | Lighthouse — Circuit Relay v2 + DHT + archive ledger | `agentfm -mode relay -port 4001 -swarmkey ./swarm.key` |
+| `witness` | Ledger-only replica for offline catch-up | `agentfm -mode witness -swarmkey ./swarm.key -bootstrap <relay-multiaddr>` |
+| `genkey` | Generate a private-swarm key | `agentfm -mode genkey` |
+
+Full per-flag reference: [docs/cli.md](docs/cli.md).
+
+---
+
 ## Documentation
 
 | | |
