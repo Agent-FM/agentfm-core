@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import { EventEmitter } from 'node:events'
 import { Logger } from './logger'
+import { sanitizePort } from './validate'
 
 export interface BackendConfig {
   apiPort: number
@@ -296,8 +297,15 @@ export class BackendManager extends EventEmitter {
 
   private killStaleOnPort(bin: string, port: number): void {
     if (process.platform === 'win32') return
+    let safePort: number
     try {
-      const out = execSync(`lsof -nP -i :${port} -sTCP:LISTEN -t || true`, {
+      safePort = sanitizePort(port)
+    } catch {
+      this.logger.info(`killStaleOnPort: skipping sweep, invalid port ${JSON.stringify(port)}`)
+      return
+    }
+    try {
+      const out = execSync(`lsof -nP -i :${safePort} -sTCP:LISTEN -t || true`, {
         encoding: 'utf8',
         timeout: 1500,
       }).trim()
@@ -314,7 +322,7 @@ export class BackendManager extends EventEmitter {
             .toString()
             .trim()
           if (!cmd.includes(bin) && !cmd.includes('agentfm')) continue
-          this.logger.info(`Killing stale backend pid ${pid} on port ${port} (${cmd.slice(0, 80)})`)
+          this.logger.info(`Killing stale backend pid ${pid} on port ${safePort} (${cmd.slice(0, 80)})`)
           try {
             process.kill(pid, 'SIGKILL')
           } catch {

@@ -2,6 +2,7 @@ import { ipcMain, shell, BrowserWindow } from 'electron'
 import { resolve, sep } from 'node:path'
 import { BackendManager } from './backend-manager'
 import { settingsStore } from './store'
+import { sanitizePort } from './validate'
 
 const SAFE_EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:'])
 
@@ -16,14 +17,20 @@ export function isSafeExternalUrl(url: string): boolean {
 export function registerIPC(backend: BackendManager): void {
   // Backend controls
   ipcMain.handle('backend:health', () => backend.health())
-  ipcMain.handle('backend:restart', (_event, cfg) => backend.restart(cfg))
+  ipcMain.handle('backend:restart', (_event, cfg) => {
+    if (cfg && typeof cfg === 'object' && (cfg as { apiPort?: unknown }).apiPort !== undefined) {
+      ;(cfg as { apiPort: number }).apiPort = sanitizePort((cfg as { apiPort: unknown }).apiPort)
+    }
+    return backend.restart(cfg)
+  })
   ipcMain.handle('backend:logs', (_event, n?: number) => backend.logs(n))
 
   // Persistent settings
   ipcMain.handle('settings:get', (_event, key: string) => settingsStore.get(key as never))
-  ipcMain.handle('settings:set', (_event, key: string, value: unknown) =>
-    settingsStore.set(key as never, value as never),
-  )
+  ipcMain.handle('settings:set', (_event, key: string, value: unknown) => {
+    const safeValue = key === 'apiPort' ? sanitizePort(value) : value
+    settingsStore.set(key as never, safeValue as never)
+  })
   ipcMain.handle('settings:delete', (_event, key: string) => {
     settingsStore.delete(key as never)
   })
