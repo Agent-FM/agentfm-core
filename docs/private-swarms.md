@@ -5,12 +5,12 @@ Connect your office laptop to your home GPU PC behind strict corporate firewalls
 ## Three-step setup
 
 ```bash
-# 1. On a $5/mo VPS — boot a relay
-agentfm-relay -port 4001
-# (prints a permanent multiaddr backed by relay_identity.key)
+# 1. Generate a swarm key (distribute it out-of-band to every node)
+agentfm -mode genkey  # writes ./swarm.key
 
-# 2. On any laptop — generate a swarm key
-agentfm -mode genkey  # writes ./swarm.key — distribute out-of-band
+# 2. On a $5/mo VPS — boot a relay with that key
+agentfm -mode relay -port 4001 -swarmkey ./swarm.key
+# (prints a permanent multiaddr backed by ~/.agentfm/relay_identity.key)
 
 # 3. Join nodes with both -swarmkey and -bootstrap
 agentfm -mode worker -swarmkey ./swarm.key \
@@ -46,7 +46,7 @@ agentfm -mode worker -swarmkey ./swarm.key \
 ## Operational checklist
 
 - [ ] Swarm key is `0600`. AgentFM warns at load time if it's group/world-readable.
-- [ ] Relay binary runs the SAME swarm key as the workers/bosses joining it.
+- [ ] The relay (`agentfm -mode relay`) runs the SAME swarm key as the workers/bosses joining it.
 - [ ] Public-mesh discovery is disabled when both `-swarmkey` AND `-bootstrap` are set — the node never reaches the public lighthouse.
 - [ ] Boss nodes joining the private mesh ALSO need `-swarmkey` and `-bootstrap`.
 - [ ] If a key is compromised, generate a new one (`agentfm -mode genkey`) and redistribute — every node must rebuild before it can re-join.

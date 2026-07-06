@@ -15,6 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/host/autonat"
+	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 )
 
 // LoadOrGenerateIdentity returns the persistent Ed25519 private key at
@@ -102,7 +103,11 @@ func createHost(cfg Config, bootstrapAddr string) (host.Host, error) {
 
 	if cfg.Mode == "relay" {
 		fmt.Println("📡 Enabling Circuit Relay v2 Service (Anchor Node)")
-		options = append(options, libp2p.EnableRelayService())
+		options = append(options,
+			libp2p.EnableRelayService(relay.WithInfiniteLimits()),
+			libp2p.ForceReachabilityPublic(),
+			libp2p.EnableNATService(),
+		)
 	} else {
 		options = append(options, libp2p.EnableRelay(), libp2p.EnableHolePunching())
 
@@ -136,7 +141,7 @@ func createHost(cfg Config, bootstrapAddr string) (host.Host, error) {
 // discoverable) while Boss and Relay nodes run it in server mode so they
 // help route other peers.
 func initRoutingAndPubSub(ctx context.Context, h host.Host, isWorker bool) (*pubsub.PubSub, *dht.IpfsDHT, error) {
-	ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithFloodPublish(true))
+	ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithFloodPublish(true), pubsub.WithPeerExchange(true))
 	if err != nil {
 		return nil, nil, err
 	}

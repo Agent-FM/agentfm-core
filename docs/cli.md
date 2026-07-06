@@ -1,6 +1,6 @@
 # CLI Reference
 
-The `agentfm` binary is multi-mode; the `agentfm-relay` binary is a dedicated lighthouse.
+The `agentfm` binary is multi-mode — one binary covers every role (worker, api, boss, relay, witness) via `-mode`.
 
 ## `agentfm`
 
@@ -36,7 +36,7 @@ The `agentfm` binary is multi-mode; the `agentfm-relay` binary is a dedicated li
 | `worker` | Run an agent container; advertise capabilities; accept task streams. |
 | `boss` | Interactive pterm TUI for browsing the mesh and dispatching tasks. |
 | `api` | Headless HTTP gateway exposing `/api/*` and OpenAI-compatible `/v1/*`. |
-| `relay` | Persistent lighthouse + circuit-relay; same role as the dedicated `agentfm-relay` binary. |
+| `relay` | Persistent lighthouse: Circuit Relay v2 (infinite limits) + DHT server + telemetry routing + archive ledger. |
 | `test` | Local Podman-only sandbox dry-run; bypasses libp2p entirely. |
 | `genkey` | Generate a 256-bit `swarm.key` for private-mesh PSK. |
 
@@ -78,17 +78,17 @@ Latest:
 The `Honesty:` row reflects the EigenTrust-lite derived score, updated
 after each hourly aggregate window. Raw ratings are listed below it.
 
-## `agentfm-relay`
+## `agentfm -mode relay`
 
-A dedicated relay binary for permanent lighthouse deploys (e.g. a $5/mo VPS). Identity persists in `relay_identity.key` so the multiaddr stays stable across restarts.
+Runs a permanent lighthouse — the single relay path (there is no separate relay binary). It enables Circuit Relay v2 with infinite reservation limits, a DHT in server mode, telemetry routing, and a full archive ledger so a fresh Boss can catch up even when every Boss is offline. Ideal for a $5/mo VPS.
 
 | Flag | Default | Description |
 |---|:---:|---|
-| `-port` | `4001` | TCP listen port |
+| `-port` | `0` | TCP listen port (use `4001` for a stable lighthouse) |
 | `-swarmkey` | (none) | Optional PSK for private-mesh mode |
-| `-identity` | `relay_identity.key` | Path to persistent Ed25519 identity file |
+| `-identity` | `~/.agentfm/relay_identity.key` | Persistent Ed25519 identity; keeps the multiaddr stable across restarts regardless of launch dir |
 | `-prom-listen` | `127.0.0.1:9091` | Prometheus `/metrics` bind. `-` disables |
-| `-log-format` | `auto` | Same as `agentfm` |
+| `-log-format` | `auto` | Same as other modes |
 | `-log-level` | `info` | Same as `agentfm` |
 
 ## Environment variables

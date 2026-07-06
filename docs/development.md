@@ -4,9 +4,8 @@
 
 ```
 agentfm-core/
-├── agentfm-go/         # Core Go daemon (agentfm + relay binaries)
-│   ├── cmd/agentfm/    # Multi-mode dispatcher (boss/worker/relay/api/test/genkey)
-│   ├── cmd/relay/      # Dedicated lighthouse binary
+├── agentfm-go/         # Core Go daemon (single agentfm binary)
+│   ├── cmd/agentfm/    # Multi-mode dispatcher (boss/worker/relay/witness/api/test/genkey)
 │   ├── internal/boss/  # HTTP gateway + TUI + auth + OpenAI translation
 │   ├── internal/worker/    # Sandbox runner + telemetry
 │   ├── internal/network/   # libp2p plumbing + protocol constants

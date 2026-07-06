@@ -129,6 +129,10 @@ func main() {
 		netCfg.IdentityPath = idPath
 	}
 
+	if *mode == "relay" {
+		netCfg.IdentityPath = resolveRelayIdentityPath(*identity)
+	}
+
 	// Set up the structured logger BEFORE any role-specific code runs so
 	// every component-tagged log line has a consistent schema. The component
 	// tag is the same as the mode for traceability.
@@ -212,37 +216,6 @@ func runTestMode(ctx context.Context, cfg worker.Config, testPrompt string) {
 	if err := worker.RunLocalTest(testCtx, cfg, promptToUse); err != nil {
 		pterm.Fatal.Printfln("❌ Local test failed: %v", err)
 	}
-}
-
-// runRelayMode brings up a DHT-server mesh node without any worker or
-// boss responsibilities. Useful for a developer who wants to run their
-// own lighthouse on a spare VPS instead of using the public one.
-func runRelayMode(ctx context.Context, netCfg network.Config, promListen string) {
-	node, err := network.Setup(ctx, netCfg)
-	if err != nil {
-		pterm.Fatal.Println(err)
-	}
-
-	relayCtx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-
-	if promListen != "" {
-		go func() {
-			if err := metrics.Serve(relayCtx, promListen); err != nil {
-				pterm.Error.Printfln("metrics server: %v", err)
-			}
-		}()
-		pterm.Success.Printfln("Metrics server: http://%s/metrics", promListen)
-	}
-
-	pterm.Success.Println("Relay Node Active. Press Ctrl+C to shut down.")
-	pterm.Info.Println("📌 To connect nodes to this private swarm, start them with:")
-	for _, addr := range node.Host.Addrs() {
-		fmt.Printf("agentfm -mode boss -swarmkey ./swarm.key -bootstrap %s/p2p/%s\n", addr.String(), node.Host.ID().String())
-	}
-
-	<-relayCtx.Done()
-	fmt.Println("\nShutting down relay...")
 }
 
 func runWorkerMode(ctx context.Context, netCfg network.Config, cfg worker.Config, promListen string) {
