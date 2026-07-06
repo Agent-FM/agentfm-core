@@ -138,12 +138,6 @@ const MODES: Mode[] = [
     ],
   },
   {
-    key: 'witness',
-    purpose: 'Ledger-only replica — persists the trust ledger and serves catch-up so a fresh boss recovers it when every boss is offline. No API, no Podman. (A relay already does this too.)',
-    example: `agentfm -mode witness -swarmkey ./swarm.key \\
-  -bootstrap /ip4/<host>/tcp/4001/p2p/<relay-id>`,
-  },
-  {
     key: 'genkey',
     purpose: 'Generate a private-swarm key (a shared secret you distribute out-of-band).',
     example: `agentfm -mode genkey        # writes ./swarm.key`,

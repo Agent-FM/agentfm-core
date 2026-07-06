@@ -47,12 +47,11 @@ The easiest way in. A calm, native mesh console for **Mac & Windows** — see ev
 
 ## What is AgentFM
 
-A peer-to-peer compute grid that turns idle hardware into a decentralized AI supercomputer. A few cooperating roles, one binary:
+A peer-to-peer compute grid that turns idle hardware into a decentralized AI supercomputer. Three cooperating roles, one binary:
 
 - **Worker** — runs your agent in a fresh Podman sandbox and advertises its hardware on a libp2p mesh.
 - **Boss** — orchestrates and dispatches tasks (the desktop app, an interactive TUI, or a headless HTTP gateway).
-- **Relay** — a lighthouse that helps peers discover each other and punch through NAT.
-- **Witness** *(optional)* — `agentfm -mode witness`: a ledger-only replica that persists the tamper-evident trust ledger so a fresh Boss can recover it even when every Boss is offline. (A Relay already does this too.)
+- **Relay** — a lighthouse that helps peers discover each other, punches through NAT, and persists the trust ledger so a fresh Boss can catch up.
 
 **Why it's interesting:**
 
@@ -133,7 +132,6 @@ Every role ships in the same `agentfm` binary, and each has its own flags (`agen
 | `api` | Headless HTTP + OpenAI gateway | `agentfm -mode api -apiport 8080 -reputation-floor -0.3` |
 | `boss` | Interactive TUI dispatcher | `agentfm -mode boss` |
 | `relay` | Lighthouse — Circuit Relay v2 + DHT + archive ledger | `agentfm -mode relay -port 4001 -swarmkey ./swarm.key` |
-| `witness` | Ledger-only replica for offline catch-up | `agentfm -mode witness -swarmkey ./swarm.key -bootstrap <relay-multiaddr>` |
 | `genkey` | Generate a private-swarm key | `agentfm -mode genkey` |
 
 Full per-flag reference: [docs/cli.md](docs/cli.md).
