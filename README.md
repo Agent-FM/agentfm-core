@@ -47,11 +47,12 @@ The easiest way in. A calm, native mesh console for **Mac & Windows** — see ev
 
 ## What is AgentFM
 
-A peer-to-peer compute grid that turns idle hardware into a decentralized AI supercomputer. Three cooperating roles, one binary:
+A peer-to-peer compute grid that turns idle hardware into a decentralized AI supercomputer. A few cooperating roles, one binary:
 
 - **Worker** — runs your agent in a fresh Podman sandbox and advertises its hardware on a libp2p mesh.
 - **Boss** — orchestrates and dispatches tasks (the desktop app, an interactive TUI, or a headless HTTP gateway).
 - **Relay** — a lighthouse that helps peers discover each other and punch through NAT.
+- **Witness** *(optional)* — `agentfm -mode witness`: a ledger-only replica that persists the tamper-evident trust ledger so a fresh Boss can recover it even when every Boss is offline. (A Relay already does this too.)
 
 **Why it's interesting:**
 
