@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -13,6 +14,37 @@ import (
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/multiformats/go-multiaddr"
 )
+
+// relayAddrDisallowed reports whether a candidate relay multiaddr points
+// at an internal address the boss must not be tricked into dialing (an
+// SSRF port-scan oracle when the API is exposed off-host). Loopback is
+// allowed — it is the desktop's own local relay — as is any global
+// unicast address (real VPS relays). Private (RFC1918/ULA), link-local,
+// unspecified and multicast ranges are refused. A /dns-based addr has no
+// literal IP here and is left to the bounded dial.
+func relayAddrDisallowed(maddr multiaddr.Multiaddr) bool {
+	var ipStr string
+	if v, err := maddr.ValueForProtocol(multiaddr.P_IP4); err == nil {
+		ipStr = v
+	} else if v, err := maddr.ValueForProtocol(multiaddr.P_IP6); err == nil {
+		ipStr = v
+	}
+	if ipStr == "" {
+		return false
+	}
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+	if ip.IsLoopback() {
+		return false
+	}
+	return ip.IsPrivate() ||
+		ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() ||
+		ip.IsUnspecified() ||
+		ip.IsMulticast()
+}
 
 // relayTestRequest is the JSON body for POST /api/relay/test.
 type relayTestRequest struct {
@@ -79,6 +111,14 @@ func (b *Boss) handleRelayTest(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, relayTestResponse{
 			OK:    false,
 			Error: "multiaddr missing /p2p/<peer> suffix: " + err.Error(),
+		})
+		return
+	}
+
+	if relayAddrDisallowed(maddr) {
+		writeJSON(w, http.StatusOK, relayTestResponse{
+			OK:    false,
+			Error: "relay address is in a disallowed (private/link-local) range",
 		})
 		return
 	}
