@@ -24,6 +24,7 @@ import httpx
 from pydantic import BaseModel
 
 from .._transport import (
+    IDEMPOTENT_METHODS,
     raise_for_response,
     retry_async,
     retry_sync,
@@ -63,6 +64,7 @@ class SyncResource:
                 json=json,
                 params=params,
                 retries=self._client.retries,
+                idempotent=method.upper() in IDEMPOTENT_METHODS,
             )
         except httpx.UnsupportedProtocol as exc:
             # Programmer / config error (e.g. gateway_url="ftp://x" or a
@@ -111,6 +113,7 @@ class AsyncResource:
                 json=json,
                 params=params,
                 retries=self._client.retries,
+                idempotent=method.upper() in IDEMPOTENT_METHODS,
             )
         except httpx.UnsupportedProtocol as exc:
             raise InvalidRequestError(
