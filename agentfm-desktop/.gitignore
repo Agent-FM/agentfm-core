@@ -13,3 +13,4 @@ resources/
 *.tsbuildinfo
 test-results/
 playwright-report/
+dist
