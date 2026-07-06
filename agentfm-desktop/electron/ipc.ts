@@ -2,7 +2,7 @@ import { ipcMain, shell, BrowserWindow } from 'electron'
 import { resolve, sep } from 'node:path'
 import { BackendManager } from './backend-manager'
 import { settingsStore } from './store'
-import { sanitizePort } from './validate'
+import { sanitizePort, isValidMultiaddr } from './validate'
 
 const SAFE_EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:'])
 
@@ -18,8 +18,16 @@ export function registerIPC(backend: BackendManager): void {
   // Backend controls
   ipcMain.handle('backend:health', () => backend.health())
   ipcMain.handle('backend:restart', (_event, cfg) => {
-    if (cfg && typeof cfg === 'object' && (cfg as { apiPort?: unknown }).apiPort !== undefined) {
-      ;(cfg as { apiPort: number }).apiPort = sanitizePort((cfg as { apiPort: unknown }).apiPort)
+    if (cfg && typeof cfg === 'object') {
+      const c = cfg as { apiPort?: unknown; relayMultiaddr?: unknown }
+      if (c.apiPort !== undefined) {
+        ;(cfg as { apiPort: number }).apiPort = sanitizePort(c.apiPort)
+      }
+      if (c.relayMultiaddr != null && c.relayMultiaddr !== '') {
+        if (!isValidMultiaddr(c.relayMultiaddr)) {
+          throw new Error(`invalid relayMultiaddr: ${JSON.stringify(c.relayMultiaddr)}`)
+        }
+      }
     }
     return backend.restart(cfg)
   })
@@ -28,7 +36,16 @@ export function registerIPC(backend: BackendManager): void {
   // Persistent settings
   ipcMain.handle('settings:get', (_event, key: string) => settingsStore.get(key as never))
   ipcMain.handle('settings:set', (_event, key: string, value: unknown) => {
-    const safeValue = key === 'apiPort' ? sanitizePort(value) : value
+    let safeValue = value
+    if (key === 'apiPort') {
+      safeValue = sanitizePort(value)
+    } else if (key === 'relayMultiaddr') {
+      if (value != null && value !== '') {
+        if (!isValidMultiaddr(value)) {
+          throw new Error(`invalid relayMultiaddr: ${JSON.stringify(value)}`)
+        }
+      }
+    }
     settingsStore.set(key as never, safeValue as never)
   })
   ipcMain.handle('settings:delete', (_event, key: string) => {
