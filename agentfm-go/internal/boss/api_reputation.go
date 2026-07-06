@@ -218,7 +218,12 @@ func (b *Boss) handleLog(w http.ResponseWriter, r *http.Request) {
 	if limit > 500 {
 		limit = 500
 	}
-	offset := int(parseUintQuery(r, "offset", 0))
+	offsetU := parseUintQuery(r, "offset", 0)
+	const maxOffset = 1_000_000
+	if offsetU > maxOffset {
+		offsetU = maxOffset
+	}
+	offset := int(offsetU)
 
 	ctx := r.Context()
 
