@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"sync"
@@ -76,6 +77,31 @@ type apiWorker struct {
 	LastSeen             *time.Time `json:"last_seen,omitempty"`
 }
 
+// originAllowed reports whether a request Origin may perform a
+// state-changing call. A missing Origin (server-to-server, same-origin)
+// and the opaque "null" origin (Electron file:// renderer) are allowed,
+// as are loopback origins (desktop dev server, local tools). Any other
+// http(s) origin is a cross-site browser context and is refused on
+// unsafe methods — the token-less loopback boss would otherwise be
+// drivable by any web page the user visits (CSRF).
+func originAllowed(origin string) bool {
+	if origin == "" || origin == "null" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	if u.Scheme == "file" {
+		return true
+	}
+	switch u.Hostname() {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	}
+	return false
+}
+
 // corsMiddleware wraps standard handlers to easily attach headers
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -86,6 +112,13 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
+		}
+
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			if !originAllowed(r.Header.Get("Origin")) {
+				http.Error(w, "cross-origin request refused", http.StatusForbidden)
+				return
+			}
 		}
 
 		next.ServeHTTP(w, r)
