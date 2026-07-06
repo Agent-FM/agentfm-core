@@ -1,0 +1,100 @@
+@import './tokens.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; margin: 0; }
+html { background: theme('colors.bg.0'); }
+body {
+  /* Translucent base so macOS window vibrancy shows through as subtle
+     material; on platforms without vibrancy the solid html bg backs it. */
+  background: rgba(10, 14, 22, 0.72);
+  color: theme('colors.text.0');
+  font-family: theme('fontFamily.sans');
+  font-size: 16.5px;
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+:focus-visible {
+  outline: 2px solid theme('colors.accent.DEFAULT');
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Smooth scrolling for chat / lists */
+* { scroll-behavior: smooth; }
+
+/* Subtle scrollbar that fits the dark theme */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: theme('colors.border.1');
+  border-radius: 999px;
+  border: 2px solid theme('colors.bg.0');
+}
+::-webkit-scrollbar-thumb:hover { background: theme('colors.text.3'); }
+
+/* Hide scrollbar where we want a clean overflow (e.g. tab strip) */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
+/* ---------- Glassmorphism surfaces (2026-06-14 redesign) ---------- */
+.glass {
+  background: linear-gradient(150deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(255,255,255,.09);
+  box-shadow: 0 8px 32px -12px rgba(0,0,0,.65), inset 0 1px 0 0 rgba(255,255,255,.08);
+}
+.glass-strong {
+  background: linear-gradient(150deg, rgba(255,255,255,.09), rgba(255,255,255,.03));
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 16px 48px -16px rgba(0,0,0,.7), inset 0 1px 0 0 rgba(255,255,255,.1);
+}
+.glass-bar {
+  background: rgba(12,16,24,.55);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+}
+/* Diagonal light sheen overlay for glass cards */
+.glass-sheen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  overflow: hidden;
+  background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,.10) 48%, transparent 60%);
+  background-size: 250% 100%;
+  animation: sheen 6s ease-in-out infinite;
+}
+
+@keyframes radar-sweep {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes sheen {
+  0%        { transform: translateX(-150%) skewX(-12deg); }
+  60%, 100% { transform: translateX(250%) skewX(-12deg); }
+}
+@keyframes aurora {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: .9; }
+  50%      { transform: translate(24px, -20px) scale(1.08); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse-cyan,
+  .animate-shimmer, .animate-drift, .animate-float,
+  .animate-blink, .animate-pulse,
+  .animate-radar-sweep,
+  .animate-sheen, .animate-aurora {
+    animation: none !important;
+  }
+  .glass-sheen::after { animation: none !important; display: none; }
+}

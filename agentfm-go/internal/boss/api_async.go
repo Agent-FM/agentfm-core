@@ -124,6 +124,8 @@ func (b *Boss) asyncExecuteHandler(rootCtx context.Context, wg *sync.WaitGroup) 
 		// ack write (client hung up between header and body) leaves the
 		// background task running so a webhook delivery can still fire,
 		// rather than silently dropping committed work.
+		b.expectArtifact(taskID, peerID)
+
 		taskCtx, cancelTask := context.WithTimeout(rootCtx, network.TaskExecutionTimeout)
 		wg.Add(1)
 		go func() {

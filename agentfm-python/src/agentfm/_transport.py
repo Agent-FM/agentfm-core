@@ -53,6 +53,15 @@ DEFAULT_USER_AGENT = "agentfm-python"
 # Matches the OpenAI Python SDK's retry policy.
 RETRY_STATUSES: frozenset[int] = frozenset({408, 429, 500, 502, 503, 504})
 
+# HTTP methods that are safe to re-issue after a 5xx response — the server
+# may have processed the request before it errored, so only idempotent
+# methods can be retried on a response status. Non-idempotent methods (POST,
+# PATCH) are still retried on transport-level failures (see
+# RETRYABLE_EXCEPTIONS), where the request likely never reached the server.
+IDEMPOTENT_METHODS: frozenset[str] = frozenset(
+    {"GET", "HEAD", "PUT", "DELETE", "OPTIONS", "TRACE"}
+)
+
 # Transient httpx exception classes worth retrying. Includes mid-stream
 # disconnects (RemoteProtocolError — HAProxy idle drop, gateway restart) +
 # write-side blips + pool exhaustion. _request wraps the broader
@@ -207,6 +216,7 @@ def retry_sync(
     retries: int = 3,
     backoff: float = 0.5,
     on: tuple[type[BaseException], ...] = RETRYABLE_EXCEPTIONS,
+    idempotent: bool = True,
     **kwargs: Any,
 ) -> R:
     """Run ``fn`` with exponential backoff on transient failures.
@@ -214,7 +224,10 @@ def retry_sync(
     Retries on:
     * Listed exception types (default: connection / read errors).
     * For ``fn`` that returns ``httpx.Response``: status codes in
-      :data:`RETRY_STATUSES` (408, 429, 5xx).
+      :data:`RETRY_STATUSES` (408, 429, 5xx) — only when ``idempotent`` is
+      ``True``. A non-idempotent call (POST) is never retried on a response
+      status, since the server may have processed it before erroring; it is
+      still retried on the transport-level failures in ``on``.
 
     Backoff is exponential with random jitter to avoid thundering-herd retries
     when a gateway recovers from overload.
@@ -227,7 +240,8 @@ def retry_sync(
         except on as exc:
             last_exc = exc
         else:
-            if not _should_retry_response(result if isinstance(result, httpx.Response) else None):
+            resp = result if isinstance(result, httpx.Response) else None
+            if not (idempotent and _should_retry_response(resp)):
                 return result
             last_resp = result
             last_exc = None
@@ -252,6 +266,7 @@ async def retry_async(
     retries: int = 3,
     backoff: float = 0.5,
     on: tuple[type[BaseException], ...] = RETRYABLE_EXCEPTIONS,
+    idempotent: bool = True,
     **kwargs: Any,
 ) -> R:
     last_exc: BaseException | None = None
@@ -262,7 +277,8 @@ async def retry_async(
         except on as exc:
             last_exc = exc
         else:
-            if not _should_retry_response(result if isinstance(result, httpx.Response) else None):
+            resp = result if isinstance(result, httpx.Response) else None
+            if not (idempotent and _should_retry_response(resp)):
                 return result
             last_resp = result
             last_exc = None
@@ -285,6 +301,7 @@ __all__ = [
     "DEFAULT_LIMITS",
     "DEFAULT_TIMEOUT",
     "DEFAULT_USER_AGENT",
+    "IDEMPOTENT_METHODS",
     "STREAMING_TIMEOUT",
     "make_async_client",
     "make_client",

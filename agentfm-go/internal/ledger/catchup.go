@@ -199,6 +199,12 @@ func CatchUp(ctx context.Context, local Ledger, h host.Host, relayPID peer.ID) e
 
 	const pageSize = uint64(1000)
 	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		startIdx := lastIdx
 		entries, err := FetchClient(ctx, h, relayPID, lastIdx+1, pageSize)
 		if err != nil {
 			return err
@@ -223,6 +229,12 @@ func CatchUp(ctx context.Context, local Ledger, h host.Host, relayPID peer.ID) e
 		}
 		if lastIdx >= relayHead.TreeSize {
 			break
+		}
+		// A full page that did not advance the cursor is a malicious
+		// relay stalling the walk; without this guard the loop livelocks
+		// against an attacker-chosen huge TreeSize. Mirrors CatchUpInbox.
+		if lastIdx <= startIdx {
+			return fmt.Errorf("catchup: relay served a full page that did not advance past idx %d — protocol violation", startIdx)
 		}
 	}
 	slog.Debug("catchup: complete",

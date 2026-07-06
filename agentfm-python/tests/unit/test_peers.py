@@ -338,3 +338,32 @@ async def test_async_peers_comment_body_returns_string():
             body = await c.peers.comment_body("12D3KooWA", "cid42")
 
     assert body == "Async comment body"
+
+
+# ---------------------------------------------------------------------------
+# Error translation: SDK exceptions, never raw httpx errors
+# ---------------------------------------------------------------------------
+
+
+def test_peers_get_404_raises_agentfm_error():
+    import pytest
+
+    from agentfm.exceptions import AgentFMError
+
+    with respx.mock(base_url=GATEWAY, assert_all_called=True) as router:
+        router.get("/v1/peers/12D3KooWX").mock(
+            return_value=Response(404, text="peer not found")
+        )
+        with AgentFMClient(gateway_url=GATEWAY) as c, pytest.raises(AgentFMError):
+            c.peers.get("12D3KooWX")
+
+
+def test_peers_list_500_raises_agentfm_error():
+    import pytest
+
+    from agentfm.exceptions import AgentFMError
+
+    with respx.mock(base_url=GATEWAY, assert_all_called=True) as router:
+        router.get("/api/workers").mock(return_value=Response(500, text="boom"))
+        with AgentFMClient(gateway_url=GATEWAY) as c, pytest.raises(AgentFMError):
+            c.peers.list()

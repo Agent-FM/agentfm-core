@@ -145,6 +145,12 @@ func (e *Engine) Recompute(ctx context.Context, s *store.Store) (float64, error)
 		}
 		raterID := peer.ID(r.RaterPeerId).String()
 		subjectID := peer.ID(r.SubjectPeerId).String()
+		if raterID == subjectID {
+			return nil // self-ratings carry no trust signal (M6)
+		}
+		if math.IsNaN(r.Score) || math.IsInf(r.Score, 0) {
+			return nil // non-finite scores poison the fixed-point (M5)
+		}
 		ageDays := now.Sub(time.Unix(0, r.TimestampUnixNs)).Hours() / 24.0
 		if ageDays < 0 {
 			ageDays = 0

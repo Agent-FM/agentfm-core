@@ -461,6 +461,10 @@ func (b *Boss) handleSelfComment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if req.Rating != nil && b.reputationEngine != nil && b.readStore != nil {
+		_, _ = b.reputationEngine.Recompute(r.Context(), b.readStore)
+	}
+
 	writeJSON(w, http.StatusCreated, CommentSubmitResponse{
 		CID:        comments.CIDString(cid),
 		LedgerHash: hex.EncodeToString(hash[:]),

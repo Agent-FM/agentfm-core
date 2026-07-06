@@ -18,14 +18,6 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 )
 
-func (w *Worker) truncateWords(text string, maxWords int) string {
-	words := strings.Fields(text)
-	if len(words) <= maxWords {
-		return text
-	}
-	return strings.Join(words[:maxWords], " ") + "..."
-}
-
 func getGPUStats() (hasGPU bool, usedGB float64, totalGB float64, usagePct float64) {
 	// 1s ceiling per probe so a wedged nvidia-smi (driver hang, GPU reset
 	// in progress) cannot block the 2s telemetry tick. Without this, the
@@ -87,7 +79,10 @@ func (w *Worker) startTelemetry(ctx context.Context) {
 	}
 	defer func() { _ = topic.Close() }()
 
-	safeDesc := w.truncateWords(w.config.AgentDesc, 50)
+	safeDesc := w.config.AgentDesc
+	if len(safeDesc) > 3000 {
+		safeDesc = safeDesc[:3000]
+	}
 	totalCores := runtime.NumCPU()
 
 	// Sensor / publish errors are noisy if logged every tick. Track the

@@ -23,6 +23,7 @@ type Config struct {
 	SwarmKeyPath string
 	ListenPort   int
 	BootstrapURL string
+	IdentityPath string
 }
 
 // MeshNode is the assembled libp2p stack returned by Setup. The Boss and

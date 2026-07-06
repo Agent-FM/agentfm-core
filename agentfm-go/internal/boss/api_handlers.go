@@ -62,6 +62,9 @@ func (b *Boss) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
 		// keys (e.g. legacy or test-injected IDs) resolve correctly.
 		b.mu.RLock()
 		profile, hasProfile := b.activeWorkers[kp.PeerIDStr]
+		if !hasProfile {
+			profile, hasProfile = b.lastProfile[kp.PeerIDStr]
+		}
 		b.mu.RUnlock()
 		if !hasProfile {
 			profile = types.WorkerProfile{PeerID: kp.PeerIDStr}
@@ -186,6 +189,10 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 	if req.TaskID == "" {
 		req.TaskID = newCompletionID("task_")
 	}
+	if !network.SafeTaskIDPattern.MatchString(req.TaskID) {
+		http.Error(w, "Invalid task_id format", http.StatusBadRequest)
+		return
+	}
 
 	b.mu.RLock()
 	_, exists := b.activeWorkers[req.WorkerID]
@@ -211,6 +218,8 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 	// StreamDialTimeout. Use dialWorkerStream (spinner-free) here — the
 	// HTTP path must not spawn a TUI spinner, which carries a known
 	// concurrent-state race inside pterm's SpinnerPrinter goroutine.
+	b.expectArtifact(req.TaskID, peerID)
+
 	s, dialErr := b.dialWorkerStream(r.Context(), peerID)
 	if dialErr != nil {
 		if b.completionRater != nil {

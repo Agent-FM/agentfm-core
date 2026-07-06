@@ -416,6 +416,8 @@ func (ts *taskStream) close() {
 }
 
 func (b *Boss) openTaskStream(ctx context.Context, w http.ResponseWriter, peerID peer.ID, prompt, taskID string) *taskStream {
+	b.expectArtifact(taskID, peerID)
+
 	s, err := b.dialWorkerStream(ctx, peerID)
 	if err != nil {
 		writeOpenAIError(w, http.StatusBadGateway, errTypeServerError, errCodeWorkerUnreachable, "failed to reach worker: "+err.Error())

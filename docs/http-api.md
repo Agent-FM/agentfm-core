@@ -13,9 +13,17 @@ For non-Python clients (Next.js, n8n, curl, Slack bots). The OpenAI-compatible `
 | `GET /metrics` | GET | Prometheus scrape endpoint (see [Observability](observability.md)). |
 | `GET /ui/peer/{peer_id}` | GET | v1.3 — single-page reputation viewer. Unauthenticated; reads via the routes below. |
 | `GET /v1/peers/{peer_id}/reputation` | GET | v1.3 — fetch scores + equivocator status + agent info for a peer. |
-| `GET /v1/peers/{peer_id}/log?from=N&limit=M` | GET | v1.3 — paginated entries + signed head from this Boss's local ledger. |
-| `GET /v1/peers/{peer_id}/proof?entry={hex_hash}` | GET | v1.3 — RFC 6962 inclusion proof for an entry. |
-| `POST /v1/peers/{peer_id}/comments` | POST | v1.3 — signed free-text comment submission. Self-submission only (rater_peer_id must match this gateway's identity). |
+| `GET /v1/peers/{peer_id}/log?limit=M&offset=N` | GET | v1.3 — paginated entries + signed head from this Boss's local ledger. Each entry carries `entry_hash` (hex leaf hash) — feed it straight to `/proof?entry=`. |
+| `GET /v1/peers/{peer_id}/proof?entry={hex_hash}` | GET | v1.3 — RFC 6962 inclusion proof for an entry (the `entry_hash` from `/log`). |
+| `GET /v1/peers/{peer_id}` | GET | v1.3 — one-shot peer summary (name, capability, score, equivocator flag, last-seen). |
+| `POST /v1/peers/{peer_id}/comments` | POST | v1.3 — caller-signed free-text comment. |
+| `POST /v1/peers/{peer_id}/comments/self` | POST | v1.3 — self-signed comment + optional `rating` (`[-1,+1]`); the Boss signs it with its own identity. Body: `{"text":..., "rating":0.8, "language":"en"}`. This is what the desktop "rate" button calls. |
+| `GET /v1/peers/{peer_id}/comments/{cid}` | GET | Comment body as `text/plain`. |
+| `GET /v1/peers/{peer_id}/comments/{cid}.json` | GET | Comment body as JSON: `{cid, body, language}`. |
+| `POST /api/relay/test` | POST | Probe a candidate relay multiaddr from this Boss (the desktop "Test connection" button). Body: `{"multiaddr":"/ip4/.../p2p/12D3KooW..."}` → `{"ok":bool, "peer_id":..., "error":...}`. Refuses private/link-local ranges. |
+| `GET /v1/about` | GET | Boss/relay identity + mesh info (peer id, relay multiaddr, ledger tree size, version, uptime). |
+| `GET /v1/events` | GET | Server-Sent-Events stream of mesh events (`worker_online`, `worker_offline`, `entry_appended`). Powers the desktop's live refresh. |
+| `POST /v1/chat/completions`, `/v1/completions`, `GET /v1/models` | — | OpenAI-compatible — see [openai.md](openai.md). |
 
 ## v1.3 Verifiable agent mesh endpoints
 

@@ -143,6 +143,77 @@ def test_unsupported_protocol_surfaces_as_invalid_request():
     assert ei.value.code == "invalid_gateway_url"
 
 
+def test_does_not_retry_post_on_500(
+    gateway_url: str, mock_gateway: respx.MockRouter
+):
+    """A non-idempotent POST that returns 500 must NOT be retried — the
+    gateway may have processed the request before crashing, so re-issuing it
+    risks a duplicate side effect (double task submission / duplicate
+    comment). See audit M11."""
+    from agentfm.exceptions import AgentFMError
+
+    route = mock_gateway.post("/v1/chat/completions")
+    route.respond(
+        status_code=500,
+        json={"error": {"message": "boom", "type": "server_error", "code": "internal"}},
+    )
+    with (
+        AgentFMClient(gateway_url=gateway_url, retries=3) as client,
+        pytest.raises(AgentFMError),
+    ):
+        client.openai.chat.completions.create(
+            model="12D3KooWX", messages=[{"role": "user", "content": "hi"}]
+        )
+    assert route.call_count == 1, "POST 500 must not be retried"
+
+
+def test_retries_idempotent_get_on_500(
+    gateway_url: str, mock_gateway: respx.MockRouter
+):
+    """An idempotent GET is still retried on 500 — safe to re-issue."""
+    route = mock_gateway.get("/api/workers")
+    route.side_effect = [
+        httpx.Response(500, json={"error": {"message": "x", "type": "server_error", "code": "internal"}}),
+        httpx.Response(200, json={"success": True, "agents": []}),
+    ]
+    with AgentFMClient(gateway_url=gateway_url, retries=3) as client:
+        workers = client.workers.list()
+    assert workers == []
+    assert route.call_count == 2, "GET 500 should still be retried"
+
+
+def test_post_still_retries_on_transport_error(
+    gateway_url: str, mock_gateway: respx.MockRouter
+):
+    """A transport-level blip on a POST (request likely never reached the
+    server) is still safe to retry — only 5xx *responses* are excluded."""
+    route = mock_gateway.post("/v1/chat/completions")
+    route.side_effect = [
+        httpx.ConnectError("refused"),
+        httpx.Response(
+            200,
+            json={
+                "id": "c1",
+                "object": "chat.completion",
+                "created": 1,
+                "model": "12D3KooWX",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": "hi"},
+                        "finish_reason": "stop",
+                    }
+                ],
+            },
+        ),
+    ]
+    with AgentFMClient(gateway_url=gateway_url, retries=3) as client:
+        client.openai.chat.completions.create(
+            model="12D3KooWX", messages=[{"role": "user", "content": "hi"}]
+        )
+    assert route.call_count == 2, "POST transport error should still be retried"
+
+
 def test_protocol_error_for_non_envelope_5xx(
     gateway_url: str, mock_gateway: respx.MockRouter
 ):

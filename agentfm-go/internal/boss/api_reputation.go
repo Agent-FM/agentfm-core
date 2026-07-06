@@ -125,6 +125,25 @@ func isPeerSummaryPath(urlPath string) bool {
 	return rest != "" && !strings.Contains(rest, "/")
 }
 
+const minReadRecomputeInterval = time.Second
+
+// recomputeThrottled runs a fresh-on-read reputation recompute at most
+// once per minReadRecomputeInterval. A flood of concurrent reads share
+// one recompute instead of triggering an O(ledger) pass each.
+func (b *Boss) recomputeThrottled(ctx context.Context) {
+	if b.reputationEngine == nil || b.readStore == nil {
+		return
+	}
+	b.readRecomputeMu.Lock()
+	if !b.lastReadRecompute.IsZero() && time.Since(b.lastReadRecompute) < minReadRecomputeInterval {
+		b.readRecomputeMu.Unlock()
+		return
+	}
+	b.lastReadRecompute = time.Now()
+	b.readRecomputeMu.Unlock()
+	_, _ = b.reputationEngine.Recompute(ctx, b.readStore)
+}
+
 // handleReputation services GET /v1/peers/{id}/reputation.
 func (b *Boss) handleReputation(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -147,14 +166,11 @@ func (b *Boss) handleReputation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	// Fresh-on-read recompute: small-mesh deployments want the
-	// score reflected in /v1/peers/.../reputation immediately
-	// after a rating fires, not 60s later when the ticker runs.
-	// On a ~1k-entry ledger this takes ~5ms; production deploys
-	// with very large ledgers can skip this by unsetting ReadStore.
-	if b.reputationEngine != nil && b.readStore != nil {
-		_, _ = b.reputationEngine.Recompute(ctx, b.readStore)
-	}
+	// Fresh-on-read recompute, rate-limited so a burst of concurrent
+	// GET /reputation requests can't amplify into one O(ledger) pass
+	// each (CPU DoS). Small-mesh deployments still see a rating
+	// reflected within the throttle window rather than the 60s ticker.
+	b.recomputeThrottled(ctx)
 	view, err := buildReputationView(ctx, b.ledger, b.reputationEngine, []byte(pid), peerIDStr)
 	if err != nil {
 		writeOpenAIError(w, http.StatusInternalServerError, errTypeServerError, "ledger_error", err.Error())
@@ -218,7 +234,12 @@ func (b *Boss) handleLog(w http.ResponseWriter, r *http.Request) {
 	if limit > 500 {
 		limit = 500
 	}
-	offset := int(parseUintQuery(r, "offset", 0))
+	offsetU := parseUintQuery(r, "offset", 0)
+	const maxOffset = 1_000_000
+	if offsetU > maxOffset {
+		offsetU = maxOffset
+	}
+	offset := int(offsetU)
 
 	ctx := r.Context()
 
@@ -259,6 +280,9 @@ func (b *Boss) handleLog(w http.ResponseWriter, r *http.Request) {
 		Offset   int         `json:"offset"`
 		Returned int         `json:"returned"`
 		Entries  []PeerEntry `json:"entries"`
+	}
+	if page == nil {
+		page = []PeerEntry{}
 	}
 	writeJSON(w, http.StatusOK, peerLogResponse{
 		Subject:  peerIDStr,

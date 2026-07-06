@@ -1,0 +1,134 @@
+import { describe, it, expect } from 'vitest'
+import {
+  computeRate,
+  computeTasksPerMinute,
+  computeP95FromBuckets,
+} from '../../src/lib/metricsDerive'
+import { createRingBuffer, pushRing } from '../../src/types/metrics'
+
+describe('computeRate', () => {
+  it('returns 0 when buffer has fewer than 2 points', () => {
+    const b = createRingBuffer()
+    expect(computeRate(b)).toBe(0)
+    pushRing(b, 1000, 5)
+    expect(computeRate(b)).toBe(0)
+  })
+
+  it('computes per-second rate between first and last samples', () => {
+    const b = createRingBuffer()
+    pushRing(b, 0, 0)
+    pushRing(b, 1000, 10)
+    pushRing(b, 2000, 30)
+    expect(computeRate(b)).toBeCloseTo(15)
+  })
+
+  it('returns 0 when timestamps collide (avoid div-by-zero)', () => {
+    const b = createRingBuffer()
+    pushRing(b, 1000, 5)
+    pushRing(b, 1000, 10)
+    expect(computeRate(b)).toBe(0)
+  })
+
+  it('clamps negative rates (counter reset) to 0', () => {
+    const b = createRingBuffer()
+    pushRing(b, 0, 100)
+    pushRing(b, 1000, 5)
+    expect(computeRate(b)).toBe(0)
+  })
+})
+
+describe('computeTasksPerMinute', () => {
+  it('returns 0 on empty buffer', () => {
+    expect(computeTasksPerMinute(createRingBuffer())).toBe(0)
+  })
+
+  it('returns rate × 60', () => {
+    const b = createRingBuffer()
+    pushRing(b, 0, 0)
+    pushRing(b, 1000, 1)
+    expect(computeTasksPerMinute(b)).toBeCloseTo(60)
+  })
+})
+
+describe('computeP95FromBuckets', () => {
+  it('returns 0 for empty buckets', () => {
+    expect(computeP95FromBuckets([])).toBe(0)
+  })
+
+  it('returns 0 when total count is 0', () => {
+    expect(computeP95FromBuckets([{ le: 1, count: 0 }, { le: Infinity, count: 0 }])).toBe(0)
+  })
+
+  it('interpolates p95 within the right bucket', () => {
+    const p95 = computeP95FromBuckets([
+      { le: 1, count: 10 },
+      { le: 5, count: 80 },
+      { le: 15, count: 95 },
+      { le: 60, count: 98 },
+      { le: Infinity, count: 100 },
+    ])
+    expect(p95).toBeCloseTo(15)
+  })
+
+  it('returns the highest finite bucket when p95 lands in +Inf', () => {
+    const p95 = computeP95FromBuckets([
+      { le: 1, count: 10 },
+      { le: 60, count: 50 },
+      { le: Infinity, count: 100 },
+    ])
+    expect(p95).toBe(60)
+  })
+})
+
+import { computeSuccessRateSeries } from '../../src/lib/metricsDerive'
+import { type RingBuffer } from '../../src/types/metrics'
+import { seriesKey } from '../../src/lib/metricsStore'
+
+function makeBuf(values: number[]): RingBuffer {
+  const buf = createRingBuffer()
+  let t = 1_000_000
+  for (const v of values) {
+    pushRing(buf, t, v)
+    t += 2000
+  }
+  return buf
+}
+
+describe('computeSuccessRateSeries', () => {
+  it('returns [] when no OK buffer exists', () => {
+    const map = new Map<string, RingBuffer>()
+    expect(computeSuccessRateSeries(map)).toEqual([])
+  })
+
+  it('returns all 1.0 when traffic is all OK', () => {
+    const map = new Map<string, RingBuffer>()
+    map.set(seriesKey('agentfm_tasks_total', { status: 'ok' }), makeBuf([0, 1, 2, 3]))
+    const got = computeSuccessRateSeries(map)
+    expect(got).toEqual([1, 1, 1, 1])
+  })
+
+  it('returns all 0.0 when traffic is all error after the first tick', () => {
+    const map = new Map<string, RingBuffer>()
+    map.set(seriesKey('agentfm_tasks_total', { status: 'ok' }), makeBuf([0, 0, 0, 0]))
+    map.set(seriesKey('agentfm_tasks_total', { status: 'error' }), makeBuf([0, 1, 2, 3]))
+    const got = computeSuccessRateSeries(map)
+    expect(got).toEqual([1, 0, 0, 0])
+  })
+
+  it('mixed series returns the expected ratio at each tick', () => {
+    const map = new Map<string, RingBuffer>()
+    map.set(seriesKey('agentfm_tasks_total', { status: 'ok' }), makeBuf([0, 3, 6]))
+    map.set(seriesKey('agentfm_tasks_total', { status: 'error' }), makeBuf([0, 1, 2]))
+    const got = computeSuccessRateSeries(map)
+    expect(got[0]).toBe(1)
+    expect(got[1]).toBeCloseTo(3 / 4, 5)
+    expect(got[2]).toBeCloseTo(6 / 8, 5)
+  })
+
+  it('returns 1.0 for ticks with zero denominator', () => {
+    const map = new Map<string, RingBuffer>()
+    map.set(seriesKey('agentfm_tasks_total', { status: 'ok' }), makeBuf([0, 0]))
+    const got = computeSuccessRateSeries(map)
+    expect(got).toEqual([1, 1])
+  })
+})

@@ -42,11 +42,22 @@ type Boss struct {
 	node          *network.MeshNode
 	activeWorkers map[string]types.WorkerProfile
 	lastSeen      map[string]time.Time
+	lastProfile   map[string]types.WorkerProfile
+
+	readRecomputeMu   sync.Mutex
+	lastReadRecompute time.Time
 	// RWMutex because the activeWorkers/lastSeen maps are read heavily
 	// (HTTP /api/workers, /api/execute, /api/execute/async, the TUI redraw
 	// ticker) but written only when a telemetry pulse arrives. Pure-read
 	// call sites use RLock so concurrent API hits don't serialise.
 	mu sync.RWMutex
+	// artifactExpect maps dispatched taskIDs to the worker peer allowed
+	// to deliver agentfm_artifacts/<taskID>.zip. Guarded by artifactMu
+	// (not b.mu — the artifact gate is touched on every inbound artifact
+	// stream and must not contend with telemetry/API reads).
+	artifactMu     sync.Mutex
+	artifactExpect map[string]artifactExpectation
+
 	// asyncSlots gates spawn of background goroutines from
 	// /api/execute/async. Buffered to MaxInflightAsyncTasks; non-blocking
 	// send returns 503 to the client when full.
@@ -170,6 +181,7 @@ func NewWithOptions(node *network.MeshNode, opts Options) *Boss {
 		node:                     node,
 		activeWorkers:            make(map[string]types.WorkerProfile),
 		lastSeen:                 make(map[string]time.Time),
+		lastProfile:              make(map[string]types.WorkerProfile),
 		asyncSlots:               make(chan struct{}, MaxInflightAsyncTasks),
 		ledger:                   opts.Ledger,
 		commentSubmissionHandler: opts.CommentSubmissionHandler,
@@ -196,7 +208,7 @@ func NewWithOptions(node *network.MeshNode, opts Options) *Boss {
 }
 
 func (b *Boss) Run(ctx context.Context) {
-	b.node.Host.SetStreamHandler(network.ArtifactProtocol, network.HandleArtifactStream)
+	b.node.Host.SetStreamHandler(network.ArtifactProtocol, network.NewArtifactStreamHandler(b.authorizeArtifact))
 
 	time.Sleep(1 * time.Second)
 
@@ -333,6 +345,7 @@ func (b *Boss) handleTelemetryProfile(profile types.WorkerProfile) {
 	_, existed := b.activeWorkers[profile.PeerID]
 	b.activeWorkers[profile.PeerID] = profile
 	b.lastSeen[profile.PeerID] = time.Now()
+	b.lastProfile[profile.PeerID] = profile
 	n := len(b.activeWorkers)
 	b.mu.Unlock()
 	metrics.WorkersOnline.Set(float64(n))

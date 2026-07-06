@@ -145,6 +145,7 @@ func (b *Boss) executeTaskFlow(ctx context.Context, worker types.WorkerProfile) 
 	}
 
 	taskID := newCompletionID("task_")
+	b.expectArtifact(taskID, targetPeerID)
 	payload := types.TaskPayload{
 		Version: version.AppVersion,
 		Task:    "agent_task",

@@ -521,12 +521,19 @@ func (l *ledgerImpl) acceptLocalAlert(ctx context.Context, alert *pb.Equivocatio
 	if proto.Equal(alert.HeadA, alert.HeadB) {
 		return nil
 	}
-	// Real conflict: either same TreeSize with different RootHash
-	// (classic equivocation) OR heads at different sizes (in which
-	// case the witness should have flagged a consistency-proof
-	// failure — we don't re-verify the proof here, just trust the
-	// witness's classification once both heads are sig-valid).
-	if alert.HeadA.TreeSize == alert.HeadB.TreeSize && bytes.Equal(alert.HeadA.RootHash, alert.HeadB.RootHash) {
+	// A genuine equivocation is two heads the offender signed at the
+	// SAME TreeSize but with DIFFERENT RootHash — a fork at one log
+	// position, which an honest peer never produces. Heads at DIFFERENT
+	// sizes are normal log growth: without re-verifying a consistency
+	// proof (not carried in the alert) and without a trusted witness
+	// allowlist, a different-size pair is indistinguishable from an
+	// attacker replaying two of the offender's genuine heads to frame
+	// them. Only accept the soundly-verifiable same-size/different-root
+	// case.
+	if alert.HeadA.TreeSize != alert.HeadB.TreeSize {
+		return errors.New("alert heads at different tree sizes; not equivocation (normal log growth)")
+	}
+	if bytes.Equal(alert.HeadA.RootHash, alert.HeadB.RootHash) {
 		return errors.New("alert heads have same (size, root); no actual conflict")
 	}
 

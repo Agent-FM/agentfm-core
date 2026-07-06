@@ -1,0 +1,16 @@
+node_modules/
+out/
+dist/
+resources/
+.env
+.env.local
+*.log
+.DS_Store
+.vscode/
+
+# Local-only state
+.agentfm_api_identity.key
+*.tsbuildinfo
+test-results/
+playwright-report/
+dist

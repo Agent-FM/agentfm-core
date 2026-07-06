@@ -1,0 +1,37 @@
+import { useEffect } from 'react'
+import type { SideEffect } from '../../lib/apiCatalog'
+import { Button } from '../primitives/Button'
+
+interface Props {
+  sideEffect: Exclude<SideEffect, 'none'>
+  onConfirm: () => void
+  onCancel: () => void
+}
+
+const COPY: Record<Exclude<SideEffect, 'none'>, string> = {
+  dispatch: 'This will run a real task in a container on a worker (consumes compute).',
+  signed: 'This will be cryptographically signed by your Boss and appended to the reputation ledger.',
+}
+
+export function ConfirmDispatchDialog({ sideEffect, onConfirm, onCancel }: Props) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onCancel}>
+      <div className="bg-bg-1 border border-border-1 rounded-2xl p-5 max-w-md mx-4" role="dialog" aria-modal="true" aria-labelledby="confirm-dispatch-title" onClick={(e) => e.stopPropagation()}>
+        <h3 id="confirm-dispatch-title" className="text-lg font-semibold mb-2">Confirm request</h3>
+        <p className="text-sm text-text-1 mb-4">{COPY[sideEffect]}</p>
+        <div className="flex justify-end gap-2">
+          <Button onClick={onCancel}>Cancel</Button>
+          <Button variant="primary" onClick={onConfirm}>Send anyway</Button>
+        </div>
+      </div>
+    </div>
+  )
+}

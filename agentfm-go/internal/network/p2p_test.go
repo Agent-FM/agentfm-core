@@ -15,7 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-// --- loadOrGenerateIdentity ------------------------------------------------
+// --- LoadOrGenerateIdentity ------------------------------------------------
 
 // TestLoadOrGenerateIdentity_NewKey verifies the cold-start path: no key on
 // disk, function mints a fresh Ed25519 key, persists it with mode 0600, and
@@ -23,9 +23,9 @@ import (
 func TestLoadOrGenerateIdentity_NewKey(t *testing.T) {
 	t.Chdir(t.TempDir())
 
-	priv, err := loadOrGenerateIdentity("test_new")
+	priv, err := LoadOrGenerateIdentity(".agentfm_test_new_identity.key")
 	if err != nil {
-		t.Fatalf("loadOrGenerateIdentity: %v", err)
+		t.Fatalf("LoadOrGenerateIdentity: %v", err)
 	}
 	if priv == nil {
 		t.Fatal("nil priv")
@@ -63,11 +63,11 @@ func TestLoadOrGenerateIdentity_NewKey(t *testing.T) {
 func TestLoadOrGenerateIdentity_LoadsExisting(t *testing.T) {
 	t.Chdir(t.TempDir())
 
-	priv1, err := loadOrGenerateIdentity("test_stable")
+	priv1, err := LoadOrGenerateIdentity(".agentfm_test_stable_identity.key")
 	if err != nil {
 		t.Fatalf("first call: %v", err)
 	}
-	priv2, err := loadOrGenerateIdentity("test_stable")
+	priv2, err := LoadOrGenerateIdentity(".agentfm_test_stable_identity.key")
 	if err != nil {
 		t.Fatalf("second call: %v", err)
 	}
@@ -96,9 +96,9 @@ func TestLoadOrGenerateIdentity_CorruptedFile(t *testing.T) {
 		t.Fatalf("write fixture: %v", err)
 	}
 
-	priv, err := loadOrGenerateIdentity("test_corrupt")
+	priv, err := LoadOrGenerateIdentity(".agentfm_test_corrupt_identity.key")
 	if err != nil {
-		t.Fatalf("loadOrGenerateIdentity: %v", err)
+		t.Fatalf("LoadOrGenerateIdentity: %v", err)
 	}
 	if priv == nil {
 		t.Fatal("expected a fresh key, got nil")
@@ -130,9 +130,9 @@ func TestLoadOrGenerateIdentity_UnpersistablePath(t *testing.T) {
 		t.Fatalf("mkdir blocker: %v", err)
 	}
 
-	priv, err := loadOrGenerateIdentity("test_unpersist")
+	priv, err := LoadOrGenerateIdentity(".agentfm_test_unpersist_identity.key")
 	if err != nil {
-		t.Fatalf("function must still return a valid key, got error: %v", err)
+		t.Fatalf("LoadOrGenerateIdentity must still return a valid key, got error: %v", err)
 	}
 	if priv == nil {
 		t.Fatal("nil priv on unpersistable path")

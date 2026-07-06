@@ -107,6 +107,33 @@ func signAlert(t *testing.T, witness, offender alertIdent, headA, headB *pb.LogH
 	return alert
 }
 
+// Security (C1): two of the offender's NORMAL, validly-signed heads at
+// DIFFERENT tree sizes are routine log growth, not equivocation. An
+// attacker can replay two such genuine heads captured off gossip to
+// frame an honest peer. acceptLocalAlert MUST reject and NOT mark.
+func TestAcceptLocalAlert_DifferentSizeHeads_NoMark(t *testing.T) {
+	l := freshAlertImpl(t)
+	w := newAlertIdent(t)
+	o := newAlertIdent(t)
+
+	rootA := make([]byte, 32)
+	rootA[0] = 0xaa
+	rootB := make([]byte, 32)
+	rootB[0] = 0xbb
+	headA := signHeadFor(t, o, 5, rootA)
+	headB := signHeadFor(t, o, 10, rootB)
+	alert := signAlert(t, w, o, headA, headB)
+
+	err := l.acceptLocalAlert(context.Background(), alert)
+	if err == nil {
+		t.Fatal("expected rejection of different-size heads (normal growth, not equivocation), got nil")
+	}
+	marked, _ := l.store.IsEquivocator(context.Background(), []byte(o.id))
+	if marked {
+		t.Fatal("offender wrongly marked as equivocator via replayed different-size heads (framing attack)")
+	}
+}
+
 // happy path: well-formed alert from a real witness against a real
 // offender with two genuinely-conflicting heads gets accepted +
 // marks the offender.

@@ -4,13 +4,47 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/multiformats/go-multiaddr"
 )
+
+// relayAddrDisallowed reports whether a candidate relay multiaddr points
+// at an internal address the boss must not be tricked into dialing (an
+// SSRF port-scan oracle when the API is exposed off-host). Loopback is
+// allowed — it is the desktop's own local relay — as is any global
+// unicast address (real VPS relays). Private (RFC1918/ULA), link-local,
+// unspecified and multicast ranges are refused. A /dns-based addr has no
+// literal IP here and is left to the bounded dial.
+func relayAddrDisallowed(maddr multiaddr.Multiaddr) bool {
+	var ipStr string
+	if v, err := maddr.ValueForProtocol(multiaddr.P_IP4); err == nil {
+		ipStr = v
+	} else if v, err := maddr.ValueForProtocol(multiaddr.P_IP6); err == nil {
+		ipStr = v
+	}
+	if ipStr == "" {
+		return false
+	}
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+	if ip.IsLoopback() {
+		return false
+	}
+	return ip.IsPrivate() ||
+		ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() ||
+		ip.IsUnspecified() ||
+		ip.IsMulticast()
+}
 
 // relayTestRequest is the JSON body for POST /api/relay/test.
 type relayTestRequest struct {
@@ -81,6 +115,14 @@ func (b *Boss) handleRelayTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if relayAddrDisallowed(maddr) {
+		writeJSON(w, http.StatusOK, relayTestResponse{
+			OK:    false,
+			Error: "relay address is in a disallowed (private/link-local) range",
+		})
+		return
+	}
+
 	if b.node == nil || b.node.Host == nil {
 		writeJSON(w, http.StatusServiceUnavailable, relayTestResponse{
 			OK:    false,
@@ -89,9 +131,16 @@ func (b *Boss) handleRelayTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Bounded dial. 5s is enough for a healthy lighthouse on the open
-	// internet; anything slower is effectively unreachable from a
-	// desktop boss anyway.
+	if b.node.Host.Network().Connectedness(info.ID) == network.Connected {
+		writeJSON(w, http.StatusOK, relayTestResponse{
+			OK:     true,
+			PeerID: info.ID.String(),
+		})
+		return
+	}
+
+	b.node.Host.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.TempAddrTTL)
+
 	dialCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 

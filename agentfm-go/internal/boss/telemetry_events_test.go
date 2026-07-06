@@ -20,6 +20,7 @@ func TestHandleTelemetryProfile_PublishesWorkerOnlineOnFirstSighting(t *testing.
 	b := &Boss{
 		activeWorkers: make(map[string]types.WorkerProfile),
 		lastSeen:      make(map[string]time.Time),
+		lastProfile:   make(map[string]types.WorkerProfile),
 		eventBus:      NewEventBus(),
 		mu:            sync.RWMutex{},
 	}
@@ -68,6 +69,7 @@ func TestEvictWorker_PublishesWorkerOffline(t *testing.T) {
 	b := &Boss{
 		activeWorkers: make(map[string]types.WorkerProfile),
 		lastSeen:      make(map[string]time.Time),
+		lastProfile:   make(map[string]types.WorkerProfile),
 		eventBus:      NewEventBus(),
 		mu:            sync.RWMutex{},
 	}
