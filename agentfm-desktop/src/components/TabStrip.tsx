@@ -4,6 +4,7 @@ import { useUIStore } from '../lib/store'
 
 const tabs = [
   { to: '/radar', label: 'Radar' },
+  { to: '/getting-started', label: 'Getting Started' },
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/chat', label: 'Chat' },
   { to: '/activity', label: 'Activity' },

@@ -1,5 +1,4 @@
 import type { PeerSummary } from '../../types/api';
-import { compactAge } from '../../lib/peer';
 import { Badge } from '../primitives/Badge';
 import { Card } from '../primitives/Card';
 import { StarRow } from '../primitives/StarRow';
@@ -30,13 +29,9 @@ export function SummaryCard({ data }: { data: PeerSummary }) {
       </Field>
       <Field label="Status">
         {data.online ? (
-          <span className="text-sm text-accent tabular-nums">
-            ✓ online{data.last_seen ? ' · last seen ' + compactAge(data.last_seen) + ' ago' : ''}
-          </span>
+          <span className="text-sm text-accent tabular-nums">✓ online</span>
         ) : (
-          <span className="text-sm text-text-2 tabular-nums">
-            offline{data.last_seen ? ' · last ' + compactAge(data.last_seen) + ' ago' : ''}
-          </span>
+          <span className="text-sm text-text-2 tabular-nums">offline</span>
         )}
       </Field>
       <Field label="Equivocator">

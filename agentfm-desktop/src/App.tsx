@@ -10,6 +10,7 @@ import { SettingsSheet } from './components/SettingsSheet'
 import { useBackend } from './hooks/useBackend'
 import { useEventStream } from './hooks/useEventStream'
 import Radar from './routes/Radar'
+import GettingStarted from './routes/GettingStarted'
 import Dashboard from './routes/Dashboard'
 import Chat from './routes/Chat'
 import PeerView from './routes/PeerView'
@@ -34,6 +35,7 @@ export default function App() {
             <Route element={<Shell />}>
               <Route index element={<Navigate to="/radar" replace />} />
               <Route path="radar" element={<Radar />} />
+              <Route path="getting-started" element={<GettingStarted />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="chat" element={<Chat />} />
               <Route path="chat/:sessionId" element={<Chat />} />
