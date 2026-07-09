@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"agentfm/internal/ledger"
+	"agentfm/internal/ledger/comments"
 	"agentfm/internal/metrics"
 	"agentfm/internal/network"
 	"agentfm/internal/obs"
@@ -21,8 +22,9 @@ import (
 // infinite reservation limits, a Kademlia DHT in server mode, an actively
 // drained telemetry subscription (so it keeps routing gossip), and a full
 // archive ledger. The archive persists every signed Rating / Comment /
-// EquivocationAlert and serves head-fetch / ledger-fetch, so a fresh boss
-// can catch up against this relay even when every other boss is offline.
+// EquivocationAlert, serves head-fetch / ledger-fetch, and replicates +
+// serves comment bodies (comment-fetch), so a fresh boss can catch up
+// against this relay even when every other boss is offline.
 //
 // This is the single relay path — the dedicated relay binary was folded in
 // here so `agentfm -mode relay` is the only relay, dev or production.
@@ -73,11 +75,22 @@ func runRelayMode(ctx context.Context, netCfg network.Config, promListen string)
 		pterm.Fatal.Printfln("relay identity load failed: %v", err)
 	}
 
+	var cstore *comments.Store
+	if cs, err := comments.Open(defaultCommentsRoot()); err != nil {
+		slog.Warn("relay: comments store open failed; comment bodies will not be archived",
+			slog.Any(obs.FieldErr, err))
+	} else {
+		cstore = cs
+		cserver := comments.NewServer(node.Host, cstore)
+		cserver.Start()
+		defer cserver.Stop()
+	}
+
 	dbPath := defaultRelayLedgerPath()
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o700); err != nil {
 		slog.Warn("relay: could not create ledger dir; running connectivity-only",
 			slog.String("path", filepath.Dir(dbPath)), slog.Any(obs.FieldErr, err))
-	} else if arch, err := ledger.NewWithOptions(dbPath, priv, node.PubSub, ledger.Options{Host: node.Host}); err != nil {
+	} else if arch, err := ledger.NewWithOptions(dbPath, priv, node.PubSub, ledger.Options{Host: node.Host, Comments: cstore}); err != nil {
 		slog.Warn("relay: archive ledger failed to open; running connectivity-only",
 			slog.Any(obs.FieldErr, err))
 	} else {

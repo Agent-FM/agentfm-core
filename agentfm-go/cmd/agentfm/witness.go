@@ -57,8 +57,15 @@ func runWitnessMode(ctx context.Context, netCfg network.Config, promListen strin
 		pterm.Fatal.Printfln("cannot create ledger dir %s: %v", dbPath, err)
 	}
 
+	cstore, err := comments.Open(defaultCommentsRoot())
+	if err != nil {
+		slog.Warn("witness: comments store open failed; CommentFetch disabled",
+			slog.Any(obs.FieldErr, err))
+	}
+
 	l, err := ledger.NewWithOptions(dbPath, priv, node.PubSub, ledger.Options{
-		Host: node.Host,
+		Host:     node.Host,
+		Comments: cstore,
 	})
 	if err != nil {
 		pterm.Fatal.Printfln("ledger open failed: %v", err)
@@ -66,11 +73,7 @@ func runWitnessMode(ctx context.Context, netCfg network.Config, promListen strin
 	defer func() { _ = l.Close() }()
 	slog.Info("witness: ledger opened", slog.String("path", dbPath))
 
-	cstore, err := comments.Open(defaultCommentsRoot())
-	if err != nil {
-		slog.Warn("witness: comments store open failed; CommentFetch disabled",
-			slog.Any(obs.FieldErr, err))
-	} else {
+	if cstore != nil {
 		cserver := comments.NewServer(node.Host, cstore)
 		cserver.Start()
 		defer cserver.Stop()
