@@ -60,6 +60,12 @@ type ledgerImpl struct {
 	// implementation has no init that can fail at this point).
 	inbox *inbox.Inbox
 
+	// bodyFetcher replicates comment bodies referenced by gossip-accepted
+	// Comment entries. nil unless Options.Comments + Host + pubsub were
+	// all provided. Set once in newImpl before the subscriber goroutine
+	// starts; never mutated afterwards.
+	bodyFetcher *bodyFetcher
+
 	// Subscriber goroutine lifecycle. Only populated when ps != nil.
 	subCtx    context.Context
 	subCancel context.CancelFunc
@@ -136,6 +142,10 @@ func newImpl(path string, key crypto.PrivKey, ps *pubsub.PubSub, opts Options) (
 		l.sub = sub
 		l.subCtx, l.subCancel = context.WithCancel(context.Background())
 		l.subDone = make(chan struct{})
+		if opts.Host != nil && opts.Comments != nil {
+			l.bodyFetcher = newBodyFetcher(opts.Host, opts.Comments)
+			go l.bodyFetcher.run(l.subCtx)
+		}
 		// Pass sub + subCtx + subDone as args so the goroutine holds
 		// stable references — Close() races to nil the struct fields
 		// during shutdown, and we don't want the goroutine reading
@@ -665,6 +675,10 @@ func (l *ledgerImpl) runSubscriber(ctx context.Context, sub *pubsub.Subscription
 			// is appropriate so operators can correlate when needed.
 			slog.Debug("ledger: gossip entry rejected by inbox",
 				slog.Any(obs.FieldErr, err))
+			continue
+		}
+		if l.bodyFetcher != nil {
+			l.bodyFetcher.enqueue(&entry)
 		}
 	}
 }
@@ -710,6 +724,9 @@ func (l *ledgerImpl) Close() error {
 	}
 	if subDone != nil {
 		<-subDone
+	}
+	if l.bodyFetcher != nil {
+		<-l.bodyFetcher.done
 	}
 
 	if equivSub != nil {

@@ -3,6 +3,7 @@ package ledger
 import (
 	"context"
 
+	"agentfm/internal/ledger/comments"
 	pb "agentfm/internal/ledger/pb"
 	"agentfm/internal/ledger/store"
 
@@ -17,6 +18,12 @@ type Options struct {
 	// and HeadFetchProtocol stream handlers (P2-5, P5-1). nil disables
 	// both handlers (local-only / test mode).
 	Host host.Host
+
+	// Comments, when non-nil (and Host + pubsub are also set), makes
+	// this ledger fetch and persist the body of every Comment entry
+	// accepted from gossip, pulling it from the entry's author via
+	// CommentFetchProtocol. nil disables body replication.
+	Comments *comments.Store
 }
 
 // IsHeadValid reports whether head carries at least threshold
