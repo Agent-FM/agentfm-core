@@ -84,4 +84,27 @@ func AppendInboxRating(t testing.TB, s *store.Store, rater host.Host, subject pe
 	}
 }
 
+// AppendInboxComment inserts a Comment entry into the store's INBOX log,
+// simulating a comment envelope received from another peer over gossip.
+func AppendInboxComment(t testing.TB, s *store.Store, rater host.Host, subject peer.ID, textCID []byte) {
+	t.Helper()
+	entry := &pb.SignedEntry{Body: &pb.SignedEntry_Comment{Comment: &pb.Comment{
+		RaterPeerId:     []byte(rater.ID()),
+		SubjectPeerId:   []byte(subject),
+		Language:        "en",
+		TextCid:         textCID,
+		TimestampUnixNs: time.Now().UnixNano(),
+		PrevHash:        make([]byte, 32),
+	}}}
+	payload, err := proto.Marshal(entry)
+	if err != nil {
+		t.Fatalf("testutil.AppendInboxComment marshal: %v", err)
+	}
+	var hash [32]byte
+	copy(hash[:], payload)
+	if err := s.InsertInboxEntry(ctx2(), []byte(rater.ID()), hash, [32]byte{}, payload); err != nil {
+		t.Fatalf("testutil.AppendInboxComment InsertInboxEntry: %v", err)
+	}
+}
+
 func ctx2() context.Context { return context.Background() }
