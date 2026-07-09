@@ -46,6 +46,7 @@ func TestInboxFetch_ServerStreamsInboxEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("derive rater id: %v", err)
 	}
+	var prev [32]byte
 	for i := byte(1); i <= 3; i++ {
 		entry := &pb.SignedEntry{
 			Body: &pb.SignedEntry_Rating{Rating: &pb.Rating{
@@ -54,18 +55,19 @@ func TestInboxFetch_ServerStreamsInboxEntries(t *testing.T) {
 				Dimension:       "honesty",
 				Score:           float64(i) / 10,
 				TimestampUnixNs: time.Now().UnixNano(),
-				PrevHash:        make([]byte, 32),
+				PrevHash:        prev[:],
 			}},
 		}
 		payload, err := proto.Marshal(entry)
 		if err != nil {
 			t.Fatalf("marshal %d: %v", i, err)
 		}
-		var hash, prev [32]byte
+		var hash [32]byte
 		hash[0] = i
 		if err := srvLedger.Store().InsertInboxEntry(ctx, []byte(raterID), hash, prev, payload); err != nil {
 			t.Fatalf("seed inbox %d: %v", i, err)
 		}
+		prev = hash
 	}
 
 	entries, err := ledger.FetchInboxFrom(ctx, client, server.ID(), 0, 10)

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { X, Send, ExternalLink } from 'lucide-react';
+import { X, Check, Send, ExternalLink, FileArchive, Heart } from 'lucide-react';
 import { useUIStore } from '../lib/store';
 import { useWorkers } from '../lib/query';
 import { useDispatch } from '../hooks/useDispatch';
@@ -81,35 +81,38 @@ export function DispatchDrawer() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black/55 backdrop-blur-sm z-40"
+            className="fixed inset-0 bg-bg-0/60 z-40"
             onClick={close}
           />
           <motion.div
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
-            transition={{ type: 'spring', stiffness: 280, damping: 30 }}
-            className="fixed right-0 top-10 bottom-0 w-[52%] min-w-[480px] bg-bg-1 border-l border-accent/15 overflow-auto p-6 z-50"
-            style={{ boxShadow: '-24px 0 48px -16px rgba(247,147,30,.15)' }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="fixed right-0 top-10 bottom-0 w-[52%] min-w-[480px] glass-strong rounded-l-sheet shadow-float overflow-auto p-4 z-50"
             onKeyDown={handleKey}
           >
             {/* Header */}
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h2 className="text-xl font-semibold tracking-tight text-text-0">
-                  {displayName(worker, cached)}
-                  {worker.model ? ` · ${worker.model}` : ''}
-                </h2>
-                <div className="font-mono text-[11px] text-text-2 mt-0.5">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold text-text-0">
+                    {displayName(worker, cached)}
+                  </h2>
+                  {worker.model && (
+                    <span className="text-sm text-text-2">{worker.model}</span>
+                  )}
+                </div>
+                <div className="font-mono text-2xs text-text-2 mt-0.5">
                   {shortenPeerID(worker.peer_id, 12, 5)}
                 </div>
                 <div className="flex gap-1.5 mt-1.5">
                   <Badge
                     tone={
                       worker.honesty_score > 0.3
-                        ? 'lime'
+                        ? 'ok'
                         : worker.honesty_score < -0.5
-                          ? 'rose'
+                          ? 'bad'
                           : 'neutral'
                     }
                     mono
@@ -118,40 +121,35 @@ export function DispatchDrawer() {
                     {worker.honesty_score.toFixed(2)}
                   </Badge>
                   <Badge
-                    tone={worker.dispatch_allowed ? 'lime' : 'rose'}
+                    tone={worker.dispatch_allowed ? 'ok' : 'bad'}
                     title={worker.dispatch_refuse_reason}
                   >
-                    {worker.dispatch_allowed ? '✓ allowed' : '✗ refused'}
+                    {worker.dispatch_allowed ? (
+                      <Check size={11} strokeWidth={2} aria-hidden />
+                    ) : (
+                      <X size={11} strokeWidth={2} aria-hidden />
+                    )}
+                    {worker.dispatch_allowed ? 'Allowed' : 'Refused'}
                   </Badge>
                 </div>
               </div>
-              <button onClick={close} className="text-text-2 hover:text-text-0 text-lg">
+              <button onClick={close} className="text-text-2 hover:text-text-0 transition-colors">
                 <X size={18} />
               </button>
             </div>
 
             {/* Prompt */}
-            <div className="text-[11px] uppercase tracking-wider text-text-2 mb-1.5">Prompt</div>
+            <div className="text-2xs font-medium text-text-2 mb-1.5">Prompt</div>
             <textarea
               autoFocus
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
+              aria-label="Task prompt"
               placeholder="Describe what you want the agent to do…"
-              className="w-full min-h-[100px] bg-bg-0 border border-border-0 rounded-md p-3 text-sm text-text-0 outline-none focus:border-accent resize-y"
+              className="w-full min-h-[100px] glass-inset rounded-ctl p-3 text-sm text-text-0 outline-none focus:border-accent/60 resize-y"
               disabled={state.status === 'streaming' || state.status === 'connecting'}
             />
-            <div className="text-[11px] text-text-2 mt-1.5 flex justify-between items-center">
-              <span>
-                Press{' '}
-                <kbd className="bg-bg-2 border border-border-0 border-b-2 px-1.5 py-0.5 rounded text-[10px] font-sans">
-                  ⌘
-                </kbd>{' '}
-                +{' '}
-                <kbd className="bg-bg-2 border border-border-0 border-b-2 px-1.5 py-0.5 rounded text-[10px] font-sans">
-                  ↵
-                </kbd>{' '}
-                to send
-              </span>
+            <div className="text-2xs text-text-2 mt-1.5 flex justify-end items-center">
               <Button
                 variant="primary"
                 onClick={submit}
@@ -175,7 +173,7 @@ export function DispatchDrawer() {
             {/* Live stream */}
             {(state.output || state.status !== 'idle') && (
               <>
-                <div className="text-[11px] uppercase tracking-wider text-text-2 mt-5 mb-1.5">
+                <div className="text-2xs font-medium text-text-2 mt-5 mb-1.5">
                   Live stream
                 </div>
                 <StreamingView
@@ -187,7 +185,7 @@ export function DispatchDrawer() {
 
             {/* Error */}
             {state.status === 'error' && (
-              <div className="mt-3 p-3 bg-rose-950/40 border border-rose-900/60 rounded-md text-xs text-rose-300">
+              <div className="mt-3 p-3 bg-bad/10 border border-bad/30 rounded-ctl text-xs text-bad">
                 Stream error: {state.error}
               </div>
             )}
@@ -195,12 +193,12 @@ export function DispatchDrawer() {
             {/* Artifact */}
             {state.hasArtifact && state.taskId && (
               <>
-                <div className="text-[11px] uppercase tracking-wider text-text-2 mt-5 mb-1.5">
+                <div className="text-2xs font-medium text-text-2 mt-5 mb-1.5">
                   Artifacts
                 </div>
-                <div className="bg-bg-1 border border-border-0 rounded-md p-2.5 flex items-center gap-3 text-xs">
-                  <span className="text-accent">📄</span>
-                  <span className="flex-1 font-mono">{state.taskId}.zip</span>
+                <div className="glass-inset rounded-ctl p-2.5 flex items-center gap-3 text-xs">
+                  <FileArchive size={14} strokeWidth={1.5} className="text-accent shrink-0" aria-hidden />
+                  <span className="flex-1 font-mono tabular-nums">{state.taskId}.zip</span>
                   <Button onClick={() => window.api.app.openArtifact(state.taskId!)}>
                     <ExternalLink size={12} />
                     Show in Finder
@@ -217,7 +215,8 @@ export function DispatchDrawer() {
                   variant="primary"
                   onClick={() => openFeedback(worker.peer_id, state.taskId!)}
                 >
-                  Leave feedback 💌
+                  <Heart size={12} strokeWidth={1.5} aria-hidden />
+                  <span>Leave feedback</span>
                 </Button>
               </div>
             )}

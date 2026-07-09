@@ -6,7 +6,6 @@ Mirrors :class:`agentfm.AgentFMClient` with ``async`` / ``await`` semantics.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 import os
 import time
@@ -109,19 +108,22 @@ class _AsyncTasksNamespace(AsyncResource):
         chunks: list[str] = []
         task_id = f"task_{uuid.uuid4().hex}"
         started_mono = time.monotonic()
+        saw_artifacts_incoming = False
         async for chunk in self.stream(
             worker_id=worker_id, prompt=prompt, task_id=task_id
         ):
             if chunk.kind == "text":
                 chunks.append(chunk.text)
+            elif chunk.kind == "marker":
+                # Marker chunk is emitted only on [AGENTFM: FILES_INCOMING];
+                # on NO_FILES no zip is written, so don't block on the timeout.
+                saw_artifacts_incoming = True
         text = "".join(chunks)
 
         am = self._client.artifacts
-        artifacts: list[Path] = (
-            await asyncio.to_thread(am.collect_for_task, task_id, artifact_timeout)
-            if am is not None
-            else []
-        )
+        artifacts: list[Path] = []
+        if am is not None and saw_artifacts_incoming:
+            artifacts = await asyncio.to_thread(am.collect_for_task, task_id, artifact_timeout)
 
         return TaskResult(
             worker_id=PeerID(str(worker_id)),
@@ -366,17 +368,13 @@ class AsyncAgentFMClient:
         await self._http.aclose()
 
     def __del__(self) -> None:
-        # Defensive close: synchronous in __del__ because there is no event
-        # loop guarantee at GC time. We close the transport directly to free
-        # sockets without scheduling on a running loop. Wrapped because
-        # __del__ during interpreter teardown can raise on already-collected
-        # attributes. The import of contextlib lives at module top so __del__
-        # does not trigger the import system when sys.meta_path is None.
-        with contextlib.suppress(Exception):
-            transport = getattr(self._http, "_transport", None)
-            close = getattr(transport, "close", None)
-            if close is not None:
-                close()
+        # An async httpx transport exposes only `aclose` (a coroutine), which
+        # cannot be awaited from __del__, so there is no way to free the
+        # connection pool here. Callers MUST use `async with
+        # AsyncAgentFMClient(...)` or `await client.aclose()`. (The previous
+        # getattr(transport, "close") branch was dead — the async transport has
+        # no sync `close` — and silently leaked sockets while looking correct.)
+        return
 
     async def __aenter__(self) -> AsyncAgentFMClient:
         return self

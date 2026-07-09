@@ -11,15 +11,16 @@ interface Props<T extends string> {
 
 export function SegGroup<T extends string>({ options, value, onChange }: Props<T>) {
   return (
-    <div className="inline-flex p-1 bg-bg-2 border border-border-0 rounded-md gap-1">
+    <div className="bg-raised inline-flex p-px rounded-ctl gap-px">
       {options.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
-          className={`relative px-3 py-1 text-xs rounded border transition-colors ${
+          aria-pressed={o.value === value}
+          className={`px-2.5 h-5 text-xs rounded-[4px] transition-colors duration-150 cursor-pointer ${
             o.value === value
-              ? 'text-accent border-accent/40 bg-accent-bg'
-              : 'text-text-2 border-transparent hover:text-text-0'
+              ? 'bg-control-selected text-text-0 font-medium'
+              : 'text-text-1 hover:text-text-0'
           }`}
         >
           {o.label}

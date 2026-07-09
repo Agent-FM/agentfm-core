@@ -143,8 +143,8 @@ type modelEntry struct {
 	LastSeen             *time.Time `json:"agentfm_last_seen,omitempty"`
 }
 
-func (b *Boss) profileToModelEntry(p types.WorkerProfile, created int64) modelEntry {
-	aw := b.profileToAPIWorker(p)
+func (b *Boss) profileToModelEntry(ctx context.Context, p types.WorkerProfile, created int64) modelEntry {
+	aw := b.profileToAPIWorker(ctx, p)
 	owner := p.Author
 	if owner == "" {
 		owner = "agentfm"
@@ -314,7 +314,7 @@ func loadRatio(p types.WorkerProfile) float64 {
 	return float64(p.CurrentTasks) / float64(p.MaxTasks)
 }
 
-func (b *Boss) pickWorker(model string) (types.WorkerProfile, error) {
+func (b *Boss) pickWorker(ctx context.Context, model string) (types.WorkerProfile, error) {
 	b.mu.RLock()
 	candidates := make(map[string]types.WorkerProfile, len(b.activeWorkers))
 	for k, v := range b.activeWorkers {
@@ -324,7 +324,7 @@ func (b *Boss) pickWorker(model string) (types.WorkerProfile, error) {
 
 	filtered := make(map[string]types.WorkerProfile, len(candidates))
 	for k, w := range candidates {
-		if b.checkTrust(context.Background(), w).Allowed {
+		if b.checkTrust(ctx, w).Allowed {
 			filtered[k] = w
 		}
 	}
@@ -449,9 +449,11 @@ func (b *Boss) openTaskStream(ctx context.Context, w http.ResponseWriter, peerID
 	return &taskStream{s: s}
 }
 
+const maxTaskResponseBytes = 16 << 20
+
 func drainTaskStream(s netcore.Stream) (string, error) {
 	deadman := &timeoutReader{stream: s, timeout: network.TaskExecutionTimeout}
-	filtered := newSentinelFilter(deadman)
+	filtered := newSentinelFilter(io.LimitReader(deadman, maxTaskResponseBytes))
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, filtered); err != nil {
 		return "", err

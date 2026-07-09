@@ -55,6 +55,7 @@ func Setup(ctx context.Context, cfg Config) (*MeshNode, error) {
 	isWorker := cfg.Mode == "worker"
 	ps, kademliaDHT, err := initRoutingAndPubSub(ctx, h, isWorker)
 	if err != nil {
+		_ = h.Close()
 		return nil, err
 	}
 

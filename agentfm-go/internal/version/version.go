@@ -8,4 +8,4 @@ package version
 //
 // (see Makefile's build-all target). The const literal below is the
 // fallback for `go build` / `go run` invocations that skip ldflags.
-const AppVersion = "1.3.0-rc.1"
+const AppVersion = "1.3.0"

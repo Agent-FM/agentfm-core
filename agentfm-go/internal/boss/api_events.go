@@ -1,7 +1,6 @@
 package boss
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -84,6 +83,8 @@ func (b *Boss) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -161,10 +162,4 @@ func (b *Boss) publishEntryAppended(subjectPID []byte, kind string) {
 			"kind":            kind,
 		},
 	})
-}
-
-// contextForSSE is a helper that creates a cancellable context for
-// SSE stream tests. Exported only for tests in the same package.
-func contextForSSE() (context.Context, context.CancelFunc) {
-	return context.WithCancel(context.Background())
 }

@@ -28,6 +28,11 @@ const fetchStreamTimeout = 30 * time.Second
 // allocate memory linear in our log size).
 const maxFetchEntries = 1000
 
+// maxFetchAggregateBytes bounds the total payload a client buffers from one
+// fetch page. The per-entry 1 MiB cap alone still lets a hostile responder
+// ship maxFetchEntries * 1 MiB (~1 GiB); legit entries are ~1 KiB.
+const maxFetchAggregateBytes = 32 << 20
+
 // startFetchHandler registers the LedgerFetchProtocol handler on host.
 // Each incoming stream serves one (from, count) range from the local
 // store.
@@ -49,7 +54,14 @@ func (l *ledgerImpl) stopFetchHandler(h host.Host) {
 // Errors mid-stream are surfaced as a zero-count response so the
 // client can distinguish "no data" from "transport failure."
 func (l *ledgerImpl) handleFetch(s libnet.Stream) {
-	defer func() { _ = s.Close() }()
+	reset := true
+	defer func() {
+		if reset {
+			_ = s.Reset()
+		} else {
+			_ = s.Close()
+		}
+	}()
 	if err := s.SetDeadline(time.Now().Add(fetchStreamTimeout)); err != nil {
 		slog.Debug("fetch: set deadline", slog.Any(obs.FieldErr, err))
 		return
@@ -66,6 +78,7 @@ func (l *ledgerImpl) handleFetch(s libnet.Stream) {
 	count := binary.BigEndian.Uint64(hdr[8:])
 	if count == 0 {
 		_ = writeFetchCount(s, 0)
+		reset = false
 		return
 	}
 	if count > maxFetchEntries {
@@ -86,6 +99,7 @@ func (l *ledgerImpl) handleFetch(s libnet.Stream) {
 	if err != nil && !errors.Is(err, errStopIterate) {
 		slog.Debug("fetch: iterate", slog.Any(obs.FieldErr, err))
 		_ = writeFetchCount(s, 0)
+		reset = false
 		return
 	}
 
@@ -101,6 +115,7 @@ func (l *ledgerImpl) handleFetch(s libnet.Stream) {
 			return
 		}
 	}
+	reset = false
 }
 
 func writeFetchCount(w io.Writer, n uint64) error {
@@ -144,7 +159,14 @@ func FetchClient(ctx context.Context, h host.Host, remote peer.ID, from, count u
 	if err != nil {
 		return nil, fmt.Errorf("ledger fetch: open stream: %w", err)
 	}
-	defer func() { _ = s.Close() }()
+	success := false
+	defer func() {
+		if success {
+			_ = s.Close()
+		} else {
+			_ = s.Reset()
+		}
+	}()
 
 	if err := s.SetDeadline(time.Now().Add(fetchStreamTimeout)); err != nil {
 		return nil, fmt.Errorf("ledger fetch: set deadline: %w", err)
@@ -170,6 +192,7 @@ func FetchClient(ctx context.Context, h host.Host, remote peer.ID, from, count u
 	}
 
 	out := make([]FetchedEntry, 0, n)
+	var aggregate uint64
 	for i := uint64(0); i < n; i++ {
 		var eh [12]byte
 		if _, err := io.ReadFull(s, eh[:]); err != nil {
@@ -180,11 +203,16 @@ func FetchClient(ctx context.Context, h host.Host, remote peer.ID, from, count u
 		if plen > (1 << 20) {
 			return nil, fmt.Errorf("ledger fetch: entry %d payload too large (%d > 1MiB)", i, plen)
 		}
+		aggregate += uint64(plen)
+		if aggregate > maxFetchAggregateBytes {
+			return nil, fmt.Errorf("ledger fetch: aggregate payload exceeds %d bytes", maxFetchAggregateBytes)
+		}
 		payload := make([]byte, plen)
 		if _, err := io.ReadFull(s, payload); err != nil {
 			return nil, fmt.Errorf("ledger fetch: read entry %d payload: %w", i, err)
 		}
 		out = append(out, FetchedEntry{Idx: idx, Payload: payload})
 	}
+	success = true
 	return out, nil
 }

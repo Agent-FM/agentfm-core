@@ -8,7 +8,7 @@ interface TabsProps<T extends string> {
 
 export function Tabs<T extends string>({ options, value, onChange }: TabsProps<T>) {
   return (
-    <div className="flex gap-1 border-b border-border-0 mb-3">
+    <div className="flex gap-1 border-b border-white/[0.08] mb-3">
       {options.map((o) => {
         const isActive = o.value === value;
         return (
@@ -21,7 +21,7 @@ export function Tabs<T extends string>({ options, value, onChange }: TabsProps<T
           >
             {o.label}
             {typeof o.count === 'number' && (
-              <span className="text-text-3 ml-1 tabular-nums">· {o.count}</span>
+              <span className="text-text-3 ml-1.5 tabular-nums">{o.count}</span>
             )}
             {isActive && (
               <motion.div

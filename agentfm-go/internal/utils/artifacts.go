@@ -10,20 +10,21 @@ import (
 
 func ZipDirectory(sourceDir, destZip string) error {
 	info, err := os.Stat(sourceDir)
-	if err != nil || !info.IsDir() {
+	if err != nil {
 		return fmt.Errorf("source directory missing or invalid: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("source path is not a directory: %s", sourceDir)
 	}
 
 	zipFile, err := os.Create(destZip)
 	if err != nil {
 		return fmt.Errorf("failed to create zip: %w", err)
 	}
-	defer zipFile.Close()
 
 	archive := zip.NewWriter(zipFile)
-	defer archive.Close()
 
-	return filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
+	walkErr := filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -34,6 +35,10 @@ func ZipDirectory(sourceDir, destZip string) error {
 		}
 
 		if relPath == "." {
+			return nil
+		}
+
+		if info.Mode()&os.ModeSymlink != 0 {
 			return nil
 		}
 
@@ -59,12 +64,20 @@ func ZipDirectory(sourceDir, destZip string) error {
 			return nil
 		}
 
-		// Close the source file on every iteration instead of deferring
-		// inside the Walk callback. A plain defer here would accumulate
-		// open file handles for the whole duration of the archive write,
-		// which blows up on directories with thousands of files.
 		return copyFileIntoZip(path, writer)
 	})
+
+	closeErr := archive.Close()
+	if cerr := zipFile.Close(); cerr != nil && closeErr == nil {
+		closeErr = cerr
+	}
+	if walkErr != nil {
+		return walkErr
+	}
+	if closeErr != nil {
+		return fmt.Errorf("finalize zip: %w", closeErr)
+	}
+	return nil
 }
 
 func copyFileIntoZip(path string, writer io.Writer) error {

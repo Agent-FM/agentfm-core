@@ -29,11 +29,11 @@ import (
 	"log/slog"
 	"time"
 
-	"agentfm/internal/obs"
 	pb "agentfm/internal/ledger/pb"
+	"agentfm/internal/obs"
 
-	libnet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/host"
+	libnet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"google.golang.org/protobuf/proto"
 )
@@ -69,7 +69,14 @@ func (l *ledgerImpl) stopHeadFetchHandler(h host.Host) {
 }
 
 func (l *ledgerImpl) handleHeadFetch(s libnet.Stream) {
-	defer func() { _ = s.Close() }()
+	reset := true
+	defer func() {
+		if reset {
+			_ = s.Reset()
+		} else {
+			_ = s.Close()
+		}
+	}()
 	if err := s.SetDeadline(time.Now().Add(headFetchTimeout)); err != nil {
 		slog.Debug("head-fetch: set deadline", slog.Any(obs.FieldErr, err))
 		return
@@ -99,8 +106,10 @@ func (l *ledgerImpl) handleHeadFetch(s libnet.Stream) {
 	if len(payload) > 0 {
 		if _, err := s.Write(payload); err != nil {
 			slog.Debug("head-fetch: write payload", slog.Any(obs.FieldErr, err))
+			return
 		}
 	}
+	reset = false
 }
 
 // FetchRemoteHead opens a HeadFetchProtocol stream to remote and reads
@@ -112,7 +121,14 @@ func FetchRemoteHead(ctx context.Context, h host.Host, remote peer.ID) (*pb.LogH
 	if err != nil {
 		return nil, fmt.Errorf("head-fetch: open stream: %w", err)
 	}
-	defer func() { _ = s.Close() }()
+	success := false
+	defer func() {
+		if success {
+			_ = s.Close()
+		} else {
+			_ = s.Reset()
+		}
+	}()
 
 	if err := s.SetDeadline(time.Now().Add(headFetchTimeout)); err != nil {
 		return nil, fmt.Errorf("head-fetch: set deadline: %w", err)
@@ -130,6 +146,7 @@ func FetchRemoteHead(ctx context.Context, h host.Host, remote peer.ID) (*pb.LogH
 	}
 	n := binary.BigEndian.Uint32(lenBuf[:])
 	if n == 0 {
+		success = true
 		return nil, nil // remote has no head yet
 	}
 	if n > maxHeadBytes {
@@ -145,6 +162,7 @@ func FetchRemoteHead(ctx context.Context, h host.Host, remote peer.ID) (*pb.LogH
 	if err := proto.Unmarshal(buf, &head); err != nil {
 		return nil, fmt.Errorf("head-fetch: unmarshal LogHead: %w", err)
 	}
+	success = true
 	return &head, nil
 }
 

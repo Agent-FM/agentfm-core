@@ -1,4 +1,4 @@
-import type { ApiBridge } from '../../electron/preload'
+import type { ApiBridge } from '../../shared/ipc'
 
 declare global {
   interface Window {

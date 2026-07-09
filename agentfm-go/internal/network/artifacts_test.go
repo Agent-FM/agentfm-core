@@ -244,9 +244,9 @@ func TestHandleArtifactStream_RejectsZeroLengthTaskID(t *testing.T) {
 }
 
 // TestHandleArtifactStream_BodyShorterThanHeader simulates a peer advertising
-// more bytes than it actually sends. io.Copy on the handler side returns
-// without error when the peer closes cleanly, so the file will be short — we
-// assert the handler does not claim success beyond what was received.
+// more bytes than it actually sends. The transfer is truncated, so the handler
+// must not persist the partial payload as a legitimate artifact: it streams to
+// a .part temp and only renames into place on a complete transfer.
 func TestHandleArtifactStream_BodyShorterThanHeader(t *testing.T) {
 	hosts := testutil.NewConnectedMesh(t, 2)
 	sender, receiver := hosts[0], hosts[1]
@@ -272,17 +272,11 @@ func TestHandleArtifactStream_BodyShorterThanHeader(t *testing.T) {
 	testutil.WaitFor(t, done, 3*time.Second, "handler to finish")
 
 	gotPath := filepath.Join("agentfm_artifacts", "shorty.zip")
-	data, err := os.ReadFile(gotPath)
-	if err != nil {
-		t.Fatalf("read output: %v", err)
+	if _, err := os.Stat(gotPath); !os.IsNotExist(err) {
+		t.Errorf("truncated transfer left an artifact at %s (err=%v); want no file", gotPath, err)
 	}
-	// Body is shorter than header; file on disk must reflect what was actually
-	// received, never padded or magically completed.
-	if int64(len(data)) >= advertised {
-		t.Errorf("unexpectedly got %d bytes, wanted <= %d", len(data), advertised)
-	}
-	if len(data) != actual {
-		t.Errorf("got %d bytes, want exactly %d (actual stream length)", len(data), actual)
+	if _, err := os.Stat(gotPath + ".part"); !os.IsNotExist(err) {
+		t.Errorf("truncated transfer left a .part temp; want it cleaned up")
 	}
 }
 

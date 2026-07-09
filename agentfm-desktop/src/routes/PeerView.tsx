@@ -10,6 +10,7 @@ import { TelemetryStrip } from '../components/peer/TelemetryStrip';
 import { Tabs } from '../components/peer/Tabs';
 import { EntryRow } from '../components/peer/EntryRow';
 import { Button } from '../components/primitives/Button';
+import { SkeletonBox, SkeletonRow } from '../components/primitives/Skeleton';
 import { staggerItem } from '../lib/motion';
 import { displayName } from '../lib/displayName';
 
@@ -26,15 +27,36 @@ export default function PeerView() {
   const cached = usePeerIdentityCache((s) => (peerId ? s.byPeerId[peerId] : undefined));
 
   if (!peerId) {
-    return <div className="p-6 text-bad">No peer id</div>;
+    return <div className="p-4 text-sm text-bad">No peer id</div>;
   }
   if (sPending || lPending) {
-    return <div className="p-6 text-text-2">Loading peer history…</div>;
+    return (
+      <div className="p-4">
+        <SkeletonBox className="h-3 w-24 mb-4" />
+        <div className="flex justify-between items-start mb-4">
+          <div className="min-w-0 flex-1 space-y-2">
+            <SkeletonBox className="h-5 w-48" />
+            <SkeletonBox className="h-2.5 w-72" />
+          </div>
+          <div className="flex gap-2">
+            <SkeletonBox className="h-8 w-28" />
+            <SkeletonBox className="h-8 w-28" />
+          </div>
+        </div>
+        <SkeletonBox className="h-40 w-full mb-4" />
+        <SkeletonBox className="h-24 w-full mb-4" />
+        <div className="border-t border-border-0">
+          {[0, 1, 2, 3].map((i) => (
+            <SkeletonRow key={i} delay={i * 60} />
+          ))}
+        </div>
+      </div>
+    );
   }
   if (sErr || lErr) {
-    return <div className="p-6 text-bad">{(sErr || lErr)?.message}</div>;
+    return <div className="p-4 text-sm text-bad">{(sErr || lErr)?.message}</div>;
   }
-  if (!summary || !log) return <div className="p-6 text-text-2">No data.</div>;
+  if (!summary || !log) return <div className="p-4 text-sm text-text-2">No data yet.</div>;
 
   const allEntries = log.entries ?? [];
   const ratings = allEntries.filter((e) => e.kind === 'Rating');
@@ -42,25 +64,25 @@ export default function PeerView() {
   const view = tab === 'all' ? allEntries : tab === 'ratings' ? ratings : comments;
 
   return (
-    <div className="p-6 max-w-5xl">
+    <div className="p-4">
       <button
         onClick={() => navigate('/radar')}
-        className="inline-flex items-center gap-1.5 text-xs text-text-2 mb-3 hover:text-text-0"
+        className="inline-flex items-center gap-1.5 text-xs text-text-2 mb-2 hover:text-text-0 transition-colors duration-150"
       >
-        <ArrowLeft size={14} />
+        <ArrowLeft size={14} strokeWidth={1.5} />
         <span>Back to Radar</span>
       </button>
 
       <div className="flex justify-between items-start mb-2">
         <div className="min-w-0 flex-1">
-          <h1 className="text-3xl font-semibold tracking-tight text-text-0">
+          <h1 className="text-lg font-semibold text-text-0">
             {displayName({ ...summary, name: summary.agent_name, peer_id: summary.peer_id }, cached)}
           </h1>
-          <div className="font-mono text-[11px] text-text-2 mt-1 break-all tabular-nums">
+          <div className="font-mono text-2xs text-text-2 mt-1 break-all tabular-nums">
             {summary.peer_id}
             {(summary.author?.trim() || cached?.author) && (
               <>
-                {' · by '}
+                {' by '}
                 <span className="text-accent font-semibold">
                   {summary.author?.trim() || cached?.author}
                 </span>
@@ -68,7 +90,7 @@ export default function PeerView() {
             )}
           </div>
           {(summary.description?.trim() || cached?.description) && (
-            <p className="text-[14px] text-text-1 mt-3 leading-[1.55] whitespace-pre-line max-w-3xl">
+            <p className="text-sm text-text-1 mt-2 leading-relaxed whitespace-pre-line max-w-3xl">
               {summary.description?.trim() || cached?.description}
             </p>
           )}
@@ -95,9 +117,9 @@ export default function PeerView() {
       {summary.is_equivocator && (
         <div
           role="alert"
-          className="mb-6 border border-bad/40 bg-bad/10 rounded-[14px] p-5 flex gap-3"
+          className="mb-4 border border-bad/40 bg-bad/10 rounded-card p-3 flex gap-3"
         >
-          <AlertOctagon size={24} className="text-bad flex-none mt-0.5" />
+          <AlertOctagon size={16} strokeWidth={1.5} className="text-bad flex-none mt-0.5" />
           <div>
             <div className="text-bad font-semibold text-sm">Equivocator detected</div>
             <div className="text-xs text-text-1 mt-1">
@@ -110,19 +132,19 @@ export default function PeerView() {
                 </>
               )}
             </div>
-            <div className="text-[11px] text-text-2 mt-2">
-              Equivocation is detected via cross-witness consistency proofs and is permanent —
+            <div className="text-2xs text-text-2 mt-2">
+              Equivocation is detected via cross-witness consistency proofs and is permanent,
               even if the agent later behaves correctly.
             </div>
           </div>
         </div>
       )}
 
-      <div className="mb-6">
+      <div className="mb-4">
         <SummaryCard data={summary} />
       </div>
 
-      <div className="mb-6">
+      <div className="mb-4">
         <TelemetryStrip peerId={summary.peer_id} />
       </div>
 
@@ -137,11 +159,15 @@ export default function PeerView() {
       />
 
       {view.length === 0 ? (
-        <div className="text-sm text-text-2 py-6">No entries match this filter.</div>
+        <div className="text-sm text-text-3 py-6 text-center">No entries match this filter.</div>
       ) : (
-        <div>
+        <div className="border-t border-border-0">
           {view.map((e, i) => (
-            <motion.div key={`${e.received_at}-${i}`} {...staggerItem(Math.min(i, 12))}>
+            <motion.div
+              key={`${e.received_at}-${i}`}
+              className="border-b border-border-0 hover:bg-white/[0.04] transition-colors duration-150"
+              {...staggerItem(Math.min(i, 12))}
+            >
               <EntryRow entry={e} peerId={summary.peer_id} />
             </motion.div>
           ))}

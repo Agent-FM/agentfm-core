@@ -13,9 +13,9 @@ var defaultSeedsBytes []byte
 
 // SeedsManifest is the on-disk shape for genesis-seeds.json (P5-2).
 type SeedsManifest struct {
-	Version   int          `json:"version"`
-	UpdatedAt string       `json:"updated_at,omitempty"`
-	Seeds     []SeedEntry  `json:"seeds"`
+	Version   int         `json:"version"`
+	UpdatedAt string      `json:"updated_at,omitempty"`
+	Seeds     []SeedEntry `json:"seeds"`
 }
 
 // SeedEntry is one curated entry in the manifest.

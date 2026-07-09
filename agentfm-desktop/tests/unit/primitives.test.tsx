@@ -9,22 +9,23 @@ import { Avatar } from '../../src/components/primitives/Avatar'
 import { Meter } from '../../src/components/primitives/Meter'
 
 describe('RoutePage', () => {
-  it('renders content with two calm ambient blobs and no mesh grid', () => {
+  it('renders content on a plain solid surface with no ambient decor', () => {
     const { container } = render(<RoutePage><div>hello</div></RoutePage>)
     expect(screen.getByText('hello')).toBeInTheDocument()
-    expect(container.querySelectorAll('.animate-aurora').length).toBe(2)
+    expect(container.querySelectorAll('.animate-aurora').length).toBe(0)
     expect(container.querySelector('.route-page__grid')).toBeNull()
   })
 })
 
 describe('SectionLabel', () => {
-  it('renders the label as an uppercase caption', () => {
-    render(<SectionLabel>BACKEND</SectionLabel>)
-    const el = screen.getByText('BACKEND')
-    expect(el.className).toMatch(/uppercase/)
+  it('renders the label as a small caption', () => {
+    render(<SectionLabel>Backend</SectionLabel>)
+    const el = screen.getByText('Backend')
+    expect(el.className).toMatch(/text-2xs/)
+    expect(el.className).toMatch(/font-medium/)
   })
-  it('applies text-bad when tone is rose', () => {
-    render(<SectionLabel tone="rose">DANGER ZONE</SectionLabel>)
+  it('applies text-bad when tone is bad', () => {
+    render(<SectionLabel tone="bad">DANGER ZONE</SectionLabel>)
     const el = screen.getByText('DANGER ZONE')
     expect(el.className).toMatch(/text-bad/)
   })
@@ -53,12 +54,17 @@ describe('Avatar', () => {
 })
 
 describe('Meter', () => {
-  it('renders a flat accent fill at the clamped width, no shimmer', () => {
-    const { container, rerender } = render(<Meter value={150} />)
+  it('clamps the fill width and ramps orange → amber past 70 → red past 90', () => {
+    const { container, rerender } = render(<Meter value={50} />)
     const fill = container.querySelector<HTMLElement>('[data-meter-fill]')!
-    expect(fill.style.width).toBe('100%')
+    expect(fill.style.width).toBe('50%')
     expect(fill.className).toMatch(/bg-accent/)
     expect(container.querySelector('.animate-meter-shimmer')).toBeNull()
+    rerender(<Meter value={80} />)
+    expect(fill.className).toMatch(/bg-warn/)
+    rerender(<Meter value={150} />)
+    expect(fill.style.width).toBe('100%')
+    expect(fill.className).toMatch(/bg-bad/)
     rerender(<Meter value={-20} />)
     expect(fill.style.width).toBe('0%')
   })
@@ -68,21 +74,21 @@ import { ProjectChip } from '../../src/components/primitives/ProjectChip'
 import { RelayPill } from '../../src/components/primitives/RelayPill'
 
 describe('ProjectChip', () => {
-  it('renders the project name and a pulsing dot', () => {
+  it('renders the project name and a static status dot (Xcode restraint)', () => {
     const { container } = render(<ProjectChip name="Private Workspace" />)
     expect(screen.getByText('Private Workspace')).toBeInTheDocument()
-    expect(container.querySelector('.animate-pulse-cyan')).toBeInTheDocument()
+    expect(container.querySelector('.bg-accent.rounded-full')).toBeInTheDocument()
   })
 })
 
 describe('RelayPill', () => {
-  it('renders a shortened peer id with the lock prefix when private', () => {
-    render(<RelayPill peerId="12D3KooWPorLn55wwUdnBCipJMe4sFLUJEAESexeVtzYGTiTWw68" mode="private" />)
-    expect(screen.getByText(/🔒/)).toBeInTheDocument()
+  it('renders a shortened peer id with a lock icon when private', () => {
+    const { container } = render(<RelayPill peerId="12D3KooWPorLn55wwUdnBCipJMe4sFLUJEAESexeVtzYGTiTWw68" mode="private" />)
+    expect(container.querySelector('svg.lucide-lock')).toBeInTheDocument()
     expect(screen.getByText(/12D3Ko/)).toBeInTheDocument()
   })
-  it('omits the lock prefix when public', () => {
-    render(<RelayPill peerId="12D3KooWPorLn55wwUdnBCipJMe4sFLUJEAESexeVtzYGTiTWw68" mode="public" />)
-    expect(screen.queryByText(/🔒/)).toBeNull()
+  it('omits the lock icon when public', () => {
+    const { container } = render(<RelayPill peerId="12D3KooWPorLn55wwUdnBCipJMe4sFLUJEAESexeVtzYGTiTWw68" mode="public" />)
+    expect(container.querySelector('svg.lucide-lock')).toBeNull()
   })
 })

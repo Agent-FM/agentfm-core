@@ -13,11 +13,11 @@
 //     Bad sig → ErrSignatureInvalid; entry is silently dropped.
 //  3. Dedupe against inbox_entries and inbox_orphans. Already-seen → nil.
 //  4. Chain-extension check:
-//       - prev_hash is 32 zero bytes AND no chain head known → first
-//         entry from this peer, accept it.
-//       - prev_hash equals the rater's known chain head → accept,
-//         then promote any orphans waiting on this entry's hash.
-//       - otherwise → queue as orphan (subject to OrphanCap).
+//     - prev_hash is 32 zero bytes AND no chain head known → first
+//     entry from this peer, accept it.
+//     - prev_hash equals the rater's known chain head → accept,
+//     then promote any orphans waiting on this entry's hash.
+//     - otherwise → queue as orphan (subject to OrphanCap).
 package inbox
 
 import (
@@ -52,6 +52,12 @@ type Hasher func(entry *pb.SignedEntry) [32]byte
 // for adversarial scenarios while still bounding memory.
 const DefaultOrphanCap = 10_000
 
+// DefaultPerPeerOrphanCap bounds how many orphans a SINGLE peer may hold.
+// Without it one sybil rater could fill the whole global cap and drop
+// every honest peer's out-of-order entry. Capped below the global cap so
+// the table stays shared across many peers.
+const DefaultPerPeerOrphanCap = 1_000
+
 // ErrSignatureInvalid is returned by AcceptOrQueue when the entry's
 // Ed25519 signature does not verify against its RaterPeerID. Surfaced
 // for tests / logging; the gossip subscriber silently drops it.
@@ -81,11 +87,12 @@ var ErrInvalidPayload = errors.New("inbox: invalid payload")
 // Inbox coordinates accept / queue / promote for one local peer.
 // Goroutine-safe: all writes go through Store's mutex; reads scale.
 type Inbox struct {
-	store     *store.Store
-	ownPeerID peer.ID
-	orphanCap uint64
-	verify    Verifier
-	hash      Hasher
+	store            *store.Store
+	ownPeerID        peer.ID
+	orphanCap        uint64
+	perPeerOrphanCap uint64
+	verify           Verifier
+	hash             Hasher
 }
 
 // New constructs an Inbox bound to a store and an owner peer ID.
@@ -95,12 +102,17 @@ func New(s *store.Store, own peer.ID, orphanCap uint64, verify Verifier, hash Ha
 	if orphanCap == 0 {
 		orphanCap = DefaultOrphanCap
 	}
+	perPeer := orphanCap
+	if perPeer > DefaultPerPeerOrphanCap {
+		perPeer = DefaultPerPeerOrphanCap
+	}
 	return &Inbox{
-		store:     s,
-		ownPeerID: own,
-		orphanCap: orphanCap,
-		verify:    verify,
-		hash:      hash,
+		store:            s,
+		ownPeerID:        own,
+		perPeerOrphanCap: perPeer,
+		orphanCap:        orphanCap,
+		verify:           verify,
+		hash:             hash,
 	}
 }
 
@@ -183,8 +195,17 @@ func (i *Inbox) AcceptOrQueue(ctx context.Context, entry *pb.SignedEntry) error 
 		// per Rating/Comment doc comment. Accept.
 		return i.acceptAndPromote(ctx, raterPeerIDBytes, hash, prevHash, payload)
 	case hasChain && prevHash == chainHead:
-		// Standard extension of the rater's known chain.
-		return i.acceptAndPromote(ctx, raterPeerIDBytes, hash, prevHash, payload)
+		// Standard extension of the rater's known chain. The store does an
+		// atomic compare-and-extend, so if a concurrent accept advanced the
+		// head between our read above and the insert, we lost the race:
+		// queue as an orphan rather than accept a fork.
+		if err := i.acceptAndPromote(ctx, raterPeerIDBytes, hash, prevHash, payload); err != nil {
+			if errors.Is(err, store.ErrInboxChainMismatch) {
+				return i.queueOrphan(ctx, raterPeerIDBytes, hash, prevHash, payload)
+			}
+			return err
+		}
+		return nil
 	default:
 		// Either we have a chain head and this entry doesn't extend it,
 		// or we haven't seen this peer and they claim a non-zero
@@ -221,7 +242,21 @@ func (i *Inbox) acceptAndPromote(
 			return fmt.Errorf("find orphans: %w", err)
 		}
 		for _, o := range orphans {
-			if err := i.store.InsertInboxEntry(ctx, peerIDBytes, o.Hash, o.PrevHash, o.Payload); err != nil {
+			err := i.store.InsertInboxEntry(ctx, peerIDBytes, o.Hash, o.PrevHash, o.Payload)
+			if errors.Is(err, store.ErrInboxChainMismatch) {
+				// A sibling already extended this parent; o is a fork at
+				// this chain position and can never promote. Drop it rather
+				// than absorbing the fork into inbox_entries.
+				slog.Warn("inbox: dropping forked orphan at chain position (equivocation)",
+					slog.String("peer", peer.ID(peerIDBytes).String()),
+				)
+				if derr := i.store.DeleteInboxOrphan(ctx, peerIDBytes, o.Hash); derr != nil {
+					slog.Warn("inbox: failed to drop forked orphan",
+						slog.Any(obs.FieldErr, derr))
+				}
+				continue
+			}
+			if err != nil {
 				slog.Warn("inbox: failed to promote orphan",
 					slog.Any(obs.FieldErr, err),
 					slog.String("peer", peer.ID(peerIDBytes).String()),
@@ -247,6 +282,15 @@ func (i *Inbox) queueOrphan(
 	hash, prevHash [32]byte,
 	payload []byte,
 ) error {
+	// Per-peer quota first: one sybil rater must not be able to consume the
+	// whole global cap and starve every other peer's out-of-order delivery.
+	perPeer, err := i.store.CountInboxOrphansForPeer(ctx, peerIDBytes)
+	if err != nil {
+		return fmt.Errorf("per-peer orphan count: %w", err)
+	}
+	if perPeer >= i.perPeerOrphanCap {
+		return ErrOrphanCapExceeded
+	}
 	count, err := i.store.CountInboxOrphans(ctx)
 	if err != nil {
 		return fmt.Errorf("orphan count: %w", err)

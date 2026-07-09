@@ -56,11 +56,11 @@ func TestHandleExecuteTask_FeedbackPersistsComment(t *testing.T) {
 	crw := NewCompletionRatingWriter(recLedger, bossHost)
 
 	b := &Boss{
-		node:          &network.MeshNode{Host: bossHost},
-		activeWorkers: make(map[string]types.WorkerProfile),
-		lastSeen:      make(map[string]time.Time),
-		ledger:        recLedger,
-		commentsStore: cs,
+		node:            &network.MeshNode{Host: bossHost},
+		activeWorkers:   make(map[string]types.WorkerProfile),
+		lastSeen:        make(map[string]time.Time),
+		ledger:          recLedger,
+		commentsStore:   cs,
 		completionRater: crw,
 	}
 	workerPID := workerHost.ID()
@@ -226,4 +226,3 @@ func TestHandleExecuteTask_NoFeedbackSkipsPersist(t *testing.T) {
 		}
 	}
 }
-

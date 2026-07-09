@@ -220,7 +220,7 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Create the output directory where AgentFM's Go worker will look for the files
-RUN mkdir -p /tmp/output && chmod 777 /tmp/output
+RUN mkdir -p /tmp/output && chmod 755 /tmp/output
 
 # Install the necessary libraries
 RUN pip install --no-cache-dir requests

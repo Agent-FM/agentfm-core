@@ -1,21 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { ApiBridge, ArtifactMetadata, ArtifactListEntry } from '../shared/ipc'
 
-export interface ArtifactMetadata {
-  projectName?: string
-  prompt?: string
-  agentName?: string
-  agentDescription?: string
-  agentPeerId?: string
-}
+export type { ApiBridge, ArtifactMetadata, ArtifactListEntry } from '../shared/ipc'
 
-export interface ArtifactListEntry {
-  taskId: string
-  sizeBytes: number
-  mtime: number
-  metadata?: ArtifactMetadata
-}
-
-const api = {
+const api: ApiBridge = {
   platform: process.platform,
   backend: {
     health: () => ipcRenderer.invoke('backend:health'),
@@ -46,9 +34,13 @@ const api = {
     listArtifacts: () => ipcRenderer.invoke('app:listArtifacts') as Promise<ArtifactListEntry[]>,
     writeArtifactMeta: (taskId: string, meta: ArtifactMetadata) =>
       ipcRenderer.invoke('app:writeArtifactMeta', taskId, meta) as Promise<void>,
+    saveSwarmKeyFile: (content: string, defaultName: string) =>
+      ipcRenderer.invoke('app:saveSwarmKeyFile', content, defaultName) as Promise<{
+        ok: boolean
+        path?: string
+        error?: string
+      }>,
   },
 }
 
 contextBridge.exposeInMainWorld('api', api)
-
-export type ApiBridge = typeof api

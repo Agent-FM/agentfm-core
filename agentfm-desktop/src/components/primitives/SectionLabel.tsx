@@ -1,13 +1,14 @@
-import type { ReactNode } from 'react'
+import type { ElementType, ReactNode } from 'react'
 
 interface Props {
   children: ReactNode
-  tone?: 'cyan' | 'rose'
+  tone?: 'accent' | 'bad'
+  as?: ElementType
 }
 
-export function SectionLabel({ children, tone }: Props) {
-  const toneColor = tone === 'rose' ? 'text-bad' : tone === 'cyan' ? 'text-accent' : 'text-text-2'
+export function SectionLabel({ children, tone, as: Tag = 'div' }: Props) {
+  const toneColor = tone === 'bad' ? 'text-bad' : tone === 'accent' ? 'text-accent' : 'text-text-1'
   return (
-    <div className={`text-2xs font-medium uppercase tracking-[0.14em] ${toneColor}`}>{children}</div>
+    <Tag className={`text-2xs font-medium ${toneColor}`}>{children}</Tag>
   )
 }

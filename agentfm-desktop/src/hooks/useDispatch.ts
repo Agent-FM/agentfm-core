@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { api, ApiError } from '../lib/api';
+import { stripAnsi } from '../lib/ansi';
 
 export interface DispatchState {
   status: 'idle' | 'connecting' | 'streaming' | 'completed' | 'error';
@@ -42,11 +43,14 @@ export function useDispatch() {
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
         buffer += chunk;
-        // Strip [AGENTFM: ...] sentinel lines from displayed output
-        const cleaned = buffer
-          .split('\n')
-          .filter((line) => !line.trim().startsWith('[AGENTFM:'))
-          .join('\n');
+        // Strip [AGENTFM: ...] sentinel lines and ANSI escapes from the
+        // displayed output (the chat path does the same via stripAnsi).
+        const cleaned = stripAnsi(
+          buffer
+            .split('\n')
+            .filter((line) => !line.trim().startsWith('[AGENTFM:'))
+            .join('\n'),
+        );
         setState((s) => ({ ...s, output: cleaned }));
       }
 
@@ -56,8 +60,19 @@ export function useDispatch() {
       // sidecar so the Assets view can surface agent name + description
       // even after the agent has gone offline.
       for (let i = 0; i < 20; i++) {
-        const exists = await window.api.app.checkArtifact(taskId);
+        // Bail if this dispatch was superseded/reset, otherwise a stale loop
+        // would write hasArtifact onto the NEXT dispatch's state.
+        if (ctrl.signal.aborted) return;
+        let exists = false;
+        try {
+          exists = await window.api.app.checkArtifact(taskId);
+        } catch {
+          // An IPC hiccup must not wipe the already-completed dispatch's
+          // output via the outer catch, just stop polling.
+          break;
+        }
         if (exists) {
+          if (ctrl.signal.aborted) return;
           setState((s) => ({ ...s, hasArtifact: true }));
           try {
             await window.api.app.writeArtifactMeta(taskId, {

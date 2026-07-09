@@ -11,7 +11,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
-RUN mkdir -p /tmp/output && chmod 777 /tmp/output
+RUN mkdir -p /tmp/output && chmod 755 /tmp/output
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

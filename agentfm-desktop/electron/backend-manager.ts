@@ -189,7 +189,13 @@ export class BackendManager extends EventEmitter {
 
     this.logger.info(`Starting backend: ${bin} ${args.join(' ')}`)
 
-    const proc = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'], cwd: this.artifactsDir })
+    const proc = spawn(bin, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: this.artifactsDir,
+      // The packaged renderer loads via file:// (Origin: null); opt the
+      // loopback gateway into trusting that origin for state-changing POSTs.
+      env: { ...process.env, AGENTFM_ALLOW_FILE_ORIGIN: '1' },
+    })
     this.proc = proc
 
     proc.stdout?.on('data', (data: Buffer) => this.logger.write(data))
@@ -321,7 +327,13 @@ export class BackendManager extends EventEmitter {
           const cmd = execSync(`ps -p ${pid} -o command=`, { encoding: 'utf8', timeout: 500 })
             .toString()
             .trim()
-          if (!cmd.includes(bin) && !cmd.includes('agentfm')) continue
+          // Only kill OUR backend: the exact resolved binary path, or a
+          // packaged agentfm-<os>-<arch> binary. A bare "agentfm" substring
+          // would match unrelated processes (a manual `agentfm -mode api`, or
+          // anything launched from a path containing "agentfm").
+          const isOurBackend =
+            cmd.includes(bin) || /agentfm-(win32|darwin|linux)-(x64|arm64|amd64)/.test(cmd)
+          if (!isOurBackend) continue
           this.logger.info(`Killing stale backend pid ${pid} on port ${safePort} (${cmd.slice(0, 80)})`)
           try {
             process.kill(pid, 'SIGKILL')
@@ -346,7 +358,9 @@ export class BackendManager extends EventEmitter {
       return join(process.resourcesPath, 'bin', `agentfm-${platform}${ext}`)
     }
 
-    // Dev: relative from electron/ -> project root -> agentfm-core
-    return join(__dirname, '..', '..', '..', 'agentfm-core', 'agentfm-go', 'agentfm')
+    // Dev: __dirname is agentfm-desktop/out/main; up 3 to the repo root,
+    // then into agentfm-go. (The old path assumed the pre-merge layout where
+    // agentfm-desktop was a sibling of agentfm-core.)
+    return join(__dirname, '..', '..', '..', 'agentfm-go', 'agentfm')
   }
 }

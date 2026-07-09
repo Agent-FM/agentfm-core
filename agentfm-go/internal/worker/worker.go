@@ -108,7 +108,7 @@ func (w *Worker) Start(ctx context.Context) {
 	defer stop()
 
 	if err := w.buildSandboxImage(ctx); err != nil {
-		pterm.Fatal.Printfln("Startup failed: %v", err)
+		pterm.Error.Printfln("Startup failed: %v", err)
 		os.Exit(1)
 	}
 

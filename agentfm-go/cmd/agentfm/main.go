@@ -49,9 +49,9 @@ func main() {
 
 	// Observability: Prometheus /metrics listen address. Default is loopback
 	// for safety; pass 0.0.0.0:<port> to expose to off-host scrapers.
-	// Empty string disables the metrics server (worker and relay only;
+	// Pass "-" to disable the metrics server (worker/relay/witness only;
 	// boss-api always serves /metrics on its own port).
-	promListen := flag.String("prom-listen", "", "Prometheus /metrics listen address (worker default 127.0.0.1:9090, relay default 127.0.0.1:9091, witness default 127.0.0.1:9092, empty disables)")
+	promListen := flag.String("prom-listen", "", "Prometheus /metrics listen address (worker default 127.0.0.1:9090, relay default 127.0.0.1:9091, witness default 127.0.0.1:9092; pass - to disable)")
 
 	// Structured-logging controls. Format auto-detects: console on a TTY,
 	// JSON otherwise. Operators running under systemd / docker / k8s want
@@ -127,6 +127,18 @@ func main() {
 			pterm.Fatal.Printfln("❌ Failed to resolve worker identity path: %v", err)
 		}
 		netCfg.IdentityPath = idPath
+	}
+
+	if *mode == "relay" {
+		netCfg.IdentityPath = resolveRelayIdentityPath(*identity)
+	}
+
+	if *mode == "witness" {
+		if *identity != "" {
+			netCfg.IdentityPath = *identity
+		} else {
+			netCfg.IdentityPath = defaultWitnessIdentityPath()
+		}
 	}
 
 	// Set up the structured logger BEFORE any role-specific code runs so
@@ -212,37 +224,6 @@ func runTestMode(ctx context.Context, cfg worker.Config, testPrompt string) {
 	if err := worker.RunLocalTest(testCtx, cfg, promptToUse); err != nil {
 		pterm.Fatal.Printfln("❌ Local test failed: %v", err)
 	}
-}
-
-// runRelayMode brings up a DHT-server mesh node without any worker or
-// boss responsibilities. Useful for a developer who wants to run their
-// own lighthouse on a spare VPS instead of using the public one.
-func runRelayMode(ctx context.Context, netCfg network.Config, promListen string) {
-	node, err := network.Setup(ctx, netCfg)
-	if err != nil {
-		pterm.Fatal.Println(err)
-	}
-
-	relayCtx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-
-	if promListen != "" {
-		go func() {
-			if err := metrics.Serve(relayCtx, promListen); err != nil {
-				pterm.Error.Printfln("metrics server: %v", err)
-			}
-		}()
-		pterm.Success.Printfln("Metrics server: http://%s/metrics", promListen)
-	}
-
-	pterm.Success.Println("Relay Node Active. Press Ctrl+C to shut down.")
-	pterm.Info.Println("📌 To connect nodes to this private swarm, start them with:")
-	for _, addr := range node.Host.Addrs() {
-		fmt.Printf("agentfm -mode boss -swarmkey ./swarm.key -bootstrap %s/p2p/%s\n", addr.String(), node.Host.ID().String())
-	}
-
-	<-relayCtx.Done()
-	fmt.Println("\nShutting down relay...")
 }
 
 func runWorkerMode(ctx context.Context, netCfg network.Config, cfg worker.Config, promListen string) {

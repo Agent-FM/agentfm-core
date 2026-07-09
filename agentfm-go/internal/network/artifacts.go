@@ -197,13 +197,18 @@ func handleArtifactStream(stream network.Stream, authorize func(taskID string, f
 		return
 	}
 	destPath := filepath.Join(".", "agentfm_artifacts", safeTaskID+".zip")
+	tmpPath := destPath + ".part"
 
-	outFile, err := os.Create(destPath)
+	outFile, err := os.Create(tmpPath)
 	if err != nil {
-		slog.Error("create local artifact file", slog.Any(obs.FieldErr, err), slog.String("dest", destPath))
+		slog.Error("create local artifact file", slog.Any(obs.FieldErr, err), slog.String("dest", tmpPath))
 		return
 	}
-	defer outFile.Close()
+	defer func() {
+		if !success {
+			_ = os.Remove(tmpPath)
+		}
+	}()
 
 	progressTitle := safeTaskID
 	if len(progressTitle) > 8 {
@@ -226,20 +231,29 @@ func handleArtifactStream(stream network.Stream, authorize func(taskID string, f
 	bytesRead, err := io.Copy(pw, io.LimitReader(stream, fileSize))
 	if err != nil {
 		pb.Stop()
+		_ = outFile.Close()
 		metrics.StreamErrorsTotal.WithLabelValues(metrics.ProtocolArtifacts, metrics.ReasonReset).Inc()
 		slog.Error("download artifacts", slog.Any(obs.FieldErr, err), slog.String(obs.FieldProtocol, "artifacts"))
 		return
 	}
 	pb.Stop()
 	if bytesRead != fileSize {
-		// Truncation: the worker declared more than it shipped. Don't
-		// surface the partial as a legitimate artifact.
+		_ = outFile.Close()
 		metrics.StreamErrorsTotal.WithLabelValues(metrics.ProtocolArtifacts, metrics.ReasonReset).Inc()
 		slog.Warn("artifact truncated",
 			slog.Int64("declared_size", fileSize),
 			slog.Int64("actual", bytesRead),
 			slog.String(obs.FieldProtocol, "artifacts"),
 		)
+		return
+	}
+	if err := outFile.Close(); err != nil {
+		metrics.StreamErrorsTotal.WithLabelValues(metrics.ProtocolArtifacts, metrics.ReasonReset).Inc()
+		slog.Error("flush artifact file", slog.Any(obs.FieldErr, err), slog.String("dest", tmpPath))
+		return
+	}
+	if err := os.Rename(tmpPath, destPath); err != nil {
+		slog.Error("finalize artifact file", slog.Any(obs.FieldErr, err), slog.String("dest", destPath))
 		return
 	}
 	success = true

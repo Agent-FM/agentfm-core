@@ -14,7 +14,7 @@ const ERROR_THRESHOLD = 3
  *
  * Call this from inside a route component that should drive polling (only
  * Dashboard today). Other routes that don't need /metrics should not call
- * it — the boss `/metrics` endpoint is unrelated to the always-on
+ * it, the boss `/metrics` endpoint is unrelated to the always-on
  * `/api/workers` poll handled by useWorkerHistory.
  */
 export function useMetricsPoll(): void {
@@ -29,6 +29,10 @@ export function useMetricsPoll(): void {
     async function tick() {
       if (cancelledRef.current) return
       if (document.visibilityState !== 'visible') {
+        // Null the (already-fired) timer id so onVisibility restarts polling
+        // when the tab becomes visible again. Without this, timerRef stays
+        // truthy and !timerRef.current never re-triggers tick().
+        timerRef.current = null
         return
       }
       try {

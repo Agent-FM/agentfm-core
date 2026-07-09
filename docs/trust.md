@@ -58,7 +58,7 @@ Comments are content-addressed (SHA-256 CID), signed by the commenter's Ed25519 
 
 ### Relay archive ledger
 
-The relay binary opens a full archive ledger that auto-subscribes to `FeedbackTopic` and `EquivocationTopic`. Every peer's rating and comment history accumulates there even when the originating Boss is offline.
+A relay (`agentfm -mode relay`) opens a full archive ledger that auto-subscribes to `FeedbackTopic` and `EquivocationTopic`. Every peer's rating and comment history accumulates there even when the originating Boss is offline.
 
 The relay serves `/agentfm/ledger-fetch/1.0.0` — any Boss can pull missed entries on demand.
 
@@ -199,7 +199,7 @@ No PR. No allow-list. No maintainer review.
 | Dispatch gate (equivocator + floor) | `internal/boss/trust_gate.go` |
 | Hourly aggregate ratings | `internal/boss/api.go` (outcome hooks) |
 | Signed Comment feedback | `internal/boss/api_comments.go` |
-| Relay archive ledger | `cmd/relay/main.go` |
+| Relay archive ledger | `cmd/agentfm/relay.go` |
 | Boss auto catch-up | `internal/boss/api.go` (startup fetch) |
 | Offline peer visibility | `internal/boss/api.go` (`ListKnownPeers`) |
 | Merkle log spine | `internal/ledger/ledger.go`, `internal/ledger/impl.go`, `internal/ledger/merkle/*.go` |

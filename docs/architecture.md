@@ -32,7 +32,7 @@ flowchart LR
 
 | Role | Binary | Responsibility |
 |---|---|---|
-| **Relay** | `agentfm-relay` (or `agentfm -mode relay`) | Permanent lighthouse on a public IP. Runs a DHT in server mode, enables Circuit Relay v2, persists peer identity. |
+| **Relay** | `agentfm -mode relay` | Permanent lighthouse on a public IP. Circuit Relay v2 (infinite limits), DHT in server mode, telemetry routing, archive ledger, persistent peer identity. |
 | **Worker** | `agentfm -mode worker` | Advertises hardware via GossipSub. Accepts task streams. Executes inside ephemeral Podman containers. |
 | **Boss** | `agentfm -mode boss` (TUI) or `-mode api` (HTTP gateway) | Discovers peers, dispatches tasks, surfaces results. Both flavours share the same dial logic. |
 

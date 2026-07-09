@@ -12,13 +12,13 @@ import (
 
 // aboutResponse is the JSON payload for GET /v1/about.
 type aboutResponse struct {
-	BossPeerID       string  `json:"boss_peer_id"`
-	RelayPeerID      string  `json:"relay_peer_id"`
-	RelayMultiaddr   string  `json:"relay_multiaddr"`
-	ReputationFloor  float64 `json:"reputation_floor"`
-	LedgerTreeSize   uint64  `json:"ledger_tree_size"`
-	Version          string  `json:"version"`
-	UptimeSeconds    int64   `json:"uptime_seconds"`
+	BossPeerID      string  `json:"boss_peer_id"`
+	RelayPeerID     string  `json:"relay_peer_id"`
+	RelayMultiaddr  string  `json:"relay_multiaddr"`
+	ReputationFloor float64 `json:"reputation_floor"`
+	LedgerTreeSize  uint64  `json:"ledger_tree_size"`
+	Version         string  `json:"version"`
+	UptimeSeconds   int64   `json:"uptime_seconds"`
 }
 
 // handleAbout services GET /v1/about — returns a backend identity and

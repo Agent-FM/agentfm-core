@@ -544,7 +544,7 @@ func (b *Boss) handlePeerGet(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	honesty, equivocator, dispatchAllowed, refuseReason := b.computeTrustView(peerIDStr)
+	honesty, equivocator, dispatchAllowed, refuseReason := b.computeTrustView(ctx, peerIDStr)
 
 	resp := peerSummaryResponse{
 		PeerID:               peerIDStr,

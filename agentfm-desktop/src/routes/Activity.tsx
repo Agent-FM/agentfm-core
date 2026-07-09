@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { Star, MessageSquare } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAbout, useWorkers, qk } from '../lib/query';
@@ -8,9 +8,6 @@ import { EntryRow } from '../components/peer/EntryRow';
 import type { PeerEntry } from '../types/api';
 import { usePeerName } from '../hooks/usePeerName';
 import { shortenPeerID } from '../lib/peer';
-import { Card } from '../components/primitives/Card';
-import { SectionLabel } from '../components/primitives/SectionLabel';
-import { staggerItem } from '../lib/motion';
 
 interface ActivityEntry {
   subject: string;
@@ -40,7 +37,7 @@ export default function Activity() {
   const me = about?.boss_peer_id;
   const peers = workers?.agents.map((w) => w.peer_id) ?? [];
 
-  // Fan out per peer — N+1 at hobbyist scale (<10 peers)
+  // Fan out per peer, N+1 at hobbyist scale (<10 peers)
   const queries = useQueries({
     queries: peers.map((pid) => ({
       queryKey: qk.peerLog(pid, { limit: 200, offset: 0 }),
@@ -85,74 +82,74 @@ export default function Activity() {
   );
 
   return (
-    <div className="p-6 max-w-5xl">
-      <h1 className="text-2xl font-semibold tracking-tight text-text-0">My activity</h1>
-      <p className="text-sm text-text-2 mt-1 mb-6">
-        Every rating and comment <em>you</em> have signed and broadcast to the mesh.
+    <div className="p-4">
+      <h1 className="text-lg font-semibold text-text-0">My activity</h1>
+      <p className="text-sm text-text-2 mt-1 mb-4">
+        Every rating and comment you have signed and broadcast to the mesh.
         {someLoading && (
-          <span className="ml-2 tabular-nums">refreshing across {peers.length} peers…</span>
+          <span className="ml-2 tabular-nums text-text-3">
+            Refreshing across {peers.length} peers
+          </span>
         )}
       </p>
 
       {myEntries.length === 0 && !someLoading ? (
-        <div className="bg-bg-2 border border-border-0 rounded-lg p-8 text-center">
-          <p className="text-text-1 font-medium">No outgoing entries yet.</p>
-          <p className="text-sm text-text-2 mt-2">
-            Leave feedback on a peer from their profile, or run a dispatch — entries you sign show
-            up here.
+        <div className="py-16 text-center">
+          <p className="text-base font-semibold text-text-1">No outgoing entries yet</p>
+          <p className="text-sm text-text-3 mt-1.5">
+            Leave feedback on a peer from their profile or run a dispatch. Entries you sign show up
+            here.
           </p>
         </div>
       ) : (
-        <div className="space-y-6">
-          {(() => {
-            let rowIndex = 0;
-            return orderedBuckets.map((b) => (
-              <section key={b}>
-                <div className="mb-2 px-1 flex items-center gap-2">
-                  <SectionLabel tone="cyan">{BUCKET_LABEL[b]}</SectionLabel>
-                  <span className="text-2xs text-text-3 tabular-nums">({grouped[b].length})</span>
-                </div>
-                <Card density="compact" className="divide-y divide-border-0">
-                  {grouped[b].map(({ subject, entry }, i) => (
-                    <motion.div
-                      key={`${entry.received_at}-${i}`}
-                      className="px-4 py-3"
-                      {...staggerItem(Math.min(rowIndex++, 12))}
+        <div className="space-y-5">
+          {orderedBuckets.map((b) => (
+            <section key={b}>
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-2xs font-medium text-text-2">{BUCKET_LABEL[b]}</span>
+                <span className="text-2xs text-text-3 tabular-nums">{grouped[b].length}</span>
+              </div>
+              <div className="border border-border-0 rounded-card overflow-hidden">
+                {grouped[b].map(({ subject, entry }, i) => (
+                  <div
+                    key={`${entry.received_at}-${i}`}
+                    className="flex gap-3 px-3 py-2 border-b border-border-0 last:border-b-0 hover:bg-white/[0.04] transition-colors duration-150"
+                  >
+                    <span
+                      className={`mt-0.5 shrink-0 w-6 h-6 rounded-ctl flex items-center justify-center ${
+                        entry.kind === 'Comment'
+                          ? 'bg-white/[0.06] text-text-1'
+                          : 'bg-accent/15 text-accent'
+                      }`}
+                      aria-hidden="true"
                     >
-                      <div className="text-2xs">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span
-                            className="inline-flex items-center gap-1 rounded bg-accent/12 text-accent px-1.5 py-0.5"
-                            title={me ?? 'this boss'}
-                          >
-                            <span className="font-bold">YOU</span>
-                            <span className="font-mono opacity-80">boss · {me ? shortenPeerID(me, 6, 4) : '…'}</span>
-                          </span>
-                          <span className="text-text-2">
-                            {entry.kind === 'Comment' ? 'commented on' : 'rated'}
-                          </span>
-                          <span className="inline-flex items-center gap-1 rounded bg-bg-2 border border-border-0 text-text-1 px-1.5 py-0.5">
-                            <span className="font-bold text-text-2">PEER</span>
-                            <span className="font-medium">
-                              <PeerName peerId={subject} />
-                            </span>
-                          </span>
-                        </div>
+                      {entry.kind === 'Comment'
+                        ? <MessageSquare size={13} strokeWidth={1.5} />
+                        : <Star size={13} strokeWidth={1.5} />}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-1.5 text-sm min-w-0">
+                        <span className="text-text-1 shrink-0">
+                          You {entry.kind === 'Comment' ? 'commented on' : 'rated'}
+                        </span>
                         <button
                           onClick={() => navigate(`/peer/${subject}`)}
-                          className="mt-1 block text-left font-mono text-text-3 break-all hover:text-accent transition-colors"
-                          title={`${subject} — open profile`}
+                          className="font-medium text-text-0 hover:text-accent transition-colors truncate cursor-pointer"
+                          title={`${subject}, open profile`}
                         >
-                          {subject}
+                          <PeerName peerId={subject} />
                         </button>
+                        <span className="font-mono text-2xs text-text-2 shrink-0">
+                          {shortenPeerID(subject, 6, 4)}
+                        </span>
                       </div>
                       <EntryRow entry={entry} peerId={subject} />
-                    </motion.div>
-                  ))}
-                </Card>
-              </section>
-            ));
-          })()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
       )}
     </div>

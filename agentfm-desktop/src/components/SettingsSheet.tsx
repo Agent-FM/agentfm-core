@@ -26,35 +26,35 @@ export function SettingsSheet() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[65] flex justify-end"
+            className="fixed inset-0 bg-bg-0/60 z-[65] flex justify-end"
             onClick={close}
           >
             <motion.div
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
-              transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
               onClick={(e) => e.stopPropagation()}
-              className="w-[420px] h-full bg-bg-1 border-l border-border-0 p-7 overflow-auto"
+              className="w-[420px] h-full glass-strong shadow-float p-4 overflow-auto"
             >
-              <div className="flex justify-between items-start mb-7">
-                <h2 className="text-xl font-semibold tracking-tight text-text-0">Settings</h2>
+              <div className="flex justify-between items-start mb-5">
+                <h2 className="text-lg font-semibold text-text-0">Settings</h2>
                 <button onClick={close} aria-label="close" className="text-text-2 hover:text-text-0">
-                  <X size={18} />
+                  <X size={16} strokeWidth={1.5} />
                 </button>
               </div>
 
-              <div className="mb-7 bg-bg-2 border border-border-0 rounded-xl p-4">
-                <div className="text-2xs uppercase tracking-wider text-text-2 mb-2">Backend</div>
+              <div className="mb-5 glass p-3">
+                <div className="text-2xs font-medium text-text-2 mb-2">Backend</div>
                 <div className="flex items-center gap-2 text-sm">
-                  <StatusDot tone={backend.ok ? 'cyan' : 'rose'} pulse={backend.ok} />
+                  <StatusDot tone={backend.ok ? 'ok' : 'bad'} pulse={backend.ok} />
                   <span className="text-text-0">{backend.ok ? 'Healthy' : 'Down'}</span>
-                  <span className="ml-auto text-2xs text-text-2 font-mono">v{about?.version ?? '…'}</span>
+                  <span className="ml-auto text-2xs text-text-2 font-mono tabular-nums">v{about?.version ?? '…'}</span>
                 </div>
-                <div className="mt-2 text-2xs text-text-2 font-mono">
+                <div className="mt-1.5 text-2xs text-text-2 font-mono tabular-nums">
                   {backend.online_workers} online worker{backend.online_workers === 1 ? '' : 's'}
                 </div>
-                <div className="mt-4">
+                <div className="mt-3">
                   <Button onClick={() => setShowLogs(true)}>
                     <FileText size={12} />
                     <span>View logs</span>
@@ -62,7 +62,7 @@ export function SettingsSheet() {
                 </div>
               </div>
 
-              <label className="block text-2xs uppercase tracking-wider text-text-2 mb-2">Theme</label>
+              <label className="block text-2xs font-medium text-text-2 mb-2">Theme</label>
               <SegGroup
                 options={[
                   { value: 'dark', label: 'Dark' },

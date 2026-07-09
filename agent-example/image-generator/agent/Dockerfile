@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-RUN mkdir -p /tmp/output && chmod 777 /tmp/output
+RUN mkdir -p /tmp/output && chmod 755 /tmp/output
 
 RUN pip install --no-cache-dir requests
 

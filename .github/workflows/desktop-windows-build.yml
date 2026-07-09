@@ -31,8 +31,12 @@ jobs:
           GOOS: windows
           GOARCH: amd64
         run: |
+          # Name using Node's platform-arch (win32-x64) so it matches what
+          # backend-manager.ts resolves at runtime (agentfm-${process.platform}-${process.arch})
+          # and what scripts/build-binaries.sh emits. electron-builder's
+          # extraResources copies resources/agentfm-* into Resources/bin/.
           mkdir -p ../agentfm-desktop/resources
-          go build -trimpath -ldflags="-s -w" -o ../agentfm-desktop/resources/agentfm-windows-amd64.exe ./cmd/agentfm
+          go build -trimpath -ldflags="-s -w" -o ../agentfm-desktop/resources/agentfm-win32-x64.exe ./cmd/agentfm
 
       - name: Install desktop deps
         run: npm ci

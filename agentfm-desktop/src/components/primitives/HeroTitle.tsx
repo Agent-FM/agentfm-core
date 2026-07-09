@@ -8,7 +8,7 @@ interface Props {
 
 export function HeroTitle({ children, accent, trail }: Props) {
   return (
-    <h1 className="font-semibold tracking-tight leading-tight m-0" style={{ fontSize: '33px', letterSpacing: '-0.02em' }}>
+    <h1 className="text-lg font-semibold m-0 text-text-0">
       {children}{' '}
       <span data-hero-accent className="text-accent">{accent}</span>
       {trail != null ? <> {trail}</> : null}

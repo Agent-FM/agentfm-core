@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
+	pb "agentfm/internal/ledger/pb"
 	"agentfm/internal/metrics"
 	"agentfm/internal/network"
-	pb "agentfm/internal/ledger/pb"
 	"agentfm/internal/types"
 	"agentfm/internal/version"
 
@@ -355,4 +355,3 @@ func (b *Boss) appendFeedbackComment(ctx context.Context, target peer.ID, taskID
 	}
 	return nil
 }
-

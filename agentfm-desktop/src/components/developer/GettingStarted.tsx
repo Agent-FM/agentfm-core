@@ -14,8 +14,8 @@ interface Step {
 
 export function GettingStarted({ baseURL, authEnabled }: Props) {
   const authNote = authEnabled
-    ? 'Auth is enabled — send an Authorization: Bearer <key> header on every request.'
-    : 'No API key needed — the gateway binds to loopback and auth is disabled by default.'
+    ? 'Auth is enabled, send an Authorization: Bearer <key> header on every request.'
+    : 'No API key needed, the gateway binds to loopback and auth is disabled by default.'
 
   const steps: Step[] = [
     {
@@ -27,7 +27,7 @@ export function GettingStarted({ baseURL, authEnabled }: Props) {
     {
       n: 2,
       title: 'List the agents (models) online',
-      body: 'OpenAI-compatible. Each online worker is exposed as a model whose id is the agent’s peer id — that is the handle you use to address it.',
+      body: 'OpenAI-compatible. Each online worker is exposed as a model whose id is the agent’s peer id, that is the handle you use to address it.',
       code: `curl ${baseURL}/v1/models`,
     },
     {
@@ -48,10 +48,10 @@ export function GettingStarted({ baseURL, authEnabled }: Props) {
 
   const python = `from openai import OpenAI
 
-# The Boss speaks the OpenAI protocol — point any OpenAI client at it.
+# The Boss speaks the OpenAI protocol, point any OpenAI client at it.
 client = OpenAI(base_url="${baseURL}/v1", api_key="${authEnabled ? 'YOUR_KEY' : 'not-needed'}")
 
-# 1. Discover online agents — each model id IS the agent's peer id
+# 1. Discover online agents, each model id IS the agent's peer id
 agent_id = client.models.list().data[0].id
 print("addressing agent:", agent_id)
 
@@ -86,7 +86,7 @@ for chunk in stream:
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium text-text-0">{s.title}</div>
               <div className="text-2xs text-text-2 mb-1.5">{s.body}</div>
-              <pre className="bg-bg-0 border border-border-0 rounded-lg p-2.5 font-mono text-2xs overflow-auto whitespace-pre-wrap text-text-1">
+              <pre className="glass-inset rounded-ctl p-2.5 font-mono text-2xs overflow-auto whitespace-pre-wrap text-text-1">
                 {s.code}
               </pre>
             </div>
@@ -94,10 +94,10 @@ for chunk in stream:
         ))}
       </div>
 
-      <div className="text-[11px] font-mono uppercase tracking-[0.14em] text-text-2 mb-1.5">
+      <div className="text-2xs font-medium text-text-2 mb-1.5">
         Or use the OpenAI Python SDK
       </div>
-      <pre className="bg-bg-0 border border-border-0 rounded-xl p-3 font-mono text-xs overflow-auto whitespace-pre-wrap text-text-1">
+      <pre className="glass-inset rounded-card p-3 font-mono text-xs overflow-auto whitespace-pre-wrap text-text-1">
         {python}
       </pre>
       <p className="text-2xs text-text-2 mt-3">

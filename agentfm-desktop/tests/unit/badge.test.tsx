@@ -14,10 +14,10 @@ describe('Badge', () => {
     expect(el.className).toMatch(/text-accent/)
   })
 
-  it('applies rose tone classes when tone=rose', () => {
-    const { container } = render(<Badge tone="rose">x</Badge>)
+  it('applies bad tone classes when tone=bad', () => {
+    const { container } = render(<Badge tone="bad">x</Badge>)
     const el = container.firstChild as HTMLElement
-    expect(el.className).toMatch(/text-bad|text-rose-/)
+    expect(el.className).toMatch(/text-bad/)
   })
 
   it('renders mono when mono=true', () => {
@@ -26,9 +26,9 @@ describe('Badge', () => {
     expect(el.className).toMatch(/font-mono/)
   })
 
-  it('renders neutral tone with text-2', () => {
+  it('renders neutral tone with secondary text', () => {
     const { container } = render(<Badge tone="neutral">x</Badge>)
     const el = container.firstChild as HTMLElement
-    expect(el.className).toMatch(/text-text-2/)
+    expect(el.className).toMatch(/text-text-1/)
   })
 })

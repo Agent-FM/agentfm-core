@@ -37,7 +37,7 @@ func (b *Boss) handleCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	worker, err := b.pickWorker(req.Model)
+	worker, err := b.pickWorker(r.Context(), req.Model)
 	if err != nil {
 		writeOpenAIWorkerError(w, req.Model, err)
 		return

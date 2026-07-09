@@ -136,17 +136,22 @@ class _TasksNamespace(SyncResource):
         # race for "the latest zip by mtime".
         task_id = f"task_{uuid.uuid4().hex}"
         started_mono = time.monotonic()
-        chunks = [
-            chunk.text
-            for chunk in self.stream(worker_id=worker_id, prompt=prompt, task_id=task_id)
-            if chunk.kind == "text"
-        ]
+        saw_artifacts_incoming = False
+        chunks: list[str] = []
+        for chunk in self.stream(worker_id=worker_id, prompt=prompt, task_id=task_id):
+            if chunk.kind == "text":
+                chunks.append(chunk.text)
+            elif chunk.kind == "marker":
+                # stream() emits a marker chunk only when the worker signalled
+                # [AGENTFM: FILES_INCOMING]. On NO_FILES no zip is ever written,
+                # so blocking on collect_for_task's full timeout is pointless.
+                saw_artifacts_incoming = True
         text = "".join(chunks)
 
         am = self._client.artifacts
-        artifacts: list[Path] = (
-            am.collect_for_task(task_id, timeout=artifact_timeout) if am is not None else []
-        )
+        artifacts: list[Path] = []
+        if am is not None and saw_artifacts_incoming:
+            artifacts = am.collect_for_task(task_id, timeout=artifact_timeout)
 
         return TaskResult(
             worker_id=PeerID(str(worker_id)),

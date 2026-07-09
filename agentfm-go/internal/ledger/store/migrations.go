@@ -37,8 +37,8 @@ func loadMigrations() ([]migration, error) {
 		// Reject any file we cannot parse rather than silently apply in
 		// a surprising order.
 		parts := strings.SplitN(e.Name(), "_", 2)
-		if len(parts) < 1 {
-			return nil, fmt.Errorf("migration filename has no version prefix: %s", e.Name())
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("migration filename missing NNN_ version prefix: %s", e.Name())
 		}
 		var version int
 		if _, err := fmt.Sscanf(parts[0], "%d", &version); err != nil {

@@ -92,10 +92,16 @@ func (w *CompletionRatingWriter) RecordOutcome(subject peer.ID, o Outcome) {
 // appends a signed Rating to the ledger. Net-zero buckets are cleared without
 // writing.
 func (w *CompletionRatingWriter) Tick(ctx context.Context) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
+	type pending struct {
+		entry         *pb.SignedEntry
+		bucket        *peerBuckets
+		emitSuccesses int
+		emitFailures  int
+	}
 
+	w.mu.Lock()
 	now := w.now()
+	var toWrite []pending
 	for pid, b := range w.state {
 		if now.Sub(b.lastEmit) < w.window {
 			continue
@@ -116,11 +122,24 @@ func (w *CompletionRatingWriter) Tick(ctx context.Context) error {
 			),
 			TimestampUnixNs: now.UnixNano(),
 		}
-		entry := &pb.SignedEntry{Body: &pb.SignedEntry_Rating{Rating: rating}}
-		if _, err := w.ledger.Append(ctx, entry); err != nil {
+		toWrite = append(toWrite, pending{
+			entry:         &pb.SignedEntry{Body: &pb.SignedEntry_Rating{Rating: rating}},
+			bucket:        b,
+			emitSuccesses: b.successes,
+			emitFailures:  b.failures,
+		})
+	}
+	w.mu.Unlock()
+
+	for _, p := range toWrite {
+		if _, err := w.ledger.Append(ctx, p.entry); err != nil {
 			return err
 		}
-		b.successes, b.failures, b.lastEmit = 0, 0, now
+		w.mu.Lock()
+		p.bucket.successes -= p.emitSuccesses
+		p.bucket.failures -= p.emitFailures
+		p.bucket.lastEmit = now
+		w.mu.Unlock()
 	}
 	return nil
 }

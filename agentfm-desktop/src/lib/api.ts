@@ -89,7 +89,7 @@ export const api = {
       body,
     ),
 
-  // Streaming endpoints — return a Response guaranteed to be ok with a body.
+  // Streaming endpoints, return a Response guaranteed to be ok with a body.
   // On non-2xx, ApiError is thrown with the error body text.
   execute: async (
     body: {

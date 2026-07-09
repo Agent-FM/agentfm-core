@@ -15,6 +15,10 @@ interface PeerIdentityStore {
   remember: (workers: WorkerProfile[]) => void
 }
 
+// Bound the persisted cache so it doesn't grow forever across restarts on a
+// churning mesh. Keeps the most-recently-inserted MAX_PEERS entries.
+const MAX_PEERS = 500
+
 function hasContent(w: WorkerProfile): boolean {
   return (
     !!(w.name && w.name.trim()) ||
@@ -54,7 +58,14 @@ export const usePeerIdentityCache = create<PeerIdentityStore>()(
               changed = true
             }
           }
-          return changed ? { byPeerId: next } : state
+          if (!changed) return state
+          const keys = Object.keys(next)
+          if (keys.length > MAX_PEERS) {
+            const trimmed: Record<string, PeerIdentity> = {}
+            for (const k of keys.slice(keys.length - MAX_PEERS)) trimmed[k] = next[k]
+            return { byPeerId: trimmed }
+          }
+          return { byPeerId: next }
         }),
     }),
     { name: 'agentfm-peer-identity' },

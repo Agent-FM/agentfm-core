@@ -26,8 +26,30 @@ jobs:
           name: dist
           path: agentfm-python/dist/
 
+  # Gate: never publish a release that fails lint / type-check / tests.
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agentfm-python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Lint (ruff)
+        run: ruff check src/ tests/
+      - name: Type-check (mypy)
+        run: mypy src/agentfm/
+      - name: Test
+        run: pytest -q
+
   publish:
-    needs: [build]
+    needs: [build, test]
     runs-on: ubuntu-latest
     environment:
       name: pypi

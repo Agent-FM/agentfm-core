@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"agentfm/internal/ledger"
-	"agentfm/internal/ledger/store"
 	pb "agentfm/internal/ledger/pb"
+	"agentfm/internal/ledger/store"
 	"agentfm/test/testutil"
 
 	"github.com/libp2p/go-libp2p/core/crypto"

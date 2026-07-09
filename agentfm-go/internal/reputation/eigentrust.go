@@ -50,8 +50,8 @@ const (
 
 // Config tunes the solver. Zero values fall back to the defaults.
 type Config struct {
-	Mixing        float64       // α
-	HalfLifeDays  float64       // age decay parameter
+	Mixing        float64 // α
+	HalfLifeDays  float64 // age decay parameter
 	MaxIterations int
 	Tolerance     float64
 	Now           func() time.Time // injectable for tests
@@ -332,20 +332,22 @@ func CanReadmit(score float64) bool {
 	return score >= (EjectionThreshold + Hysteresis)
 }
 
-// iterateEquivocators returns every peer the store has marked as an
-// equivocator. Used by Recompute to apply the permanent floor.
-//
-// Implemented inline here rather than as a store.* method to keep
-// the store API surface narrow; this is the only reader.
-func iterateEquivocators(ctx context.Context, _ *store.Store) ([]string, error) {
-	// Currently the store exposes IsEquivocator(peerID) only, not a
-	// bulk iterator. For v1.3 we don't need the full list at score
-	// time — the equivocator floor is enforced separately in the
-	// HTTP API via ledger.IsEquivocator + the buildReputationView
-	// short-circuit. Return empty here so EigenTrust converges over
-	// all other peers normally.
-	//
-	// A follow-up tickets adds store.IterateEquivocators if a
-	// large-population recompute needs the data on every tick.
-	return nil, nil
+// iterateEquivocators returns the string peer IDs of every peer the
+// store has marked as an equivocator, keyed the same way as the score
+// table (peer.ID(bytes).String()). Used by Recompute to apply the
+// permanent floor so Snapshot/Score reflect it too, matching the
+// package contract.
+func iterateEquivocators(ctx context.Context, s *store.Store) ([]string, error) {
+	if s == nil {
+		return nil, nil
+	}
+	raw, err := s.IterateEquivocators(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(raw))
+	for _, pid := range raw {
+		out = append(out, peer.ID(pid).String())
+	}
+	return out, nil
 }

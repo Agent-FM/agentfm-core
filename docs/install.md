@@ -11,7 +11,7 @@
 curl -fsSL https://api.agentfm.net/install.sh | bash
 ```
 
-Drops `agentfm` and `agentfm-relay` into `/usr/local/bin`.
+Drops the single `agentfm` binary into `/usr/local/bin` (it covers every role via `-mode`).
 
 ## From source
 
@@ -35,7 +35,7 @@ Full SDK docs: [agentfm-python/README.md](../agentfm-python/README.md).
 
 ```bash
 agentfm -mode genkey   # → writes ./swarm.key
-agentfm-relay --help   # → relay flag list
+agentfm --help         # → all modes + flags
 ```
 
 ## Related

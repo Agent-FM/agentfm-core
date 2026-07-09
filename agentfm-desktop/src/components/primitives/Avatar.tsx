@@ -7,17 +7,17 @@ interface Props {
 }
 
 const SIZES = {
-  sm: { box: 26, font: 13, radius: 8 },
-  md: { box: 48, font: 22, radius: 12 },
-  lg: { box: 54, font: 24, radius: 13 },
+  sm: { box: 26, font: 13 },
+  md: { box: 48, font: 22 },
+  lg: { box: 54, font: 24 },
 }
 
 export function Avatar({ size = 'md', emoji, children }: Props) {
   const s = SIZES[size]
   return (
     <div
-      className="relative shrink-0 flex items-center justify-center bg-bg-1 border border-border-0 text-text-1"
-      style={{ width: s.box, height: s.box, borderRadius: s.radius, fontSize: s.font }}
+      className="relative shrink-0 flex items-center justify-center rounded-ctl bg-bg-well border border-border-0 text-text-1"
+      style={{ width: s.box, height: s.box, fontSize: s.font }}
     >
       {emoji ?? children}
     </div>

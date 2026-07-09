@@ -278,7 +278,7 @@ export function useChat() {
                   return;
                 }
               } catch {
-                // ignore — keep polling
+                // ignore, keep polling
               }
               await new Promise((r) => setTimeout(r, 500));
             }

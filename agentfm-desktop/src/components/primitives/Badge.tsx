@@ -1,6 +1,6 @@
 import { ReactNode } from 'react'
 
-export type BadgeTone = 'cyan' | 'violet' | 'lime' | 'amber' | 'rose' | 'neutral'
+export type BadgeTone = 'accent' | 'ok' | 'warn' | 'bad' | 'neutral'
 
 interface Props {
   tone?: BadgeTone
@@ -11,19 +11,18 @@ interface Props {
 }
 
 const TONES: Record<BadgeTone, string> = {
-  cyan:    'bg-accent/15 border-accent/35 text-accent',
-  violet:  'bg-accent/15 border-accent/40 text-accent',
-  lime:    'bg-ok/15 border-ok/40 text-ok',
-  amber:   'bg-warn/15 border-warn/40 text-warn',
-  rose:    'bg-bad/15 border-bad/40 text-bad',
-  neutral: 'bg-bg-2 border-border-0 text-text-2',
+  accent:  'bg-accent/15 border-accent/35 text-accent',
+  ok:      'bg-ok/15 border-ok/40 text-ok',
+  warn:    'bg-warn/15 border-warn/40 text-warn',
+  bad:     'bg-bad/15 border-bad/40 text-bad',
+  neutral: 'bg-raised border-border-1 text-text-1',
 }
 
-export function Badge({ tone = 'cyan', mono = false, children, className, title }: Props) {
+export function Badge({ tone = 'accent', mono = false, children, className, title }: Props) {
   return (
     <span
       title={title}
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs border ${TONES[tone]} ${mono ? 'font-mono' : ''} ${className ?? ''}`}
+      className={`inline-flex items-center gap-1 px-1.5 py-px rounded-[4px] text-2xs border ${TONES[tone]} ${mono ? 'font-mono tabular-nums' : ''} ${className ?? ''}`}
     >
       {children}
     </span>

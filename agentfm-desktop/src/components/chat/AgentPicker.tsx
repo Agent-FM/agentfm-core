@@ -23,10 +23,10 @@ export function AgentPicker({ pinnedPeerId, onPin }: Props) {
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className={`inline-flex items-center gap-2 border px-2.5 py-1.5 rounded-md text-xs hover:text-text-0 ${
+        className={`inline-flex items-center gap-2 border h-[22px] px-2.5 rounded-ctl text-xs transition-colors duration-150 hover:text-text-0 ${
           isUnpinned
             ? 'bg-warn/10 border-warn/40 text-warn'
-            : 'bg-bg-2 border-border-0 text-text-1'
+            : 'bg-[#3A3A3E] border-border-0 text-text-1'
         }`}
       >
         <span
@@ -35,7 +35,7 @@ export function AgentPicker({ pinnedPeerId, onPin }: Props) {
           }`}
         />
         <span>{label}</span>
-        <ChevronDown size={12} className={isUnpinned ? 'text-warn' : 'text-text-2'} />
+        <ChevronDown size={12} strokeWidth={1.5} className={isUnpinned ? 'text-warn' : 'text-text-2'} />
       </button>
 
       <AnimatePresence>
@@ -44,12 +44,12 @@ export function AgentPicker({ pinnedPeerId, onPin }: Props) {
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.12 }}
-            className="absolute top-full mt-1 left-0 bg-bg-1 border border-border-0 rounded-md shadow-xl w-72 max-h-72 overflow-auto z-20"
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+            className="absolute top-full mt-1 left-0 glass-strong rounded-card shadow-float w-72 max-h-72 overflow-auto z-20"
             onMouseLeave={() => setOpen(false)}
           >
             {online.length === 0 && (
-              <div className="px-3 py-3 text-xs text-text-2">
+              <div className="px-2.5 py-2 text-xs text-text-2">
                 No online agents in this project. Wait for one to appear on the Radar.
               </div>
             )}
@@ -62,13 +62,12 @@ export function AgentPicker({ pinnedPeerId, onPin }: Props) {
                     onPin(w.peer_id);
                     setOpen(false);
                   }}
-                  className={`relative w-full text-left px-3 py-2 text-xs hover:bg-bg-2 ${
-                    isPinned ? 'text-text-0 bg-accent-soft' : 'text-text-1'
+                  className={`relative w-full text-left px-2.5 py-1.5 text-xs border-b border-border-0 last:border-b-0 transition-colors duration-150 hover:bg-white/[0.04] ${
+                    isPinned ? 'row-selected text-text-0' : 'text-text-1'
                   }`}
                 >
-                  {isPinned && <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-accent" />}
                   <div className="font-medium">{displayName(w)}</div>
-                  <div className="text-text-2 text-[11px] font-mono tabular-nums">
+                  <div className="text-text-2 text-2xs font-mono tabular-nums">
                     {shortenPeerID(w.peer_id, 12, 5)} · rating{' '}
                     {w.honesty_score.toFixed(2)}
                   </div>

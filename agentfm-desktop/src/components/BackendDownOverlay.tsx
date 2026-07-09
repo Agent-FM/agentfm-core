@@ -31,10 +31,10 @@ export function BackendDownOverlay({ show }: { show: boolean }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-gradient-to-b from-bad/15 to-bg-0 backdrop-blur-md p-8"
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-bg-0/90 p-8"
         >
           <div className="max-w-xl w-full text-center">
-            <AlertOctagon size={80} className="text-bad mx-auto animate-pulse" />
+            <AlertOctagon size={48} strokeWidth={1.5} className="text-bad mx-auto animate-pulse" />
             <h2 className="text-2xl font-semibold tracking-tight text-text-0 mt-4">Backend stopped</h2>
             <p className="text-text-2 mb-6 mt-2">
               The bundled agentfm backend isn't responding. You can view logs to diagnose, or
@@ -47,7 +47,7 @@ export function BackendDownOverlay({ show }: { show: boolean }) {
               <Button onClick={loadLogs}>View logs</Button>
             </div>
             {showLogs && (
-              <pre className="text-[10px] font-mono text-text-2 bg-bg-1 border border-border-0 rounded p-3 max-h-80 overflow-auto text-left">
+              <pre className="text-2xs font-mono console-well rounded-ctl p-3 max-h-80 overflow-auto text-left">
                 {logs.join('')}
               </pre>
             )}

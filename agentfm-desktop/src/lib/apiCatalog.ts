@@ -75,10 +75,10 @@ export function basePathOf(path: string): string {
 
 const AUTH_LOOPBACK =
   'The gateway binds to loopback (127.0.0.1) and auth is disabled by default, so no API key is needed. If you enable auth, send an Authorization: Bearer <key> header on every request.'
-const AUTH_PUBLIC = 'Unauthenticated — served without auth even when the gateway has auth enabled.'
+const AUTH_PUBLIC = 'Unauthenticated, served without auth even when the gateway has auth enabled.'
 
 // Agents are addressed by their libp2p peer id (from /v1/models), never by a
-// display name — names are not unique across a federated mesh.
+// display name, names are not unique across a federated mesh.
 const EXAMPLE_PEER = '12D3KooWNYnSuMbZPJwi94JP3m8qu756E9ygU9GdtwoLXS6QwZ9a'
 
 const EXECUTE_BODY = {
@@ -159,17 +159,21 @@ export const API_CATALOG: EndpointDef[] = [
       { name: 'include_offline', loc: 'query', required: false, example: 'true', description: 'Include remembered offline peers in the list.' },
     ],
     exampleResponse: {
-      workers: [
-        { peer_id: '12D3KooW…', agent: 'HR Agent', online: true, current_tasks: 0, max_tasks: 3, cpu_usage_pct: 24, honesty_score: 0.42 },
+      success: true,
+      online_count: 1,
+      offline_count: 0,
+      agents: [
+        { peer_id: '12D3KooW…', name: 'HR Agent', online: true, current_tasks: 0, max_tasks: 3, cpu_usage_pct: 24, honesty_score: 0.42 },
       ],
     },
     responseFields: [
-      { name: 'workers[]', type: 'array', description: 'One entry per known worker.' },
-      { name: 'workers[].peer_id', type: 'string', description: 'Worker libp2p peer id (use as worker_id when dispatching).' },
-      { name: 'workers[].agent', type: 'string', description: 'Human-readable agent name advertised by the worker.' },
-      { name: 'workers[].online', type: 'boolean', description: 'Whether the worker is currently broadcasting telemetry.' },
-      { name: 'workers[].current_tasks / max_tasks', type: 'number', description: 'Live queue depth vs the worker’s concurrency cap.' },
-      { name: 'workers[].honesty_score', type: 'number', description: 'EigenTrust-style reputation in [-1, 1]; dispatch is refused below the project’s floor.' },
+      { name: 'agents[]', type: 'array', description: 'One entry per known worker.' },
+      { name: 'agents[].peer_id', type: 'string', description: 'Worker libp2p peer id (use as worker_id when dispatching).' },
+      { name: 'agents[].name', type: 'string', description: 'Human-readable agent name advertised by the worker.' },
+      { name: 'agents[].online', type: 'boolean', description: 'Whether the worker is currently broadcasting telemetry.' },
+      { name: 'agents[].current_tasks / max_tasks', type: 'number', description: 'Live queue depth vs the worker’s concurrency cap.' },
+      { name: 'agents[].honesty_score', type: 'number', description: 'EigenTrust-style reputation in [-1, 1]; dispatch is refused below the project’s floor.' },
+      { name: 'online_count / offline_count', type: 'number', description: 'Totals for the returned list.' },
     ],
     sideEffect: 'none',
   },
@@ -181,7 +185,7 @@ export const API_CATALOG: EndpointDef[] = [
     summary: 'List advertised models (OpenAI-compatible)',
     description: 'Models advertised by online workers, in OpenAI /v1/models shape.',
     overview:
-      'The OpenAI-compatible model list. Each online worker is surfaced as a "model" whose id is the worker’s libp2p peer id — the stable, unique handle you pass as `model` when calling /v1/chat/completions. Agent display names are not listed because they are not unique across a federated mesh.',
+      'The OpenAI-compatible model list. Each online worker is surfaced as a "model" whose id is the worker’s libp2p peer id, the stable, unique handle you pass as `model` when calling /v1/chat/completions. Agent display names are not listed because they are not unique across a federated mesh.',
     whenToUse:
       'Point an existing OpenAI SDK at the Boss, enumerate the agent peer ids, and use one as the `model` for a chat call.',
     auth: AUTH_LOOPBACK,
@@ -189,7 +193,7 @@ export const API_CATALOG: EndpointDef[] = [
     exampleResponse: { object: 'list', data: [{ id: EXAMPLE_PEER, object: 'model', owned_by: 'agentfm' }] },
     responseFields: [
       { name: 'object', type: 'string', description: 'Always "list".' },
-      { name: 'data[].id', type: 'string', description: 'The agent’s peer id — pass this as "model" to address it.' },
+      { name: 'data[].id', type: 'string', description: 'The agent’s peer id, pass this as "model" to address it.' },
       { name: 'data[].object', type: 'string', description: 'Always "model".' },
     ],
     sideEffect: 'none',
@@ -232,11 +236,11 @@ export const API_CATALOG: EndpointDef[] = [
     params: [
       { name: 'body', loc: 'body', required: true, example: { multiaddr: '/ip4/127.0.0.1/tcp/4015/p2p/12D3KooW…' }, description: 'Relay multiaddr to probe.' },
     ],
-    exampleResponse: { ok: true, peer_id: '12D3KooW…', rtt_ms: 8 },
+    exampleResponse: { ok: true, peer_id: '12D3KooW…' },
     responseFields: [
       { name: 'ok', type: 'boolean', description: 'True if the relay was dialled successfully.' },
-      { name: 'peer_id', type: 'string', description: 'Peer id that answered the dial.' },
-      { name: 'rtt_ms', type: 'number', description: 'Round-trip time of the probe in milliseconds.' },
+      { name: 'peer_id', type: 'string', description: 'Peer id that answered the dial (on success).' },
+      { name: 'error', type: 'string', description: 'Failure reason when ok is false (omitted on success).' },
     ],
     errors: [
       { status: '400', when: 'The multiaddr is missing or malformed.' },
@@ -257,7 +261,7 @@ export const API_CATALOG: EndpointDef[] = [
       'Run an agent and wait for its output inline. For fire-and-forget or webhook delivery, use /api/execute/async instead.',
     auth: AUTH_LOOPBACK,
     params: [
-      { name: 'body', loc: 'body', required: true, example: EXECUTE_BODY, description: 'prompt (required); worker_id optional — empty picks an available worker that passes the reputation floor.' },
+      { name: 'body', loc: 'body', required: true, example: EXECUTE_BODY, description: 'prompt (required) and worker_id (required), the libp2p peer id of the target worker. This endpoint does not auto-pick; use /v1/chat/completions for model-based selection.' },
     ],
     exampleResponse: '…agent stdout streamed live…\n[AGENTFM: NO_FILES]\n[AGENTFM] task complete',
     responseFields: [
@@ -266,9 +270,8 @@ export const API_CATALOG: EndpointDef[] = [
       { name: '[AGENTFM: NO_FILES]', type: 'marker', description: 'The task produced no artifacts.' },
     ],
     errors: [
-      { status: '400', when: 'prompt is missing/empty or the body is not valid JSON.' },
-      { status: '404', when: 'A named worker_id is not online.' },
-      { status: '409', when: 'No eligible worker (all busy, or below the reputation floor).' },
+      { status: '400', when: 'prompt is missing/empty, task_id is malformed, or the body is not valid JSON.' },
+      { status: '404', when: 'worker_id is missing, empty, or not online (returned as "Worker not found or offline").' },
     ],
     notes: 'Containers run with --network host on the worker; treat agent images as trusted code.',
     streaming: 'tokens',
@@ -282,24 +285,25 @@ export const API_CATALOG: EndpointDef[] = [
     summary: 'Dispatch a task (async, 202)',
     description: 'Accepts the task and returns 202 immediately; work runs in the background. Runs a real container.',
     overview:
-      'Same dispatch as /api/execute, but it returns 202 + a task id immediately and runs the work in the background. Optionally include webhook_url and the Boss will POST you the result when the task finishes (after waiting up to ~10s for any artifact zip to land). Omit it and the task still runs and writes artifacts to disk — just with no notification.',
+      'Same dispatch as /api/execute, but it returns 202 + a task id immediately and runs the work in the background. Optionally include webhook_url and the Boss will POST you the result when the task finishes (after waiting up to ~10s for any artifact zip to land). Omit it and the task still runs and writes artifacts to disk, just with no notification.',
     whenToUse:
       'Long-running agents, batch dispatch, or any caller that should not hold a connection open and prefers a callback over polling.',
     auth: AUTH_LOOPBACK,
     params: [
-      { name: 'body', loc: 'body', required: true, example: EXECUTE_BODY, description: 'Required: prompt (and worker_id to target an agent — empty picks one). OPTIONAL: add "webhook_url": "https://your-server/callback" to get a completion callback. The task dispatches and runs either way — webhook_url only controls whether you are notified. Field name is webhook_url (not "webhook").' },
+      { name: 'body', loc: 'body', required: true, example: EXECUTE_BODY, description: 'Required: prompt and worker_id (the target agent’s peer id). OPTIONAL: add "webhook_url": "https://your-server/callback" to get a completion callback. The task dispatches and runs either way, webhook_url only controls whether you are notified. Field name is webhook_url (not "webhook").' },
     ],
-    exampleResponse: { task_id: 'task_abc123', status: 'accepted' },
+    exampleResponse: { task_id: 'task_abc123', status: 'queued', message: 'Task dispatched to P2P mesh.' },
     responseFields: [
       { name: 'task_id', type: 'string', description: 'Server-generated id for the accepted task.' },
-      { name: 'status', type: 'string', description: 'Always "accepted" on the 202.' },
+      { name: 'status', type: 'string', description: 'Always "queued" on the 202.' },
+      { name: 'message', type: 'string', description: 'Human-readable dispatch note.' },
       { name: '(webhook) → your endpoint', type: 'callback', description: 'On completion the Boss POSTs JSON { task_id, worker_id, status: "completed" } to webhook_url, Content-Type application/json, with a signature header (verify it came from the Boss), 30s timeout.' },
     ],
     errors: [
       { status: '400', when: 'Invalid body / missing prompt.' },
-      { status: '409', when: 'No eligible worker to accept the task.' },
+      { status: '404', when: 'worker_id is missing, empty, or not online.' },
     ],
-    notes: 'webhook_url MUST be publicly reachable — an SSRF guard refuses private/loopback IPs at dial time, so 127.0.0.1 / LAN addresses are rejected even though the API itself is loopback. For local testing, tunnel a public URL (e.g. ngrok) or use a receiver like webhook.site. Contract: the background worker is spawned BEFORE the 202 ack is written, so a 202 means the task is committed even if the ack write later fails. taskId is validated against SafeTaskIDPattern before any filesystem use.',
+    notes: 'webhook_url MUST be publicly reachable, an SSRF guard refuses private/loopback IPs at dial time, so 127.0.0.1 / LAN addresses are rejected even though the API itself is loopback. For local testing, tunnel a public URL (e.g. ngrok) or use a receiver like webhook.site. Contract: the background worker is spawned BEFORE the 202 ack is written, so a 202 means the task is committed even if the ack write later fails. taskId is validated against SafeTaskIDPattern before any filesystem use.',
     sideEffect: 'dispatch',
   },
   {
@@ -310,9 +314,9 @@ export const API_CATALOG: EndpointDef[] = [
     summary: 'Chat completion (OpenAI-compatible)',
     description: 'OpenAI chat-completions shape. Routes to a worker by model. Runs a real container.',
     overview:
-      'The OpenAI chat-completions endpoint. Set `model` to the target agent’s peer id (from /v1/models) — that is how you address a specific agent. The Boss dispatches the conversation to that worker and returns an OpenAI-shaped completion; with stream:true you get token deltas as Server-Sent `data:` chunks ending in [DONE]. (An agent display name is also accepted as a routing shortcut, but peer ids are the unique, stable identifier and what you should use.)',
+      'The OpenAI chat-completions endpoint. Set `model` to the target agent’s peer id (from /v1/models), that is how you address a specific agent. The Boss dispatches the conversation to that worker and returns an OpenAI-shaped completion; with stream:true you get token deltas as Server-Sent `data:` chunks ending in [DONE]. (An agent display name is also accepted as a routing shortcut, but peer ids are the unique, stable identifier and what you should use.)',
     whenToUse:
-      'Drop AgentFM into any tool that already speaks OpenAI chat — point the SDK’s base_url at the Boss and pass an agent peer id as the model.',
+      'Drop AgentFM into any tool that already speaks OpenAI chat, point the SDK’s base_url at the Boss and pass an agent peer id as the model.',
     auth: AUTH_LOOPBACK,
     params: [
       { name: 'body', loc: 'body', required: true, example: CHAT_BODY, description: 'model = the agent peer id (from /v1/models); messages as usual. Set stream:true for token streaming.' },
@@ -409,7 +413,7 @@ export const API_CATALOG: EndpointDef[] = [
     summary: 'Paginated ledger entries',
     description: 'Signed ledger entries (ratings + comments) recorded about a peer. Page with limit and offset.',
     overview:
-      'The append-only ledger of signed entries about a peer — every rating and comment, newest first, with the rater’s id and trust status. Each entry is individually verifiable (see /proof). Page through with limit and offset.',
+      'The append-only ledger of signed entries about a peer, every rating and comment, newest first, with the rater’s id and trust status. Each entry is individually verifiable (see /proof). Page through with limit and offset.',
     whenToUse:
       'Render a peer’s activity/history feed, or audit who has rated a worker and how.',
     auth: AUTH_LOOPBACK,
@@ -431,13 +435,13 @@ export const API_CATALOG: EndpointDef[] = [
     responseFields: [
       { name: 'subject / limit / offset / returned', type: 'mixed', description: 'Echoed query plus how many entries this page returned.' },
       { name: 'entries[].kind', type: 'string', description: '"Rating" or "Comment".' },
-      { name: 'entries[].entry_hash', type: 'string (hex)', description: 'Hex leaf hash of the entry — pass directly to GET /v1/peers/:peerId/proof?entry=<entry_hash> to fetch its Merkle inclusion proof.' },
+      { name: 'entries[].entry_hash', type: 'string (hex)', description: 'Hex leaf hash of the entry, pass directly to GET /v1/peers/:peerId/proof?entry=<entry_hash> to fetch its Merkle inclusion proof.' },
       { name: 'entries[].rater_peer_id', type: 'string', description: 'Who signed the entry.' },
       { name: 'entries[].rater_status / rater_honesty_score', type: 'string / number', description: 'Whether the rater is verified, and their trust score.' },
       { name: 'entries[].score', type: 'number', description: 'Numeric rating (Rating entries; omitted for comment-only).' },
-      { name: 'entries[].text_cid', type: 'string (hex)', description: 'Comment entries only — the cid of the comment body. Pass it to GET /comments/:cid to fetch the text.' },
+      { name: 'entries[].text_cid', type: 'string (hex)', description: 'Comment entries only, the cid of the comment body. Pass it to GET /comments/:cid to fetch the text.' },
     ],
-    notes: 'This is the only HTTP endpoint that surfaces a comment’s text_cid. Each entry also carries its entry_hash (the Merkle leaf hash) — pass it to GET /proof?entry= to obtain that entry’s inclusion proof.',
+    notes: 'This is the only HTTP endpoint that surfaces a comment’s text_cid. Each entry also carries its entry_hash (the Merkle leaf hash), pass it to GET /proof?entry= to obtain that entry’s inclusion proof.',
     sideEffect: 'none',
   },
   {
@@ -454,7 +458,7 @@ export const API_CATALOG: EndpointDef[] = [
     auth: AUTH_LOOPBACK,
     params: [
       { name: 'peerId', loc: 'path', required: true, example: '12D3KooW…', description: 'Target peer id.' },
-      { name: 'entry', loc: 'query', required: true, example: '9f2c4e…(64 hex)', description: 'A 64-character hex leaf hash of the entry to prove. Get it from GET /v1/peers/:peerId/log — each entry now carries an entry_hash field; pass that value here.' },
+      { name: 'entry', loc: 'query', required: true, example: '9f2c4e…(64 hex)', description: 'A 64-character hex leaf hash of the entry to prove. Get it from GET /v1/peers/:peerId/log, each entry now carries an entry_hash field; pass that value here.' },
     ],
     exampleResponse: {
       entry_hash: '9f2c4e…',
@@ -475,7 +479,7 @@ export const API_CATALOG: EndpointDef[] = [
       { status: '404', when: 'No entry with that hash exists in the peer’s log (entry_not_found).' },
       { status: '503', when: 'Ledger not wired on this boss (ledger_unavailable).' },
     ],
-    notes: 'Discover an entry’s leaf hash from GET /v1/peers/:peerId/log — each entry carries an entry_hash field you can pass straight to ?entry=. Computing SHA-256 over the entry’s canonical signed bytes, or fetching over the P2P ledger protocol, remain alternatives.',
+    notes: 'Discover an entry’s leaf hash from GET /v1/peers/:peerId/log, each entry carries an entry_hash field you can pass straight to ?entry=. Computing SHA-256 over the entry’s canonical signed bytes, or fetching over the P2P ledger protocol, remain alternatives.',
     sideEffect: 'none',
   },
   {
@@ -484,21 +488,21 @@ export const API_CATALOG: EndpointDef[] = [
     method: 'POST',
     path: '/v1/peers/:peerId/comments/self',
     summary: 'Submit self-signed feedback',
-    description: 'Leave a comment that the Boss signs with its OWN libp2p identity. No caller signature needed — the rater is implicitly this node.',
+    description: 'Leave a comment that the Boss signs with its OWN libp2p identity. No caller signature needed, the rater is implicitly this node.',
     overview:
-      'The easy way to leave feedback: send just the text (and optionally a rating), and the Boss signs the entry with its own libp2p identity (b.node.Host.ID()) before appending it to the ledger and gossiping it to witnesses. The entry is attributed to this node — there is no rater_peer_id or signature field, so you can’t spoof the author. This is what the desktop "Leave feedback" flow uses.',
+      'The easy way to leave feedback: send just the text (and optionally a rating), and the Boss signs the entry with its own libp2p identity (b.node.Host.ID()) before appending it to the ledger and gossiping it to witnesses. The entry is attributed to this node, there is no rater_peer_id or signature field, so you can’t spoof the author. This is what the desktop "Leave feedback" flow uses.',
     whenToUse:
-      'Record your own rating/comment about a worker after a task — no key handling or client-side signing needed.',
+      'Record your own rating/comment about a worker after a task, no key handling or client-side signing needed.',
     auth: AUTH_LOOPBACK,
     params: [
-      { name: 'peerId', loc: 'path', required: true, example: '12D3KooW…', description: 'Subject — the peer the feedback is about.' },
+      { name: 'peerId', loc: 'path', required: true, example: '12D3KooW…', description: 'Subject, the peer the feedback is about.' },
       {
         name: 'body',
         loc: 'body',
         required: true,
         example: { text: 'Reliable worker.', language: 'en', rating: 0.3 },
         description:
-          'text (required) = the comment. language optional (e.g. "en"). rating optional, a finite number in [-1.0, +1.0] — when present, the Boss ALSO appends a paired Rating entry (dimension "honesty"). Optional attached_rating_hash (hex) links an existing rating instead.',
+          'text (required) = the comment. language optional (e.g. "en"). rating optional, a finite number in [-1.0, +1.0], when present, the Boss ALSO appends a paired Rating entry (dimension "honesty"). Optional attached_rating_hash (hex) links an existing rating instead.',
       },
     ],
     exampleResponse: { cid: 'a1b2c3…', ledger_hash: '9f2c4e…' },
@@ -510,7 +514,7 @@ export const API_CATALOG: EndpointDef[] = [
       { status: '400', when: 'Missing text, body too large, or rating not in [-1, 1] (bad_rating).' },
       { status: '503', when: 'Ledger / comments store / libp2p host not wired on this boss.' },
     ],
-    notes: 'The rater is implicit — this node’s identity (see /v1/about → boss_peer_id). The Boss signs with its own key, so the attribution is cryptographic, not a self-declared field.',
+    notes: 'The rater is implicit, this node’s identity (see /v1/about → boss_peer_id). The Boss signs with its own key, so the attribution is cryptographic, not a self-declared field.',
     sideEffect: 'signed',
   },
   {
@@ -527,7 +531,7 @@ export const API_CATALOG: EndpointDef[] = [
     auth: AUTH_LOOPBACK,
     params: [
       { name: 'peerId', loc: 'path', required: true, example: '12D3KooW…', description: 'Peer the comment is about.' },
-      { name: 'cid', loc: 'path', required: true, example: 'bafy…', description: 'Content id of the comment. Get it from GET /v1/peers/:peerId/log — each Comment entry carries a text_cid field; pass that value here.' },
+      { name: 'cid', loc: 'path', required: true, example: 'bafy…', description: 'Content id of the comment. Get it from GET /v1/peers/:peerId/log, each Comment entry carries a text_cid field; pass that value here.' },
     ],
     exampleResponse: 'Reliable worker, fast turnaround.',
     responseFields: [{ name: '(body)', type: 'text/plain', description: 'The raw comment text.' }],
@@ -549,7 +553,7 @@ export const API_CATALOG: EndpointDef[] = [
     auth: AUTH_LOOPBACK,
     params: [
       { name: 'peerId', loc: 'path', required: true, example: '12D3KooW…', description: 'Peer the comment is about.' },
-      { name: 'cid', loc: 'path', required: true, example: 'bafy…', description: 'Content id of the comment. Get it from GET /v1/peers/:peerId/log — each Comment entry carries a text_cid field; pass that value here.' },
+      { name: 'cid', loc: 'path', required: true, example: 'bafy…', description: 'Content id of the comment. Get it from GET /v1/peers/:peerId/log, each Comment entry carries a text_cid field; pass that value here.' },
     ],
     exampleResponse: { cid: 'bafy…', body: 'Reliable worker, fast turnaround.', language: 'en' },
     responseFields: [
@@ -569,7 +573,7 @@ export const API_CATALOG: EndpointDef[] = [
     summary: 'Prometheus metrics',
     description: 'Prometheus text exposition of gateway + mesh counters (tasks, errors, auth, artifact bytes). Unauthenticated.',
     overview:
-      'The Prometheus scrape endpoint, returning the standard text exposition format. Exposes gateway and mesh counters — tasks by status, stream errors by protocol, auth attempts, artifact bytes, plus the Go process metrics — so you can wire AgentFM into Prometheus/Grafana.',
+      'The Prometheus scrape endpoint, returning the standard text exposition format. Exposes gateway and mesh counters, tasks by status, stream errors by protocol, auth attempts, artifact bytes, plus the Go process metrics, so you can wire AgentFM into Prometheus/Grafana.',
     whenToUse:
       'Scrape with Prometheus, or spot-check counters during debugging.',
     auth: AUTH_PUBLIC,

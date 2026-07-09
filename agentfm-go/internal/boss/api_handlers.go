@@ -75,7 +75,7 @@ func (b *Boss) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
 			ls := kp.LastSeen
 			lastSeenPtr = &ls
 		}
-		aw := b.profileToAPIWorker(profile)
+		aw := b.profileToAPIWorker(r.Context(), profile)
 		aw.Online = kp.IsOnline
 		aw.LastSeen = lastSeenPtr
 		aw.HonestyScore = kp.HonestyScore
@@ -102,12 +102,12 @@ func (b *Boss) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
 //
 // Phase 1 logic: equivocator → dispatch blocked; else allowed.
 // Phase 8 will add the reputation-floor check here.
-func (b *Boss) computeTrustView(peerIDStr string) (honesty float64, equivocator bool, dispatchAllowed bool, refuseReason string) {
+func (b *Boss) computeTrustView(ctx context.Context, peerIDStr string) (honesty float64, equivocator bool, dispatchAllowed bool, refuseReason string) {
 	dispatchAllowed = true
 	if b.ledger != nil {
 		pid, err := peer.Decode(peerIDStr)
 		if err == nil {
-			marked, ierr := b.ledger.IsEquivocator(context.Background(), []byte(pid))
+			marked, ierr := b.ledger.IsEquivocator(ctx, []byte(pid))
 			if ierr == nil && marked {
 				equivocator = true
 				dispatchAllowed = false
@@ -125,12 +125,12 @@ func (b *Boss) computeTrustView(peerIDStr string) (honesty float64, equivocator 
 // profileToAPIWorker function. It now populates the visibility fields
 // (image, capability, honesty, equivocator, dispatch_allowed) by calling
 // computeTrustView.
-func (b *Boss) profileToAPIWorker(p types.WorkerProfile) apiWorker {
+func (b *Boss) profileToAPIWorker(ctx context.Context, p types.WorkerProfile) apiWorker {
 	hardwareStr := fmt.Sprintf("%s (CPU: %d Cores)", p.Model, p.CPUCores)
 	if p.HasGPU {
 		hardwareStr = fmt.Sprintf("%s (GPU VRAM: %.1f/%.1f GB)", p.Model, p.GPUUsedGB, p.GPUTotalGB)
 	}
-	honesty, equivocator, dispatchAllowed, refuseReason := b.computeTrustView(p.PeerID)
+	honesty, equivocator, dispatchAllowed, refuseReason := b.computeTrustView(ctx, p.PeerID)
 	return apiWorker{
 		PeerID:               p.PeerID,
 		Author:               p.Author,
@@ -177,7 +177,6 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 		metrics.TaskDurationSeconds.Observe(time.Since(started).Seconds())
 		metrics.TasksTotal.WithLabelValues(status).Inc()
 	}()
-
 
 	var req ExecuteRequest
 	limitedReader := io.LimitReader(r.Body, 1*1024*1024)

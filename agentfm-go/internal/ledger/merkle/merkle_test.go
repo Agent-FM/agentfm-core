@@ -138,13 +138,13 @@ func TestKnownVector_FourLeafTree(t *testing.T) {
 // 5-leaf tree exercises the unbalanced-split case where k (largest power
 // of 2 < n) gives left = 4 leaves, right = 1 leaf.
 //
-//                root
-//               /    \
-//          n_abcd     le
-//          /    \
-//        n_ab   n_cd
-//        / \    / \
-//       la lb  lc ld
+//	         root
+//	        /    \
+//	   n_abcd     le
+//	   /    \
+//	 n_ab   n_cd
+//	 / \    / \
+//	la lb  lc ld
 func TestKnownVector_FiveLeafTree_UnbalancedSplit(t *testing.T) {
 	tree := merkle.New()
 	la := merkle.HashLeaf([]byte("a"))

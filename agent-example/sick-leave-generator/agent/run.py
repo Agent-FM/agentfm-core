@@ -18,7 +18,9 @@ from fpdf import FPDF
 from crewai import Agent, Task, Crew, Process, LLM
 
 user_prompt = sys.argv[1] if len(sys.argv) > 1 else "I am feeling unwell and need to take today off."
-model_name = "ollama/llama3.2"
+# Honor the model the worker injects via AGENTFM_MODEL (its -model flag);
+# fall back to a sensible local default when run standalone.
+model_name = os.environ.get("AGENTFM_MODEL") or "ollama/llama3.2"
 ollama_host = os.environ.get("OLLAMA_HOST")
 
 if ollama_host:

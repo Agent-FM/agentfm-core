@@ -1,77 +1,173 @@
-@import './tokens.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================================
+   AgentFM theme layer — Xcode Default Dark. Flat, opaque, dense, utilitarian.
+   No glass, no gradients, no shadows between panes: hairlines carry all
+   structure. Single orange accent substituted where Xcode uses system blue.
+
+   QA — computed WCAG contrast (fg on its actual surface):
+     text-primary  #DFDFE0 → editor 12.32 · chrome 11.07 · nav 11.36 · inspector 10.75 · raised 10.34
+     text-secondary #9B9B9B → editor 5.90 · chrome 5.30 · nav 5.44 · inspector 5.15 · raised 4.96
+     text-muted    #8A8A8E → editor ~4.7 (small content floor)
+     text-disabled #5A5A5E → 2.1–2.4 — DISABLED/decorative ONLY (WCAG-exempt); never content
+     accent #FF9F0A → editor 7.98 · on-accent #221708 on accent 8.56
+     ok #31D158 8.12 · warn #FEC309 10.18 · error #FF453A 4.82 (on editor) · run #77F16D 11.40
+     syntax: cyan 9.95 · string 5.75 · number 8.86 · keyword 5.71 · url 5.91 on editor
+     timestamps: Xcode slate #6C7986 computes 3.69 — lightened to #8090A0 (~5.0) to clear 4.5
+   No pure #000/#FFF anywhere.
+   ========================================================================= */
+:root,
+[data-theme='dark'],
+[data-theme='light'] {
+  /* pane surfaces */
+  --window-chrome: 40 40 40;    /* #282828 toolbar / tab-bar base */
+  --navigator-bg: 38 38 38;     /* #262626 left pane   */
+  --editor-bg: 31 31 36;        /* #1F1F24 center      */
+  --console-bg: 31 31 36;       /* #1F1F24 debug area  */
+  --inspector-bg: 41 42 47;     /* #292A2F right pane  */
+  --field-bg: 30 30 30;         /* #1E1E1E fields/wells */
+  --raised: 45 45 45;           /* #2D2D2D pill / segmented / popovers */
+  --control: 58 58 62;          /* #3A3A3E secondary button / pill base */
+  --control-hover: 69 69 73;    /* #454549 secondary button hover */
+  --control-active: 51 51 55;   /* #333337 secondary button pressed */
+  --control-selected: 74 74 78; /* #4A4A4E segmented-control active */
+
+  --hairline: 255 255 255;
+  --hairline-weak: 0.085;
+  --hairline-strong: 0.14;
+
+  /* High-visibility text ramp (near-white, never pure #FFF):
+     primary #F7F7F9 ~15.8:1 · secondary #C2C2C8 ~9.3:1 · muted #ADADB5 ~7.2:1 */
+  --text-primary: 247 247 249;
+  --text-secondary: 194 194 200;
+  --text-muted: 173 173 181;
+  --text-disabled: 106 106 112; /* disabled ONLY */
+
+  --accent: 255 159 10;         /* #FF9F0A */
+  --accent-hover: 255 179 64;
+  --accent-pressed: 230 138 0;
+  --on-accent: 34 23 8;         /* #221708 */
+  --selection-focused: rgba(255, 159, 10, 0.28);
+  --selection-unfocused: rgba(255, 255, 255, 0.09);
+
+  --ok: 49 209 88;              /* #31D158 */
+  --warn: 254 195 9;            /* #FEC309 */
+  --bad: 255 69 58;             /* #FF453A */
+  --run-green: 119 241 109;     /* #77F16D */
+
+  /* console syntax accents (Xcode Default Dark inspired) */
+  --syn-ts: #8090A0;
+  --syn-agent: #5DD8FF;
+  --syn-string: #FC6A5D;
+  --syn-number: #D0BF69;
+  --syn-keyword: #FC5FA3;
+  --syn-url: #6699FF;
+}
+
 html, body, #root { height: 100%; margin: 0; }
-html { background: theme('colors.bg.0'); }
+html { background: rgb(var(--editor-bg)); }
 body {
-  /* Translucent base so macOS window vibrancy shows through as subtle
-     material; on platforms without vibrancy the solid html bg backs it. */
-  background: rgba(10, 14, 22, 0.72);
-  color: theme('colors.text.0');
+  background: rgb(var(--editor-bg));
+  color: rgb(var(--text-primary));
   font-family: theme('fontFamily.sans');
-  font-size: 16.5px;
-  line-height: 1.6;
-  letter-spacing: -0.005em;
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
 }
 
+.tnum { font-variant-numeric: tabular-nums; }
+.mono-console {
+  font-family: theme('fontFamily.mono');
+  font-size: 12px;
+  line-height: 1.45;
+  font-variant-ligatures: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* macOS-style focus: 1px accent border + 3px 40% halo */
 :focus-visible {
-  outline: 2px solid theme('colors.accent.DEFAULT');
-  outline-offset: 2px;
-  border-radius: 4px;
+  outline: none;
+  border-color: rgb(var(--accent));
+  box-shadow: 0 0 0 3px rgb(var(--accent) / 0.4);
+  border-radius: 5px;
 }
 
-/* Smooth scrolling for chat / lists */
-* { scroll-behavior: smooth; }
-
-/* Subtle scrollbar that fits the dark theme */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: theme('colors.border.1');
+  background: rgb(var(--hairline) / var(--hairline-strong));
   border-radius: 999px;
-  border: 2px solid theme('colors.bg.0');
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
-::-webkit-scrollbar-thumb:hover { background: theme('colors.text.3'); }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--text-disabled)); background-clip: content-box; }
 
-/* Hide scrollbar where we want a clean overflow (e.g. tab strip) */
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
-/* ---------- Glassmorphism surfaces (2026-06-14 redesign) ---------- */
+/* ============================================================================
+   Materials — flat Xcode panels. Class NAMES retained from earlier themes so
+   call sites keep working; recipes are now opaque and flat:
+     .glass         flat grouped box on the editor surface (inspector-style)
+     .glass-strong  floating surface: menus, popovers, sheets (opaque #2D2D2D)
+     .glass-inset   field/well (#1E1E1E), 5px radius
+     .glass-bar     window chrome strip (#282828), hairline only
+     .glass-hover   Xcode row hover (4% white)
+     .glass-accent  focused selection row (accent 28%)
+     .glass-live    live row: hairline + accent edge, opaque
+   ========================================================================= */
 .glass {
-  background: linear-gradient(150deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-  backdrop-filter: blur(20px) saturate(150%);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
-  border: 1px solid rgba(255,255,255,.09);
-  box-shadow: 0 8px 32px -12px rgba(0,0,0,.65), inset 0 1px 0 0 rgba(255,255,255,.08);
+  background: rgb(var(--raised) / 0.35);
+  border: 1px solid rgb(var(--hairline) / var(--hairline-weak));
+  border-radius: 6px;
 }
 .glass-strong {
-  background: linear-gradient(150deg, rgba(255,255,255,.09), rgba(255,255,255,.03));
-  backdrop-filter: blur(28px) saturate(160%);
-  -webkit-backdrop-filter: blur(28px) saturate(160%);
-  border: 1px solid rgba(255,255,255,.12);
-  box-shadow: 0 16px 48px -16px rgba(0,0,0,.7), inset 0 1px 0 0 rgba(255,255,255,.1);
+  background: rgb(var(--raised));
+  border: 1px solid rgb(var(--hairline) / var(--hairline-weak));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.glass-inset {
+  background: rgb(var(--field-bg));
+  border: 1px solid rgb(var(--hairline) / var(--hairline-weak));
 }
 .glass-bar {
-  background: rgba(12,16,24,.55);
-  backdrop-filter: blur(24px) saturate(150%);
-  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  background: rgb(var(--window-chrome));
 }
-/* Diagonal light sheen overlay for glass cards */
-.glass-sheen::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  overflow: hidden;
-  background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,.10) 48%, transparent 60%);
-  background-size: 250% 100%;
-  animation: sheen 6s ease-in-out infinite;
+.glass-hover {
+  transition: background-color 0.15s ease-out;
+}
+.glass-hover:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.glass-accent {
+  background: var(--selection-focused);
+  border: 1px solid rgb(var(--accent) / 0.4);
+  border-radius: 5px;
+}
+.glass-live {
+  background: rgb(var(--accent) / 0.05);
+  border: 1px solid rgb(var(--accent) / 0.24);
+  border-radius: 6px;
+}
+/* Unfocused-pane selection: Xcode grays out selection in panes that don't
+   have keyboard focus. Any container with .pane gets this automatically. */
+.pane:not(:focus-within) .glass-accent {
+  background: var(--selection-unfocused);
+  border-color: transparent;
+}
+.pane:not(:focus-within) .row-selected {
+  background: var(--selection-unfocused) !important;
+}
+.row-selected { background: var(--selection-focused); }
+.glass-sheen::after { content: none; }
+
+/* Console: editor-dark well, always */
+.console-well {
+  background: rgb(var(--console-bg));
+  border: 1px solid rgb(var(--hairline) / var(--hairline-weak));
+  color: rgb(var(--text-primary));
 }
 
 @keyframes radar-sweep {
@@ -79,22 +175,12 @@ body {
   100% { transform: rotate(360deg); }
 }
 
-@keyframes sheen {
-  0%        { transform: translateX(-150%) skewX(-12deg); }
-  60%, 100% { transform: translateX(250%) skewX(-12deg); }
-}
-@keyframes aurora {
-  0%, 100% { transform: translate(0, 0) scale(1); opacity: .9; }
-  50%      { transform: translate(24px, -20px) scale(1.08); opacity: 1; }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse-cyan,
   .animate-shimmer, .animate-drift, .animate-float,
   .animate-blink, .animate-pulse,
-  .animate-radar-sweep,
-  .animate-sheen, .animate-aurora {
+  .animate-radar-sweep {
     animation: none !important;
   }
-  .glass-sheen::after { animation: none !important; display: none; }
+  * { scroll-behavior: auto !important; }
 }
