@@ -21,8 +21,8 @@ interface Props {
 function MethodBadge({ method }: { method: 'GET' | 'POST' }) {
   return (
     <span
-      className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded-md ${
-        method === 'GET' ? 'bg-emerald-400/15 text-emerald-400' : 'bg-accent/15 text-accent'
+      className={`font-mono text-2xs font-semibold px-2 py-0.5 rounded-ctl ${
+        method === 'GET' ? 'bg-ok/15 text-ok' : 'bg-accent/15 text-accent'
       }`}
     >
       {method}
@@ -33,7 +33,7 @@ function MethodBadge({ method }: { method: 'GET' | 'POST' }) {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section>
-      <h3 className="text-[11px] font-mono font-bold uppercase tracking-[0.14em] text-text-2 mb-2">
+      <h3 className="text-2xs font-medium text-text-2 mb-2">
         {title}
       </h3>
       {children}
@@ -43,7 +43,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function Code({ children }: { children: string }) {
   return (
-    <pre className="bg-bg-0 border border-border-0 rounded-xl p-3 font-mono text-2xs overflow-auto whitespace-pre-wrap text-text-1">
+    <pre className="console-well mono-console p-3 text-xs overflow-auto whitespace-pre-wrap">
       {children}
     </pre>
   )
@@ -72,6 +72,10 @@ export function EndpointDetail({ endpoint }: Props) {
     setResult(null)
     setStream('')
     setStreaming(false)
+    // A request in flight when the endpoint changes returns after the token
+    // bump above and bails without clearing loading, reset it here so the
+    // Send button doesn't stick on "Sending…" forever.
+    setLoading(false)
     sseRef.current?.close()
     sseRef.current = null
   }
@@ -121,14 +125,14 @@ export function EndpointDetail({ endpoint }: Props) {
       : JSON.stringify(endpoint.exampleResponse, null, 2)
 
   return (
-    <div className="space-y-7 min-w-0">
+    <div className="space-y-5 min-w-0">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-2.5 font-mono text-[15px] mb-2 min-w-0">
+        <div className="flex items-center gap-2 font-mono text-xs mb-1.5 min-w-0">
           <MethodBadge method={endpoint.method} />
           <span className="text-text-0 break-all">{endpoint.path}</span>
         </div>
-        <h2 className="text-xl font-semibold tracking-tight text-text-0">{endpoint.summary}</h2>
+        <h2 className="text-lg font-semibold text-text-0">{endpoint.summary}</h2>
         <p className="text-sm text-text-1 mt-1">{endpoint.description}</p>
       </div>
 
@@ -152,26 +156,26 @@ export function EndpointDetail({ endpoint }: Props) {
 
       {scalarParams.length > 0 && (
         <Section title="Parameters">
-          <div className="overflow-hidden rounded-xl border border-border-0">
+          <div className="overflow-hidden border border-border-0">
             <table className="w-full text-left text-xs">
-              <thead className="bg-bg-2 text-text-2">
+              <thead className="bg-chrome text-text-1">
                 <tr>
-                  <th className="font-mono font-medium px-3 py-2">Name</th>
-                  <th className="font-mono font-medium px-3 py-2">In</th>
-                  <th className="font-mono font-medium px-3 py-2">Required</th>
-                  <th className="font-mono font-medium px-3 py-2">Description</th>
+                  <th className="font-mono font-medium px-3 py-1">Name</th>
+                  <th className="font-mono font-medium px-3 py-1">In</th>
+                  <th className="font-mono font-medium px-3 py-1">Required</th>
+                  <th className="font-mono font-medium px-3 py-1">Description</th>
                 </tr>
               </thead>
               <tbody>
                 {scalarParams.map((p) => (
                   <tr key={p.name} className="border-t border-border-0 align-top">
-                    <td className="font-mono text-accent px-3 py-2">{p.name}</td>
-                    <td className="font-mono text-text-2 px-3 py-2">{p.loc}</td>
-                    <td className="px-3 py-2">{p.required ? <span className="text-bad">yes</span> : <span className="text-text-3">no</span>}</td>
-                    <td className="text-text-1 px-3 py-2">
+                    <td className="font-mono text-accent px-3 py-1.5">{p.name}</td>
+                    <td className="font-mono text-text-2 px-3 py-1.5">{p.loc}</td>
+                    <td className="px-3 py-1.5">{p.required ? <span className="text-bad">yes</span> : <span className="text-text-2">no</span>}</td>
+                    <td className="text-text-1 px-3 py-1.5">
                       {p.description}
                       {p.example !== undefined && p.example !== '' && (
-                        <span className="block text-text-3 font-mono text-[11px] mt-0.5">e.g. {String(p.example)}</span>
+                        <span className="block text-text-2 font-mono text-2xs mt-0.5">e.g. {String(p.example)}</span>
                       )}
                     </td>
                   </tr>
@@ -191,46 +195,46 @@ export function EndpointDetail({ endpoint }: Props) {
 
       <Section title="Response">
         {endpoint.responseFields && endpoint.responseFields.length > 0 && (
-          <div className="overflow-hidden rounded-xl border border-border-0 mb-3">
+          <div className="overflow-hidden border border-border-0 mb-3">
             <table className="w-full text-left text-xs">
-              <thead className="bg-bg-2 text-text-2">
+              <thead className="bg-chrome text-text-1">
                 <tr>
-                  <th className="font-mono font-medium px-3 py-2">Field</th>
-                  <th className="font-mono font-medium px-3 py-2">Type</th>
-                  <th className="font-mono font-medium px-3 py-2">Description</th>
+                  <th className="font-mono font-medium px-3 py-1">Field</th>
+                  <th className="font-mono font-medium px-3 py-1">Type</th>
+                  <th className="font-mono font-medium px-3 py-1">Description</th>
                 </tr>
               </thead>
               <tbody>
                 {endpoint.responseFields.map((f) => (
                   <tr key={f.name} className="border-t border-border-0 align-top">
-                    <td className="font-mono text-accent px-3 py-2 whitespace-nowrap">{f.name}</td>
-                    <td className="font-mono text-text-2 px-3 py-2 whitespace-nowrap">{f.type}</td>
-                    <td className="text-text-1 px-3 py-2">{f.description}</td>
+                    <td className="font-mono text-accent px-3 py-1.5 whitespace-nowrap">{f.name}</td>
+                    <td className="font-mono text-text-2 px-3 py-1.5 whitespace-nowrap">{f.type}</td>
+                    <td className="text-text-1 px-3 py-1.5">{f.description}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-        <div className="text-[11px] font-mono uppercase tracking-wide text-text-2 mb-1.5">Example</div>
+        <div className="text-2xs font-medium text-text-2 mb-1.5">Example</div>
         <Code>{exampleText}</Code>
       </Section>
 
       {endpoint.errors && endpoint.errors.length > 0 && (
         <Section title="Errors">
-          <div className="overflow-hidden rounded-xl border border-border-0">
+          <div className="overflow-hidden border border-border-0">
             <table className="w-full text-left text-xs">
-              <thead className="bg-bg-2 text-text-2">
+              <thead className="bg-chrome text-text-1">
                 <tr>
-                  <th className="font-mono font-medium px-3 py-2">Status</th>
-                  <th className="font-mono font-medium px-3 py-2">When</th>
+                  <th className="font-mono font-medium px-3 py-1">Status</th>
+                  <th className="font-mono font-medium px-3 py-1">When</th>
                 </tr>
               </thead>
               <tbody>
                 {endpoint.errors.map((e) => (
                   <tr key={e.status} className="border-t border-border-0 align-top">
-                    <td className="font-mono text-bad px-3 py-2 whitespace-nowrap">{e.status}</td>
-                    <td className="text-text-1 px-3 py-2">{e.when}</td>
+                    <td className="font-mono text-bad tabular-nums px-3 py-1.5 whitespace-nowrap">{e.status}</td>
+                    <td className="text-text-1 px-3 py-1.5">{e.when}</td>
                   </tr>
                 ))}
               </tbody>
@@ -240,8 +244,8 @@ export function EndpointDetail({ endpoint }: Props) {
       )}
 
       {endpoint.notes && (
-        <div className="rounded-xl border border-accent/25 bg-accent/[0.06] px-3.5 py-3 text-xs text-text-1 leading-relaxed">
-          <span className="font-semibold text-accent">Note · </span>
+        <div className="rounded-card border border-accent/25 bg-accent/[0.06] px-3.5 py-3 text-xs text-text-1 leading-relaxed">
+          <span className="font-semibold text-accent">Note </span>
           {endpoint.notes}
         </div>
       )}

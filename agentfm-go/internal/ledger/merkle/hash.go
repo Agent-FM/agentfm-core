@@ -6,7 +6,7 @@
 // caller. Persistence lands in internal/ledger/store (P1-2); the
 // goroutine-safe wrapper lands in internal/ledger/ledger.go (P1-4).
 //
-// Hash discipline
+// # Hash discipline
 //
 // RFC 6962 demands domain separation between leaf hashes and internal
 // node hashes so that an inner-node hash can never be mistaken for a

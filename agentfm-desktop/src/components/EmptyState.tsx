@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Zap } from 'lucide-react'
+import { Zap, Satellite } from 'lucide-react'
 import { useUIStore } from '../lib/store'
 import { Button } from './primitives/Button'
 
@@ -7,28 +7,23 @@ export function EmptyState() {
   const openWizard = useUIStore((s) => s.openCreateWizard)
 
   return (
-    <div className="relative flex-1 flex items-center justify-center p-8 overflow-hidden">
-      <div
-        className="absolute inset-0 pointer-events-none animate-drift"
-        style={{
-          background:
-            'radial-gradient(circle at 20% 0%, rgba(247,147,30,.18), transparent 45%), radial-gradient(circle at 80% 100%, rgba(247,147,30,.14), transparent 45%)',
-        }}
-      />
+    <div className="relative flex-1 flex items-center justify-center p-8 overflow-hidden bg-editor">
       <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 240, damping: 28 }}
-        className="relative max-w-md text-center bg-bg-1 border border-border-0 rounded-2xl p-12"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.15, ease: 'easeOut' }}
+        className="relative max-w-md text-center"
       >
-        <div className="text-6xl mb-5 animate-float inline-block">🛰</div>
-        <h1 className="text-2xl font-semibold tracking-tight text-text-0">Welcome to <span className="text-accent">AgentFM</span></h1>
-        <p className="text-text-2 mt-3 mb-7 leading-relaxed">
+        <div className="mb-4 inline-flex items-center justify-center w-10 h-10 rounded-ctl bg-bg-well border border-border-0 text-text-2">
+          <Satellite size={20} strokeWidth={1.5} />
+        </div>
+        <h1 className="text-lg font-semibold text-text-1">Welcome to AgentFM</h1>
+        <p className="text-sm text-text-3 mt-2 mb-5 leading-relaxed">
           Create your first project to get started. A project pairs a name with a relay; you can
           add more later.
         </p>
-        <Button variant="primary" onClick={openWizard}>
-          <Zap size={14} />
+        <Button onClick={openWizard}>
+          <Zap size={14} strokeWidth={1.5} />
           <span>Create project</span>
         </Button>
       </motion.div>

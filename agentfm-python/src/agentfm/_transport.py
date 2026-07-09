@@ -76,6 +76,30 @@ RETRYABLE_EXCEPTIONS: tuple[type[BaseException], ...] = (
     httpx.PoolTimeout,
 )
 
+# For NON-idempotent methods (POST), only these prove the request never
+# reached the server. ReadError / RemoteProtocolError occur while reading the
+# RESPONSE — the request already landed — so retrying a non-idempotent POST on
+# them would double-submit (the /api/execute/async invariant commits the work
+# BEFORE the 202 ack is written).
+SAFE_NONIDEMPOTENT_RETRYABLE_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    httpx.ConnectError,
+    httpx.WriteError,
+    httpx.PoolTimeout,
+)
+
+
+def _effective_retry_exceptions(
+    on: tuple[type[BaseException], ...], idempotent: bool
+) -> tuple[type[BaseException], ...]:
+    """Restrict the retryable exception set to request-never-sent failures for
+    non-idempotent calls, so a POST is never re-issued after it reached the
+    server."""
+    if idempotent:
+        return on
+    return tuple(
+        exc for exc in on if issubclass(exc, SAFE_NONIDEMPOTENT_RETRYABLE_EXCEPTIONS)
+    )
+
 R = TypeVar("R")
 
 
@@ -234,10 +258,11 @@ def retry_sync(
     """
     last_exc: BaseException | None = None
     last_resp: R | None = None
+    active_on = _effective_retry_exceptions(on, idempotent)
     for attempt in range(retries + 1):
         try:
             result = fn(*args, **kwargs)
-        except on as exc:
+        except active_on as exc:
             last_exc = exc
         else:
             resp = result if isinstance(result, httpx.Response) else None
@@ -271,10 +296,11 @@ async def retry_async(
 ) -> R:
     last_exc: BaseException | None = None
     last_resp: R | None = None
+    active_on = _effective_retry_exceptions(on, idempotent)
     for attempt in range(retries + 1):
         try:
             result = await fn(*args, **kwargs)
-        except on as exc:
+        except active_on as exc:
             last_exc = exc
         else:
             resp = result if isinstance(result, httpx.Response) else None

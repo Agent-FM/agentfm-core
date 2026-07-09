@@ -74,13 +74,6 @@ func (b *Boss) RenderRadarForTest(w io.Writer) {
 	b.renderRadar(context.Background(), w)
 }
 
-// WithReputationFloor configures the boss's reputation floor for test use.
-// Returns b for chaining. Production code sets this via Options.ReputationFloor.
-func (b *Boss) WithReputationFloor(f float64) *Boss {
-	b.reputationFloor = f
-	return b
-}
-
 // SetLedger injects a ledger into the boss. Used by integration tests that
 // build a Boss via NewForTest and then supply a real ledger to exercise the
 // equivocator check and ListKnownPeers paths.

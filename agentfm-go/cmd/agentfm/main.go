@@ -49,9 +49,9 @@ func main() {
 
 	// Observability: Prometheus /metrics listen address. Default is loopback
 	// for safety; pass 0.0.0.0:<port> to expose to off-host scrapers.
-	// Empty string disables the metrics server (worker and relay only;
+	// Pass "-" to disable the metrics server (worker/relay/witness only;
 	// boss-api always serves /metrics on its own port).
-	promListen := flag.String("prom-listen", "", "Prometheus /metrics listen address (worker default 127.0.0.1:9090, relay default 127.0.0.1:9091, witness default 127.0.0.1:9092, empty disables)")
+	promListen := flag.String("prom-listen", "", "Prometheus /metrics listen address (worker default 127.0.0.1:9090, relay default 127.0.0.1:9091, witness default 127.0.0.1:9092; pass - to disable)")
 
 	// Structured-logging controls. Format auto-detects: console on a TTY,
 	// JSON otherwise. Operators running under systemd / docker / k8s want
@@ -131,6 +131,14 @@ func main() {
 
 	if *mode == "relay" {
 		netCfg.IdentityPath = resolveRelayIdentityPath(*identity)
+	}
+
+	if *mode == "witness" {
+		if *identity != "" {
+			netCfg.IdentityPath = *identity
+		} else {
+			netCfg.IdentityPath = defaultWitnessIdentityPath()
+		}
 	}
 
 	// Set up the structured logger BEFORE any role-specific code runs so

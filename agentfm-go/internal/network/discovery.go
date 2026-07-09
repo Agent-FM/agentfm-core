@@ -54,7 +54,11 @@ func connectToLighthouse(ctx context.Context, h host.Host, relayInfo *peer.AddrI
 // matching peers on a timer.
 func startDiscovery(ctx context.Context, h host.Host, kademliaDHT *dht.IpfsDHT, isWorker bool) {
 	mdnsService := mdns.NewMdnsService(h, MDNSServiceTag, &mdnsNotifee{h: h})
-	mdnsService.Start()
+	if err := mdnsService.Start(); err != nil {
+		slog.Warn("mdns discovery unavailable; same-LAN peer discovery disabled",
+			slog.Any(obs.FieldErr, err),
+		)
+	}
 	routingDiscovery := routing.NewRoutingDiscovery(kademliaDHT)
 
 	if isWorker {

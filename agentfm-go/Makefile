@@ -3,12 +3,9 @@
 # ==============================================================================
 
 APP_NAME := agentfm
-RELAY_NAME := relay
-RELAY_INSTALL_NAME := agentfm-relay
-VERSION := 1.3.0-rc.1
+VERSION := 1.3.0
 RELEASE_TAG := AgentFM
 MAIN_FILE := ./cmd/agentfm
-RELAY_MAIN_FILE := ./cmd/relay
 BUILD_DIR := build
 INSTALL_DIR := /usr/local/bin
 GITHUB_REPO := Agent-FM/agentfm-core
@@ -36,16 +33,13 @@ endif
 # Determine exact binary filenames for downloads
 ifeq ($(HOST_OS),windows)
     BINARY_NAME := $(APP_NAME)_$(HOST_OS)_$(HOST_ARCH).exe
-    RELAY_BINARY_NAME := $(RELAY_NAME)_$(HOST_OS)_$(HOST_ARCH).exe
 else
     BINARY_NAME := $(APP_NAME)_$(HOST_OS)_$(HOST_ARCH)
-    RELAY_BINARY_NAME := $(RELAY_NAME)_$(HOST_OS)_$(HOST_ARCH)
 endif
 
 DOWNLOAD_URL := https://github.com/$(GITHUB_REPO)/releases/download/$(RELEASE_TAG)/$(BINARY_NAME)
-RELAY_DOWNLOAD_URL := https://github.com/$(GITHUB_REPO)/releases/download/$(RELEASE_TAG)/$(RELAY_BINARY_NAME)
 
-.PHONY: all check-deps build build-agentfm build-relay build-all install uninstall clean help setup-deps download-install \
+.PHONY: all check-deps build build-agentfm build-all install uninstall clean help setup-deps download-install \
         test test-unit test-integration test-race test-coverage proto proto-lint proto-tools
 
 # Default target when someone just types `make`
@@ -85,20 +79,15 @@ endif
 # ==========================================
 # 🔨 NATIVE BUILD (For current machine)
 # ==========================================
+# The relay is no longer a separate binary — it runs as `agentfm -mode relay`.
 build-agentfm:
 	@echo "🔨 Building native $(APP_NAME) binary for $(OS_NAME) ($(HOST_ARCH))..."
 	@go mod tidy
 	@go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(APP_NAME) $(MAIN_FILE)
 	@echo "✅ $(APP_NAME) build complete! Run ./$(APP_NAME) --help"
 
-build-relay:
-	@echo "🔨 Building native $(RELAY_NAME) binary for $(OS_NAME) ($(HOST_ARCH))..."
-	@go mod tidy
-	@go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(RELAY_NAME) $(RELAY_MAIN_FILE)
-	@echo "✅ $(RELAY_NAME) build complete! Run ./$(RELAY_NAME) --help"
-
-build: build-agentfm build-relay
-	@echo "✅ Both binaries built successfully!"
+build: build-agentfm
+	@echo "✅ Build complete! The relay runs as './$(APP_NAME) -mode relay'."
 
 # ==========================================
 # 🌍 CROSS-COMPILATION (For Releases)
@@ -109,43 +98,33 @@ build-all: clean
 
 	@echo "  -> Compiling Linux (amd64)..."
 	@GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_linux_amd64 $(MAIN_FILE)
-	@GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_linux_amd64 $(RELAY_MAIN_FILE)
 
 	@echo "  -> Compiling Linux (arm64)..."
 	@GOOS=linux GOARCH=arm64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_linux_arm64 $(MAIN_FILE)
-	@GOOS=linux GOARCH=arm64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_linux_arm64 $(RELAY_MAIN_FILE)
 
 	@echo "  -> Compiling Linux (arm/v7)..."
 	@GOOS=linux GOARCH=arm GOARM=7 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_linux_arm $(MAIN_FILE)
-	@GOOS=linux GOARCH=arm GOARM=7 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_linux_arm $(RELAY_MAIN_FILE)
 
 	@echo "  -> Compiling Linux (386)..."
 	@GOOS=linux GOARCH=386 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_linux_386 $(MAIN_FILE)
-	@GOOS=linux GOARCH=386 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_linux_386 $(RELAY_MAIN_FILE)
 
 	@echo "  -> Compiling Linux (riscv64)..."
 	@GOOS=linux GOARCH=riscv64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_linux_riscv64 $(MAIN_FILE)
-	@GOOS=linux GOARCH=riscv64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_linux_riscv64 $(RELAY_MAIN_FILE)
 
 	@echo "  -> Compiling macOS (amd64/Intel)..."
 	@GOOS=darwin GOARCH=amd64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_darwin_amd64 $(MAIN_FILE)
-	@GOOS=darwin GOARCH=amd64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_darwin_amd64 $(RELAY_MAIN_FILE)
 
 	@echo "  -> Compiling macOS (arm64/Apple Silicon)..."
 	@GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_darwin_arm64 $(MAIN_FILE)
-	@GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_darwin_arm64 $(RELAY_MAIN_FILE)
 
 	@echo "  -> Compiling Windows (amd64)..."
 	@GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_windows_amd64.exe $(MAIN_FILE)
-	@GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_windows_amd64.exe $(RELAY_MAIN_FILE)
 
 	@echo "  -> Compiling Windows (arm64)..."
 	@GOOS=windows GOARCH=arm64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_windows_arm64.exe $(MAIN_FILE)
-	@GOOS=windows GOARCH=arm64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_windows_arm64.exe $(RELAY_MAIN_FILE)
 
 	@echo "  -> Compiling FreeBSD (amd64)..."
 	@GOOS=freebsd GOARCH=amd64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)_freebsd_amd64 $(MAIN_FILE)
-	@GOOS=freebsd GOARCH=amd64 go build -ldflags "-s -w -X agentfm/internal/version.AppVersion=$(VERSION)" -o $(BUILD_DIR)/$(RELAY_NAME)_freebsd_amd64 $(RELAY_MAIN_FILE)
 
 	@echo "✅ All binaries generated in ./$(BUILD_DIR)/"
 
@@ -153,18 +132,15 @@ build-all: clean
 # 🚀 INSTALLATION (Global system path)
 # ==========================================
 install: build
-	@echo "🚀 Installing locally compiled binaries to $(INSTALL_DIR)..."
+	@echo "🚀 Installing locally compiled binary to $(INSTALL_DIR)..."
 	@echo "🔑 You may be prompted for your password to write to $(INSTALL_DIR)."
 	@sudo mv $(APP_NAME) $(INSTALL_DIR)/$(APP_NAME)
 	@sudo chmod +x $(INSTALL_DIR)/$(APP_NAME)
-	@sudo mv $(RELAY_NAME) $(INSTALL_DIR)/$(RELAY_INSTALL_NAME)
-	@sudo chmod +x $(INSTALL_DIR)/$(RELAY_INSTALL_NAME)
-	@echo "✅ Installation successful! You can now run '$(APP_NAME)' and '$(RELAY_INSTALL_NAME)' from anywhere."
+	@echo "✅ Installation successful! You can now run '$(APP_NAME)' from anywhere (relay: '$(APP_NAME) -mode relay')."
 
 uninstall:
-	@echo "🗑️  Removing binaries from $(INSTALL_DIR)..."
+	@echo "🗑️  Removing binary from $(INSTALL_DIR)..."
 	@sudo rm -f $(INSTALL_DIR)/$(APP_NAME)
-	@sudo rm -f $(INSTALL_DIR)/$(RELAY_INSTALL_NAME)
 	@echo "✅ Uninstalled."
 
 # ==========================================
@@ -177,24 +153,17 @@ download-install:
 		echo "❌ Failed to download binary. Make sure release $(RELEASE_TAG) exists at $(DOWNLOAD_URL)."; \
 		exit 1; \
 	}
-	@echo "⬇️  Downloading $(RELAY_NAME) v$(VERSION) for $(HOST_OS) ($(HOST_ARCH))..."
-	@echo "🔗 Fetching from: $(RELAY_DOWNLOAD_URL)"
-	@curl -fSL $(RELAY_DOWNLOAD_URL) -o $(RELAY_NAME)_tmp || { \
-		echo "❌ Failed to download relay. Make sure release $(RELEASE_TAG) exists at $(RELAY_DOWNLOAD_URL)."; \
-		exit 1; \
-	}
-	@echo "🚀 Installing pre-built binaries to $(INSTALL_DIR)..."
-	@chmod +x $(APP_NAME)_tmp $(RELAY_NAME)_tmp
+	@echo "🚀 Installing pre-built binary to $(INSTALL_DIR)..."
+	@chmod +x $(APP_NAME)_tmp
 	@sudo mv $(APP_NAME)_tmp $(INSTALL_DIR)/$(APP_NAME)
-	@sudo mv $(RELAY_NAME)_tmp $(INSTALL_DIR)/$(RELAY_INSTALL_NAME)
-	@echo "✅ Successfully installed both! Run '$(APP_NAME) --help' and '$(RELAY_INSTALL_NAME) --help' to verify."
+	@echo "✅ Successfully installed! Run '$(APP_NAME) --help' to verify."
 
 # ==========================================
 # 🧹 CLEANUP
 # ==========================================
 clean:
 	@echo "🧹 Cleaning up old binaries..."
-	@rm -f $(APP_NAME) $(RELAY_NAME)
+	@rm -f $(APP_NAME)
 	@rm -rf $(BUILD_DIR)
 	@echo "✅ Cleaned."
 
@@ -257,13 +226,12 @@ test-coverage:
 # ==========================================
 help:
 	@echo "🚀 AgentFM Makefile Commands:"
-	@echo "  make              - Checks deps and builds both native binaries"
-	@echo "  make build        - Compiles BOTH agentfm and relay for your current OS"
-	@echo "  make build-agentfm- Compiles ONLY the agentfm node binary"
-	@echo "  make build-relay  - Compiles ONLY the relay server binary"
-	@echo "  make install      - Compiles and installs both tools globally to $(INSTALL_DIR)"
-	@echo "  make download-install - ⬇️ Downloads pre-built releases and installs them"
-	@echo "  make uninstall    - Removes the tools from your system"
+	@echo "  make              - Checks deps and builds the native binary"
+	@echo "  make build        - Compiles agentfm for your current OS (relay: 'agentfm -mode relay')"
+	@echo "  make build-agentfm- Compiles the agentfm node binary"
+	@echo "  make install      - Compiles and installs agentfm globally to $(INSTALL_DIR)"
+	@echo "  make download-install - ⬇️ Downloads a pre-built release and installs it"
+	@echo "  make uninstall    - Removes agentfm from your system"
 	@echo "  make build-all    - Cross-compiles for Mac, Linux, and Windows (x86 & ARM)"
 	@echo "  make check-deps   - Validates Go and Podman are installed"
 	@echo "  make setup-deps   - Prints OS-specific instructions to install missing tools"

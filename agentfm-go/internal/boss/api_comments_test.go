@@ -114,13 +114,40 @@ func signSubmission(t *testing.T, priv crypto.PrivKey, raterID, subjectID peer.I
 	return base64.StdEncoding.EncodeToString(sig)
 }
 
-// Happy path: signature verifies, comment is stored, ledger is
-// appended, response carries CID + ledger hash.
-// NOTE: we can't easily reproduce the EXACT timestamp the handler
-// will use (it calls time.Now() internally), so this test focuses on
-// the validation-error and routing paths. For full happy-path coverage
-// the handler exposes Append via the ledger interface — we verify the
-// stored comment via the ledger spy.
+// TestCommentSubmission_HappyPath verifies a correctly-signed self-submission
+// is accepted (201), the ledger is appended once, and the appended comment
+// carries the caller-supplied timestamp. The handler takes the timestamp from
+// the signed request body, so the caller's signature verifies deterministically.
+func TestCommentSubmission_HappyPath(t *testing.T) {
+	rig := newCommentRig(t)
+	const ts = int64(1717171717000000000)
+	sig := signSubmission(t, rig.priv, rig.rater, rig.subject, "great agent", "en", ts)
+	body, _ := json.Marshal(CommentSubmitRequest{
+		RaterPeerID:     rig.rater.String(),
+		Text:            "great agent",
+		Language:        "en",
+		TimestampUnixNs: ts,
+		SignatureBase64: sig,
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/peers/"+rig.subject.String()+"/comments",
+		bytes.NewReader(body))
+	rig.boss.handlePeers(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(rig.ledger.appended) != 1 {
+		t.Fatalf("appended %d entries, want 1", len(rig.ledger.appended))
+	}
+	got := rig.ledger.appended[0].GetComment()
+	if got == nil {
+		t.Fatal("appended entry is not a Comment")
+	}
+	if got.TimestampUnixNs != ts {
+		t.Errorf("ledger comment timestamp = %d, want %d (from request)", got.TimestampUnixNs, ts)
+	}
+}
+
 func TestCommentSubmission_BadJSON(t *testing.T) {
 	rig := newCommentRig(t)
 	rec := httptest.NewRecorder()
@@ -155,6 +182,7 @@ func TestCommentSubmission_NonSelfSubmitter_Forbidden(t *testing.T) {
 		RaterPeerID:     otherRater.String(),
 		Text:            "hello",
 		Language:        "en",
+		TimestampUnixNs: 1,
 		SignatureBase64: sig,
 	})
 	rec := httptest.NewRecorder()
@@ -174,6 +202,7 @@ func TestCommentSubmission_BodyTooLarge_Rejected(t *testing.T) {
 		RaterPeerID:     rig.rater.String(),
 		Text:            big,
 		Language:        "en",
+		TimestampUnixNs: 1,
 		SignatureBase64: sig,
 	})
 	rec := httptest.NewRecorder()

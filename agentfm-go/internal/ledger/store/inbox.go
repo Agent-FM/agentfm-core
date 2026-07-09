@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"time"
 
@@ -28,6 +29,12 @@ type InboxEntry struct {
 // ErrInboxEntryNotFound is returned by GetInboxEntry / GetInboxOrphan
 // when the requested (peer_id, hash) row does not exist.
 var ErrInboxEntryNotFound = errors.New("store: inbox entry not found")
+
+// ErrInboxChainMismatch is returned by InsertInboxEntry when the entry
+// does not extend the peer's current chain head (its prev_hash != the
+// stored last_hash). This is how a fork / equivocation at a chain
+// position is surfaced instead of being silently absorbed.
+var ErrInboxChainMismatch = errors.New("store: inbox entry does not extend chain head")
 
 // HasInboxEntry reports whether (peerID, hash) is already accepted into
 // the inbox. Used by Inbox.AcceptOrQueue for dedup before doing any
@@ -64,12 +71,18 @@ func (s *Store) HasInboxOrphan(ctx context.Context, peerID []byte, hash [32]byte
 	return true, nil
 }
 
-// InsertInboxEntry adds an accepted entry to inbox_entries and updates
-// the per-peer chain head to point at this entry's hash. Both writes
-// happen in one transaction so a concurrent reader never sees the
-// "entry inserted but head not yet updated" intermediate state.
+// InsertInboxEntry atomically appends an entry to inbox_entries and
+// advances the per-peer chain head to this entry's hash — but ONLY when
+// the entry extends the current head (its prev_hash equals the stored
+// last_hash, or the peer has no head yet). The existence check, the
+// compare-and-extend, and both writes happen in one transaction under
+// writeMu so two concurrent callers cannot both accept forking entries.
 //
-// If (peerID, hash) already exists, returns nil (idempotent insert).
+// Returns:
+//   - nil                     if (peerID, hash) is already accepted (idempotent),
+//     or the entry extends the chain and is inserted.
+//   - ErrInboxChainMismatch   if the entry does not extend the current head
+//     (a fork / equivocation at this chain position).
 func (s *Store) InsertInboxEntry(
 	ctx context.Context,
 	peerID []byte,
@@ -87,10 +100,38 @@ func (s *Store) InsertInboxEntry(
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// Idempotency: an already-accepted entry is a no-op success.
+	var one int
+	err = tx.QueryRowContext(ctx,
+		`SELECT 1 FROM inbox_entries WHERE peer_id = ? AND hash = ?`,
+		peerID, hash[:],
+	).Scan(&one)
+	if err == nil {
+		return tx.Commit()
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("check existing inbox entry: %w", err)
+	}
+
+	// Compare-and-extend: the entry may only advance the chain when the
+	// current head equals its prev_hash. No head yet ⇒ genesis link.
+	var curHead []byte
+	err = tx.QueryRowContext(ctx,
+		`SELECT last_hash FROM inbox_known_chain_head WHERE peer_id = ?`,
+		peerID,
+	).Scan(&curHead)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		// no head yet — accept as the first link.
+	case err != nil:
+		return fmt.Errorf("read chain head: %w", err)
+	case !bytes.Equal(curHead, prevHash[:]):
+		return ErrInboxChainMismatch
+	}
+
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO inbox_entries(peer_id, hash, prev_hash, payload, received_at)
-		 VALUES(?, ?, ?, ?, ?)
-		 ON CONFLICT(peer_id, hash) DO NOTHING`,
+		 VALUES(?, ?, ?, ?, ?)`,
 		peerID, hash[:], prevHash[:], payload, now,
 	); err != nil {
 		return fmt.Errorf("insert inbox entry: %w", err)
@@ -192,6 +233,20 @@ func (s *Store) CountInboxOrphans(ctx context.Context) (uint64, error) {
 	var n uint64
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM inbox_orphans`).Scan(&n); err != nil {
 		return 0, fmt.Errorf("count orphans: %w", err)
+	}
+	return n, nil
+}
+
+// CountInboxOrphansForPeer returns the number of orphans queued for a
+// single peer. Used by Inbox to enforce a per-peer quota so one sybil
+// rater cannot fill the whole orphan table and DoS out-of-order delivery
+// for every other peer.
+func (s *Store) CountInboxOrphansForPeer(ctx context.Context, peerID []byte) (uint64, error) {
+	var n uint64
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM inbox_orphans WHERE peer_id = ?`, peerID,
+	).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count orphans for peer: %w", err)
 	}
 	return n, nil
 }
@@ -390,6 +445,26 @@ func (s *Store) IsEquivocator(ctx context.Context, peerID []byte) (bool, error) 
 	return true, nil
 }
 
+// IterateEquivocators returns the peer_id bytes of every peer currently
+// marked as an equivocator. Used by the reputation engine to apply the
+// permanent score floor on every recompute.
+func (s *Store) IterateEquivocators(ctx context.Context) ([][]byte, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT peer_id FROM equivocators`)
+	if err != nil {
+		return nil, fmt.Errorf("query equivocators: %w", err)
+	}
+	defer rows.Close()
+	var out [][]byte
+	for rows.Next() {
+		var pid []byte
+		if err := rows.Scan(&pid); err != nil {
+			return nil, fmt.Errorf("scan equivocator: %w", err)
+		}
+		out = append(out, pid)
+	}
+	return out, rows.Err()
+}
+
 // EquivocatorAlert returns the alert_blob that originally marked
 // peerID as an equivocator, or (nil, nil) if no such row exists.
 func (s *Store) EquivocatorAlert(ctx context.Context, peerID []byte) ([]byte, error) {
@@ -415,9 +490,9 @@ func (s *Store) EquivocatorAlert(ctx context.Context, peerID []byte) ([]byte, er
 // WitnessState is one row from witness_state. Contains the most recent
 // LogHead bytes this witness has co-signed for the given peer.
 type WitnessState struct {
-	PeerID    []byte
-	TreeSize  uint64
-	LastHead  []byte // serialised pb.LogHead bytes (full envelope)
+	PeerID   []byte
+	TreeSize uint64
+	LastHead []byte // serialised pb.LogHead bytes (full envelope)
 }
 
 // GetWitnessState returns the row for peerID, or (nil, nil) if the
@@ -500,6 +575,8 @@ func (s *Store) DistinctSubjects(ctx context.Context) ([][]byte, error) {
 	extractSubject := func(payload []byte) []byte {
 		var signed pb.SignedEntry
 		if err := proto.Unmarshal(payload, &signed); err != nil {
+			slog.Warn("store: skipping entry with unparseable payload in DistinctSubjects",
+				slog.Any("err", err))
 			return nil
 		}
 		switch body := signed.GetBody().(type) {

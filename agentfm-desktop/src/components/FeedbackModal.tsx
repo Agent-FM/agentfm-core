@@ -49,7 +49,7 @@ export function FeedbackModal() {
     try {
       // Send the rating as a discrete field so the boss appends a paired
       // Rating ledger entry. Previously the rating was string-concatenated
-      // into the comment body — visible but cosmetic; it never flowed into
+      // into the comment body, visible but cosmetic; it never flowed into
       // EigenTrust or appeared under the PeerView Ratings tab.
       const res = await api.submitSelfComment(ctx.peerId, {
         text: text.trim(),
@@ -65,7 +65,7 @@ export function FeedbackModal() {
             q.queryKey[1] === ctx.peerId,
         }),
       ]);
-      toast.success(`Feedback signed and gossipped 💌 cid ${res.cid.slice(0, 10)}…`);
+      toast.success(`Feedback signed and gossiped, cid ${res.cid.slice(0, 10)}…`);
       close();
     } catch (err) {
       const msg = err instanceof ApiError ? `${err.status}: ${err.message}` : String(err);
@@ -84,43 +84,45 @@ export function FeedbackModal() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[60] flex items-center justify-center"
+          className="fixed inset-0 bg-bg-0/75 z-[60] flex items-center justify-center"
           onClick={close}
         >
           <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
             onClick={(e) => e.stopPropagation()}
-            className="w-[480px] bg-bg-1 border border-border-0 rounded-2xl p-7 shadow-2xl"
+            className="w-[480px] glass-strong rounded-sheet shadow-float p-4"
           >
-            <div className="flex justify-between items-start mb-4">
+            <div className="flex justify-between items-start mb-3">
               <div>
-                <h3 className="text-xl font-semibold tracking-tight text-text-0">Leave feedback</h3>
-                <div className="text-[11px] font-mono text-text-2 mt-1">
-                  about peer {ctx.peerId.slice(0, 10)}… · task {ctx.taskId}
+                <h3 className="text-lg font-semibold text-text-0">Leave feedback</h3>
+                <div className="flex items-center gap-2 text-2xs font-mono text-text-2 mt-0.5 tabular-nums">
+                  <span>peer {ctx.peerId.slice(0, 10)}…</span>
+                  <span className="h-2.5 w-px bg-border-1" />
+                  <span>task {ctx.taskId}</span>
                 </div>
               </div>
-              <button onClick={close} className="text-text-2 hover:text-text-0 text-lg">
-                <X size={18} />
+              <button onClick={close} aria-label="Close feedback" className="text-text-2 hover:text-text-0 transition-colors duration-150">
+                <X size={16} strokeWidth={1.5} />
               </button>
             </div>
 
-            <label className="text-[11px] uppercase tracking-wider text-text-2 block mb-1.5">
+            <label className="text-2xs font-medium text-text-2 block mb-1.5">
               Your comment
             </label>
             <textarea
               autoFocus
               value={text}
               onChange={(e) => setText(e.target.value)}
+              aria-label="Your comment"
               placeholder="What was the outcome?"
-              className="w-full min-h-[80px] bg-bg-0 border border-border-0 rounded-md p-3 text-sm text-text-0 outline-none focus:border-accent resize-y"
+              className="w-full min-h-[80px] glass-inset rounded-ctl p-3 text-sm text-text-0 outline-none focus:border-accent/60 resize-y"
             />
 
-            <label className="text-[11px] uppercase tracking-wider text-text-2 block mt-4 mb-1.5">
-              Rating{' '}
-              <span className="text-text-3 normal-case">(optional)</span>
+            <label className="text-2xs font-medium text-text-2 block mt-3 mb-1.5">
+              Rating <span className="text-text-3">(optional)</span>
             </label>
             <div className="mb-2">
               <StarRow value={hasRating ? starsFromScore(rating) : 0} size={18} />
@@ -132,6 +134,7 @@ export function FeedbackModal() {
                 max={1}
                 step={0.05}
                 value={rating}
+                aria-label="Rating from -1 (bad) to +1 (good)"
                 onChange={(e) => {
                   setRating(Number(e.target.value));
                   setHasRating(true);
@@ -139,26 +142,21 @@ export function FeedbackModal() {
                 className="flex-1 accent-accent"
               />
               <span
-                className={`font-mono text-sm w-12 text-right ${
+                className={`font-mono text-xs w-12 text-right tabular-nums ${
                   hasRating
                     ? rating > 0
-                      ? 'text-emerald-400'
+                      ? 'text-ok'
                       : rating < 0
-                        ? 'text-rose-400'
+                        ? 'text-bad'
                         : 'text-text-1'
                     : 'text-text-3'
                 }`}
               >
-                {hasRating ? (rating >= 0 ? '+' : '') + rating.toFixed(2) : '—'}
+                {hasRating ? (rating >= 0 ? '+' : '') + rating.toFixed(2) : 'n/a'}
               </span>
             </div>
 
-            <div className="text-[10px] text-text-2 mt-3">
-              Signed by your boss identity · gossiped on{' '}
-              <code className="font-mono">agentfm-feedback-v1</code> · permanent
-            </div>
-
-            <div className="flex gap-2 justify-end mt-5">
+            <div className="flex gap-2 justify-end mt-4">
               <Button onClick={close}>Skip</Button>
               <Button variant="primary" onClick={submit} disabled={!text.trim() || submitting}>
                 <Send size={12} />

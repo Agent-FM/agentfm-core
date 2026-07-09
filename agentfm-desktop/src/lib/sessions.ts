@@ -19,7 +19,8 @@ export async function saveSessions(
   projectId: string,
   sessions: ChatSession[],
 ): Promise<void> {
-  const trimmed = sessions.slice(-LIMIT);
+  // Sessions are newest-first; keep the newest LIMIT, not the oldest.
+  const trimmed = sessions.slice(0, LIMIT);
   await window.api.settings.set(keyFor(projectId), trimmed);
 }
 

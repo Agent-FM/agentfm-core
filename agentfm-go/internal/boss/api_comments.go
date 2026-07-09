@@ -35,17 +35,18 @@ var base64StdDecoder = base64.StdEncoding
 // own libp2p identity). External-submitter delegation lands in v1.4
 // after the protocol for verifying delegated authority is defined.
 type CommentSubmitRequest struct {
-	RaterPeerID         string `json:"rater_peer_id"`
-	Text                string `json:"text"`
-	Language            string `json:"language"`
-	AttachedRatingHash  string `json:"attached_rating_hash,omitempty"` // hex
-	SignatureBase64     string `json:"signature"`                       // base64-std
+	RaterPeerID        string `json:"rater_peer_id"`
+	Text               string `json:"text"`
+	Language           string `json:"language"`
+	AttachedRatingHash string `json:"attached_rating_hash,omitempty"` // hex
+	TimestampUnixNs    int64  `json:"timestamp_unix_ns"`              // caller-chosen; signed over
+	SignatureBase64    string `json:"signature"`                      // base64-std
 }
 
 // CommentSubmitResponse is the JSON returned on 201 Created.
 type CommentSubmitResponse struct {
-	CID         string `json:"cid"`
-	LedgerHash  string `json:"ledger_hash"`
+	CID        string `json:"cid"`
+	LedgerHash string `json:"ledger_hash"`
 }
 
 // CommentSubmissionHandler is the public-facing handler for P4-3. It
@@ -53,10 +54,9 @@ type CommentSubmitResponse struct {
 // constructor calls Use to install the handler so the
 // api_reputation.go umbrella router dispatches correctly.
 type CommentSubmissionHandler struct {
-	store    *comments.Store
-	host     peerHostShim
+	store           *comments.Store
+	host            peerHostShim
 	subjectFromPath func(path string) string
-	signSubmission func(req *CommentSubmitRequest, signedBytes []byte) error // unused; placeholder for future delegated-submitter flow
 }
 
 // peerHostShim is the minimal interface CommentSubmissionHandler
@@ -112,6 +112,10 @@ func (h *CommentSubmissionHandler) HandleHTTP(b *Boss, w http.ResponseWriter, r 
 		writeOpenAIError(w, http.StatusBadRequest, errTypeInvalidRequest, "missing_field", "rater_peer_id, text, and signature are required")
 		return
 	}
+	if req.TimestampUnixNs <= 0 {
+		writeOpenAIError(w, http.StatusBadRequest, errTypeInvalidRequest, "missing_field", "timestamp_unix_ns is required and must be positive (the caller signs over it)")
+		return
+	}
 	if len(req.Text) > comments.MaxBodyBytes {
 		writeOpenAIError(w, http.StatusBadRequest, errTypeInvalidRequest, "body_too_large",
 			fmt.Sprintf("text exceeds %d bytes", comments.MaxBodyBytes))
@@ -142,13 +146,12 @@ func (h *CommentSubmissionHandler) HandleHTTP(b *Boss, w http.ResponseWriter, r 
 	// self-submission), so the caller's `signature` field is
 	// effectively informational in v1.3 — but we still validate it
 	// to lock the API shape for v1.4's delegated flow.
-	now := time.Now().UnixNano()
 	commentPB := &pb.Comment{
 		RaterPeerId:     []byte(raterID),
 		SubjectPeerId:   []byte(subjectID),
 		TextCid:         cid,
 		Language:        req.Language,
-		TimestampUnixNs: now,
+		TimestampUnixNs: req.TimestampUnixNs,
 	}
 	if req.AttachedRatingHash != "" {
 		attached, err := hex.DecodeString(req.AttachedRatingHash)

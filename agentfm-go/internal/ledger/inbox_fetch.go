@@ -21,6 +21,7 @@ const (
 	inboxFetchStreamTimeout = 30 * time.Second
 	maxInboxFetchEntries    = 1000
 	maxInboxPayloadBytes    = 1 << 20
+	maxInboxAggregateBytes  = 32 << 20
 )
 
 // startInboxFetchHandler registers the InboxFetchProtocol handler.
@@ -44,7 +45,14 @@ func (l *ledgerImpl) stopInboxFetchHandler(h host.Host) {
 // response so the client can distinguish "no data" from "transport
 // failure" (the latter shows up as a stream error).
 func (l *ledgerImpl) handleInboxFetch(s libnet.Stream) {
-	defer func() { _ = s.Close() }()
+	reset := true
+	defer func() {
+		if reset {
+			_ = s.Reset()
+		} else {
+			_ = s.Close()
+		}
+	}()
 	if err := s.SetDeadline(time.Now().Add(inboxFetchStreamTimeout)); err != nil {
 		slog.Debug("inbox-fetch: set deadline", slog.Any(obs.FieldErr, err))
 		return
@@ -61,6 +69,7 @@ func (l *ledgerImpl) handleInboxFetch(s libnet.Stream) {
 	count := binary.BigEndian.Uint64(hdr[8:])
 	if count == 0 {
 		_ = writeInboxFetchCount(s, 0)
+		reset = false
 		return
 	}
 	if count > maxInboxFetchEntries {
@@ -82,6 +91,7 @@ func (l *ledgerImpl) handleInboxFetch(s libnet.Stream) {
 	if err != nil {
 		slog.Debug("inbox-fetch: iterate", slog.Any(obs.FieldErr, err))
 		_ = writeInboxFetchCount(s, 0)
+		reset = false
 		return
 	}
 
@@ -97,6 +107,7 @@ func (l *ledgerImpl) handleInboxFetch(s libnet.Stream) {
 			return
 		}
 	}
+	reset = false
 }
 
 func writeInboxFetchCount(w io.Writer, n uint64) error {
@@ -144,7 +155,14 @@ func FetchInboxFrom(ctx context.Context, h host.Host, remote peer.ID, sinceRowid
 	if err != nil {
 		return nil, fmt.Errorf("inbox-fetch: open stream: %w", err)
 	}
-	defer func() { _ = s.Close() }()
+	success := false
+	defer func() {
+		if success {
+			_ = s.Close()
+		} else {
+			_ = s.Reset()
+		}
+	}()
 
 	if err := s.SetDeadline(time.Now().Add(inboxFetchStreamTimeout)); err != nil {
 		return nil, fmt.Errorf("inbox-fetch: set deadline: %w", err)
@@ -170,6 +188,7 @@ func FetchInboxFrom(ctx context.Context, h host.Host, remote peer.ID, sinceRowid
 	}
 
 	out := make([]FetchedInboxEntry, 0, n)
+	var aggregate uint64
 	for i := uint64(0); i < n; i++ {
 		var eh [12]byte
 		if _, err := io.ReadFull(s, eh[:]); err != nil {
@@ -180,11 +199,16 @@ func FetchInboxFrom(ctx context.Context, h host.Host, remote peer.ID, sinceRowid
 		if uint64(plen) > maxInboxPayloadBytes {
 			return nil, fmt.Errorf("inbox-fetch: entry %d payload too large (%d > %d)", i, plen, maxInboxPayloadBytes)
 		}
+		aggregate += uint64(plen)
+		if aggregate > maxInboxAggregateBytes {
+			return nil, fmt.Errorf("inbox-fetch: aggregate payload exceeds %d bytes", maxInboxAggregateBytes)
+		}
 		payload := make([]byte, plen)
 		if _, err := io.ReadFull(s, payload); err != nil {
 			return nil, fmt.Errorf("inbox-fetch: read entry %d payload: %w", i, err)
 		}
 		out = append(out, FetchedInboxEntry{Rowid: rowid, Payload: payload})
 	}
+	success = true
 	return out, nil
 }

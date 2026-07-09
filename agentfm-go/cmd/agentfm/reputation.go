@@ -18,10 +18,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// defaultLedgerDBPath matches the existing convention for sibling
-// state files (see internal/network/host.go: `.agentfm_<mode>_identity.key`).
-const defaultLedgerDBPath = ".agentfm_ledger.db"
-
 // runReputationSubcommand dispatches `agentfm reputation <action> [args...]`.
 // Today only "show" is implemented; the parser is shaped for future
 // "verify", "rehab", etc. subcommands (P3-7, P5-3).
@@ -49,7 +45,7 @@ Commands:
   show <peer_id>     Print scores, ledger head, and recent ratings about a peer.
 
 Flags (apply to show):
-  -db <path>         Path to the ledger SQLite database (default: .agentfm_ledger.db)
+  -db <path>         Path to the ledger SQLite database (default: ~/.agentfm/boss_ledger.db)
   -limit <N>         Number of most-recent entries to print (default: 20)`)
 }
 
@@ -59,7 +55,7 @@ Flags (apply to show):
 // HTTP API (P4-2).
 func runReputationShow(args []string) {
 	fs := flag.NewFlagSet("reputation show", flag.ExitOnError)
-	dbPath := fs.String("db", defaultLedgerDBPath, "Path to the ledger SQLite database")
+	dbPath := fs.String("db", defaultBossLedgerPath("boss"), "Path to the ledger SQLite database")
 	limit := fs.Int("limit", 20, "Number of most-recent entries to print")
 	fs.Usage = func() { printReputationHelp(os.Stderr) }
 
@@ -85,7 +81,7 @@ func runReputationShow(args []string) {
 	}
 
 	if _, err := os.Stat(*dbPath); os.IsNotExist(err) {
-		pterm.Error.Printfln("ledger database not found at %s — run a worker/boss in this directory first, or pass -db <path>", *dbPath)
+		pterm.Error.Printfln("ledger database not found at %s — start a boss (or -mode api) to create it, or pass -db <path> (e.g. ~/.agentfm/relay_ledger.db)", *dbPath)
 		os.Exit(1)
 	}
 

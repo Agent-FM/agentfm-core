@@ -154,8 +154,8 @@ func TestGatherReputationView_FiltersBySubject(t *testing.T) {
 	// Three entries about subject (across two raters), one about otherSubject.
 	hA1 := insertEntry(t, raterAPriv, raterA, subject, [32]byte{}, "honesty", 0.5)
 	insertEntry(t, raterAPriv, raterA, subject, hA1, "latency", 0.7)
-	insertEntry(t, raterBPriv, raterB, subject, [32]byte{}, "honesty", -0.3)
-	insertEntry(t, raterBPriv, raterB, otherSubject, [32]byte{}, "honesty", 0.1)
+	hB1 := insertEntry(t, raterBPriv, raterB, subject, [32]byte{}, "honesty", -0.3)
+	insertEntry(t, raterBPriv, raterB, otherSubject, hB1, "honesty", 0.1)
 
 	view, err := gatherReputationView(context.Background(), s, []byte(subject), 10)
 	if err != nil {

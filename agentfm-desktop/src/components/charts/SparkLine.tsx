@@ -2,28 +2,44 @@ import { useEffect, useRef, useState } from 'react'
 
 export interface SparkLineProps {
   values: number[]
-  width: number
   height: number
   color: string
+  /** Fixed pixel width. Omit to fill the container (measured via ResizeObserver). */
+  width?: number
 }
 
-export function SparkLine({ values, width, height, color }: SparkLineProps) {
-  const ref = useRef<HTMLCanvasElement>(null)
+export function SparkLine({ values, height, color, width }: SparkLineProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [measured, setMeasured] = useState(width ?? 0)
+  const w = width ?? measured
   const [tip, setTip] = useState<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
-    const canvas = ref.current
-    if (!canvas) return
+    if (width != null || typeof ResizeObserver === 'undefined') return
+    const el = wrapRef.current
+    if (!el) return
+    const ro = new ResizeObserver((entries) => {
+      const cw = entries[0]?.contentRect.width
+      if (cw && cw > 0) setMeasured(Math.floor(cw))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [width])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || w <= 0) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
     const dpr = window.devicePixelRatio || 1
-    canvas.width = width * dpr
+    canvas.width = w * dpr
     canvas.height = height * dpr
-    canvas.style.width = `${width}px`
+    canvas.style.width = `${w}px`
     canvas.style.height = `${height}px`
     ctx.scale(dpr, dpr)
-    ctx.clearRect(0, 0, width, height)
+    ctx.clearRect(0, 0, w, height)
 
     if (values.length === 0) {
       setTip(null)
@@ -37,7 +53,7 @@ export function SparkLine({ values, width, height, color }: SparkLineProps) {
       if (v > max) max = v
     }
     const range = max - min || 1
-    const stepX = values.length > 1 ? width / (values.length - 1) : width
+    const stepX = values.length > 1 ? w / (values.length - 1) : w
 
     ctx.beginPath()
     let lastX = 0
@@ -54,18 +70,20 @@ export function SparkLine({ values, width, height, color }: SparkLineProps) {
     ctx.lineWidth = 1.2
     ctx.stroke()
 
-    ctx.lineTo(width, height)
+    ctx.lineTo(w, height)
     ctx.lineTo(0, height)
     ctx.closePath()
-    ctx.fillStyle = 'rgba(247,147,30,0.08)'
+    ctx.globalAlpha = 0.1
+    ctx.fillStyle = color
     ctx.fill()
+    ctx.globalAlpha = 1
 
     setTip(values.length >= 2 ? { x: lastX, y: lastY } : null)
-  }, [values, width, height, color])
+  }, [values, w, height, color])
 
   return (
-    <div className="relative" style={{ width, height }}>
-      <canvas ref={ref} />
+    <div ref={wrapRef} className="relative" style={{ width: width ?? '100%', height }}>
+      <canvas ref={canvasRef} />
       {tip && (
         <span
           aria-hidden

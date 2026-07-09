@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Satellite } from 'lucide-react';
 import { Button } from './primitives/Button';
 
 const WORKER_CMD = `./agentfm -mode worker \\
@@ -22,18 +23,20 @@ export function EmptyRadar() {
         setTimeout(() => setCopied(false), 1800);
       })
       .catch(() => {
-        // clipboard unavailable in some test envs — no-op
+        // clipboard unavailable in some test envs, no-op
       });
   }
 
   return (
-    <div className="max-w-2xl bg-bg-1 border border-border-0 rounded-xl p-7">
-      <div className="text-5xl mb-3 opacity-70">🛰</div>
-      <h2 className="text-xl font-semibold tracking-tight text-text-0">No agents on the mesh yet</h2>
-      <p className="text-sm text-text-2 mt-1.5 mb-5">
-        Workers announce themselves on the GossipSub telemetry topic. Once one
-        comes online, its card will appear here in real time — no refresh needed.
-      </p>
+    <div className="max-w-xl mx-auto px-4 pt-10 pb-6">
+      <div className="flex flex-col items-center text-center mb-6">
+        <Satellite size={32} strokeWidth={1.5} className="text-text-3 mb-3" aria-hidden="true" />
+        <h2 className="text-lg font-semibold text-text-1">No agents on the mesh yet</h2>
+        <p className="text-sm text-text-3 mt-1">
+          Workers announce themselves on the GossipSub telemetry topic. Once one
+          comes online, its card will appear here in real time, no refresh needed.
+        </p>
+      </div>
 
       <div className="space-y-4">
         <Step
@@ -45,12 +48,12 @@ export function EmptyRadar() {
                 Run this in a separate terminal. It uses the bundled public relay by default.
               </p>
               <div className="relative">
-                <pre className="text-[11px] font-mono bg-bg-0 border border-border-0 rounded-md p-3 overflow-x-auto text-text-1">
+                <pre className="text-xs font-mono console-well mono-console rounded-ctl p-3 overflow-x-auto text-text-1">
                   {WORKER_CMD}
                 </pre>
                 <button
                   onClick={copyCmd}
-                  className="absolute top-2 right-2 text-[10px] bg-bg-2 border border-border-0 rounded px-2 py-0.5 text-text-2 hover:text-text-0"
+                  className="absolute top-2 right-2 text-2xs bg-control hover:bg-control-hover rounded-ctl px-2 py-0.5 text-text-1 hover:text-text-0 transition-colors duration-150 cursor-pointer"
                 >
                   {copied ? 'copied!' : 'copy'}
                 </button>
@@ -67,7 +70,7 @@ export function EmptyRadar() {
                 Running a private mesh? Configure the relay multiaddr and (optionally) a swarm
                 key in Settings → Mesh.
               </p>
-              <Button onClick={() => navigate('/settings')}>Open Mesh settings</Button>
+              <Button variant="secondary" onClick={() => navigate('/settings')}>Open Mesh settings</Button>
             </>
           }
         />
@@ -97,7 +100,7 @@ function Step({
 }) {
   return (
     <div className="flex gap-3">
-      <div className="w-6 h-6 shrink-0 rounded-full bg-accent-bg border border-accent/30 text-accent text-xs font-semibold flex items-center justify-center">
+      <div className="w-5 h-5 shrink-0 rounded-full bg-white/[0.06] text-text-1 text-2xs font-medium tabular-nums flex items-center justify-center">
         {n}
       </div>
       <div className="flex-1 min-w-0">

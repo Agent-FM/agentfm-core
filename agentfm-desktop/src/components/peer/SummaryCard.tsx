@@ -3,21 +3,21 @@ import { Badge } from '../primitives/Badge';
 import { Card } from '../primitives/Card';
 import { StarRow } from '../primitives/StarRow';
 import { starsFromScore } from '../../lib/stars';
-import { Copy } from 'lucide-react';
+import { Copy, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function SummaryCard({ data }: { data: PeerSummary }) {
   const score = data.honesty_score;
   return (
-    <Card className="grid grid-cols-3 gap-x-6 gap-y-4">
+    <Card density="compact" className="space-y-0.5">
       <Field label="Rating">
         <div className="flex gap-1.5 flex-wrap items-center">
           {data.is_equivocator ? (
-            <Badge tone="rose">⚠ equivocator</Badge>
+            <Badge tone="bad"><AlertTriangle size={11} strokeWidth={1.5} /> equivocator</Badge>
           ) : (
             <>
               <StarRow value={starsFromScore(score)} size={15} />
-              <Badge tone={score > 0.3 ? 'lime' : score < -0.5 ? 'rose' : 'neutral'} mono>
+              <Badge tone={score > 0.3 ? 'ok' : score < -0.5 ? 'bad' : 'neutral'} mono>
                 <span className="tabular-nums">
                   {score >= 0 ? '+' : ''}{score.toFixed(2)}
                 </span>{' '}
@@ -29,14 +29,24 @@ export function SummaryCard({ data }: { data: PeerSummary }) {
       </Field>
       <Field label="Status">
         {data.online ? (
-          <span className="text-sm text-accent tabular-nums">✓ online</span>
+          <span className="inline-flex items-center gap-1.5 text-sm text-text-0 tabular-nums">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-ok" aria-hidden="true" />
+            online
+          </span>
         ) : (
           <span className="text-sm text-text-2 tabular-nums">offline</span>
         )}
       </Field>
       <Field label="Equivocator">
-        <span className={`text-sm tabular-nums ${data.is_equivocator ? 'text-bad' : 'text-text-1'}`}>
-          {data.is_equivocator ? '⚠ yes — floored at -1.00' : 'no'}
+        <span className={`inline-flex items-center gap-1 text-sm tabular-nums ${data.is_equivocator ? 'text-bad' : 'text-text-1'}`}>
+          {data.is_equivocator ? (
+            <>
+              <AlertTriangle size={12} strokeWidth={1.5} className="flex-none" />
+              yes, floored at -1.00
+            </>
+          ) : (
+            'no'
+          )}
         </span>
       </Field>
       {data.advertised_image_ref && (
@@ -53,7 +63,7 @@ export function SummaryCard({ data }: { data: PeerSummary }) {
                 .then(() => toast.success('Digest copied'))
                 .catch(() => toast.error('Copy failed'))
             }
-            title={`${data.advertised_image_digest} — click to copy`}
+            title={`${data.advertised_image_digest}, click to copy`}
             className="group/dg inline-flex items-start gap-1 text-left"
           >
             <code className="text-xs text-text-0 font-mono break-all">
@@ -68,16 +78,17 @@ export function SummaryCard({ data }: { data: PeerSummary }) {
       )}
       {data.advertised_capability && (
         <Field label="Capability">
-          <Badge tone="cyan" mono>{data.advertised_capability}</Badge>
+          <Badge tone="accent" mono>{data.advertised_capability}</Badge>
         </Field>
       )}
       <Field label="Total entries">
-        <span className="text-sm text-text-0 tabular-nums">{data.entries_count}</span>
+        <span className="font-mono text-xs text-text-0 tabular-nums">{data.entries_count}</span>
       </Field>
       <Field label="Verified raters">
-        <span className="text-sm text-text-1 tabular-nums">
-          {data.rater_summary?.verified_raters_count ?? 0} verified ·{' '}
-          {data.rater_summary?.unverified_raters_count ?? 0} unverified
+        <span className="inline-flex items-center gap-2 font-mono text-xs text-text-1 tabular-nums">
+          <span>{data.rater_summary?.verified_raters_count ?? 0} verified</span>
+          <span className="w-px h-3 bg-border-1" aria-hidden="true" />
+          <span>{data.rater_summary?.unverified_raters_count ?? 0} unverified</span>
         </span>
       </Field>
     </Card>
@@ -86,9 +97,9 @@ export function SummaryCard({ data }: { data: PeerSummary }) {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <div className="text-[10px] uppercase tracking-wider text-text-2 mb-1">{label}</div>
-      <div>{children}</div>
+    <div className="grid grid-cols-[130px_1fr] gap-3 items-baseline min-h-6 py-0.5">
+      <div className="text-sm text-text-1">{label}</div>
+      <div className="text-sm min-w-0">{children}</div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Copy, Check } from 'lucide-react'
+import { Copy, Check, Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import { shortenPeerID } from '../../lib/peer'
 
@@ -10,10 +10,6 @@ interface Props {
 
 export function RelayPill({ peerId, mode }: Props) {
   const isPrivate = mode === 'private'
-  const dotColor = '#F7931E'
-  const textColor = '#FCD9A8'
-  const bg = 'rgba(247,147,30,.06)'
-  const border = 'rgba(247,147,30,.25)'
   const [copied, setCopied] = useState(false)
 
   async function copy() {
@@ -30,24 +26,14 @@ export function RelayPill({ peerId, mode }: Props) {
   return (
     <button
       onClick={copy}
-      title={`${peerId} — click to copy`}
-      className="group inline-flex items-center gap-1.5 font-mono transition-colors hover:brightness-125"
-      style={{
-        fontSize: 11,
-        color: textColor,
-        background: bg,
-        border: `1px solid ${border}`,
-        padding: '5px 10px',
-        borderRadius: 999,
-      }}
+      title={`${peerId}, click to copy`}
+      className="group inline-flex items-center gap-1.5 h-[20px] font-mono text-2xs tabular-nums text-text-1 bg-raised border border-border-1 rounded-ctl px-2 transition-colors hover:bg-control"
     >
-      <span
-        className="w-[5px] h-[5px] rounded-full animate-pulse-cyan"
-        style={{ background: dotColor, boxShadow: `0 0 6px ${dotColor}` }}
-      />
-      {isPrivate ? '🔒 ' : ''}{shortenPeerID(peerId, 6, 5)}
+      <span className="w-[5px] h-[5px] rounded-full bg-ok" />
+      {isPrivate && <Lock size={10} strokeWidth={1.5} />}
+      {shortenPeerID(peerId, 6, 5)}
       {copied ? (
-        <Check size={12} className="text-accent" />
+        <Check size={12} strokeWidth={1.5} className="text-ok" />
       ) : (
         <Copy size={12} className="opacity-0 group-hover:opacity-70 transition-opacity" />
       )}

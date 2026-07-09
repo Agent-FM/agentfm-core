@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"agentfm/internal/ledger"
-	"agentfm/internal/network"
 	pb "agentfm/internal/ledger/pb"
+	"agentfm/internal/network"
 	"agentfm/test/testutil"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"

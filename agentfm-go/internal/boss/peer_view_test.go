@@ -43,16 +43,23 @@ func newPeerIDPV(t *testing.T) peer.ID {
 
 var pvInsertSeq int64
 
+// pvChainHead tracks the last inbox hash per rater so repeated inserts
+// form a valid chain (InsertInboxEntry now requires prev_hash to extend
+// the rater's current head). Raters are unique per test, so this
+// package-level map does not leak across tests.
+var pvChainHead = map[string][32]byte{}
+
 func insertInboxRating(t *testing.T, s *store.Store, rater, subject peer.ID, score float64) {
 	t.Helper()
 	pvInsertSeq++
+	prev := pvChainHead[string(rater)]
 	entry := &pb.SignedEntry{Body: &pb.SignedEntry_Rating{Rating: &pb.Rating{
 		RaterPeerId:     []byte(rater),
 		SubjectPeerId:   []byte(subject),
 		Dimension:       "honesty",
 		Score:           score,
 		TimestampUnixNs: time.Now().UnixNano() + pvInsertSeq, // unique ns to avoid hash collision
-		PrevHash:        make([]byte, 32),
+		PrevHash:        prev[:],
 	}}}
 	payload, _ := proto.Marshal(entry)
 	var hash [32]byte
@@ -60,9 +67,10 @@ func insertInboxRating(t *testing.T, s *store.Store, rater, subject peer.ID, sco
 	// Ensure distinct hash by varying multiple bytes (to avoid cycling on > 256 insertions)
 	hash[30] ^= byte(pvInsertSeq >> 8)
 	hash[31] ^= byte(pvInsertSeq)
-	if err := s.InsertInboxEntry(context.Background(), []byte(rater), hash, [32]byte{}, payload); err != nil {
+	if err := s.InsertInboxEntry(context.Background(), []byte(rater), hash, prev, payload); err != nil {
 		t.Fatalf("InsertInboxEntry: %v", err)
 	}
+	pvChainHead[string(rater)] = hash
 }
 
 func insertOwnRating(t *testing.T, s *store.Store, rater, subject peer.ID, score float64) {
@@ -354,4 +362,3 @@ func TestRenderPeerView_HeaderContainsPeerID(t *testing.T) {
 		t.Errorf("rendered view missing short peer ID %q:\n%s", wantFragment, out)
 	}
 }
-

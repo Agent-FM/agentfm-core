@@ -15,15 +15,16 @@ export function EntryRow({ entry, peerId }: Props) {
   const hasMeta = unverified || !!entry.context;
 
   return (
-    <div className="relative pl-4 border-b border-border-0/40">
-      <span
-        className={`absolute left-0 top-2 bottom-2 w-[3px] rounded-full ${
-          entry.kind === 'Rating' ? 'bg-accent' : 'bg-border-1'
-        }`}
-      />
-      <div className="grid grid-cols-[80px_84px_1fr_70px] gap-3.5 py-2.5 items-start text-sm">
-        <div className="text-[11px] uppercase tracking-wider text-text-2 pt-0.5">{entry.kind}</div>
-        <div className="font-mono font-medium tabular-nums pt-0.5">
+    <div>
+      <div className="grid grid-cols-[80px_84px_1fr_70px] gap-3 px-2 py-1 min-h-6 items-start text-sm">
+        <div
+          className={`text-2xs font-medium pt-0.5 ${
+            entry.kind === 'Rating' ? 'text-accent' : 'text-text-1'
+          }`}
+        >
+          {entry.kind}
+        </div>
+        <div className="font-mono text-xs tabular-nums pt-0.5">
           {typeof entry.score === 'number' ? (
             <div className="flex flex-col gap-0.5">
               <span
@@ -40,15 +41,13 @@ export function EntryRow({ entry, peerId }: Props) {
               </span>
               <StarRow value={starsFromScore(entry.score)} size={10} />
             </div>
-          ) : (
-            <span className="text-text-3">—</span>
-          )}
+          ) : null}
         </div>
         <div className="min-w-0">
           {hasMeta && (
             <div className="flex gap-1.5 items-baseline">
               {unverified && (
-                <span className="text-[10px] bg-bg-2 text-text-2 px-1.5 py-0.5 rounded">
+                <span className="text-2xs bg-white/[0.06] text-text-2 px-1.5 py-0.5 rounded-full">
                   unverified
                 </span>
               )}
@@ -57,7 +56,7 @@ export function EntryRow({ entry, peerId }: Props) {
           )}
           {isComment && entry.text_cid && <CommentBody peerId={peerId} cid={entry.text_cid} />}
         </div>
-        <div className="text-[11px] text-text-2 text-right font-mono tabular-nums pt-0.5">
+        <div className="text-2xs text-text-2 text-right font-mono tabular-nums pt-0.5">
           {compactAge(entry.received_at)}
         </div>
       </div>

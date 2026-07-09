@@ -82,7 +82,10 @@ func (srv *Server) handle(s libnet.Stream) {
 	}
 	body, err := srv.store.Get(cid)
 	if err != nil {
-		writeNotFound(s, err.Error())
+		// Log the real error (which may embed local filesystem paths)
+		// locally; send only a fixed string to the remote peer.
+		slog.Debug("comments fetch: get body", slog.Any(obs.FieldErr, err))
+		writeNotFound(s, "not found")
 		return
 	}
 	writeBody(s, body)

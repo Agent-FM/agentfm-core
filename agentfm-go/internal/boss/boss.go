@@ -274,7 +274,11 @@ func (b *Boss) listenTelemetry(ctx context.Context) {
 				close(msgCh)
 				return
 			}
-			msgCh <- &pubsubMsg{ReceivedFrom: msg.ReceivedFrom, Data: msg.Data}
+			select {
+			case msgCh <- &pubsubMsg{ReceivedFrom: msg.ReceivedFrom, From: msg.GetFrom(), Data: msg.Data}:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 
@@ -288,11 +292,18 @@ func (b *Boss) listenTelemetry(ctx context.Context) {
 			if !ok {
 				return
 			}
-			if msg.ReceivedFrom == b.node.Host.ID() {
+			if msg.From == b.node.Host.ID() {
 				continue
 			}
 			var profile types.WorkerProfile
 			if err := json.Unmarshal(msg.Data, &profile); err == nil && profile.CPUCores > 0 {
+				if profile.PeerID != msg.From.String() {
+					slog.Debug("dropping telemetry with unauthenticated peer id",
+						slog.String("claimed", profile.PeerID),
+						slog.String(obs.FieldPeerID, msg.From.String()),
+					)
+					continue
+				}
 				b.handleTelemetryProfile(profile)
 			}
 		}
@@ -304,6 +315,7 @@ func (b *Boss) listenTelemetry(ctx context.Context) {
 // are copied across.
 type pubsubMsg struct {
 	ReceivedFrom peer.ID
+	From         peer.ID
 	Data         []byte
 }
 

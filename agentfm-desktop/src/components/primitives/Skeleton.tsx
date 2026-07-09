@@ -4,9 +4,7 @@ interface BoxProps {
 
 export function SkeletonBox({ className }: BoxProps) {
   return (
-    <div className={`relative overflow-hidden bg-bg-2 rounded ${className ?? ''}`}>
-      <div className="absolute inset-0 animate-shimmer bg-gradient-to-r from-transparent via-accent/10 to-transparent" />
-    </div>
+    <div className={`bg-white/[0.06] rounded animate-pulse ${className ?? ''}`} />
   )
 }
 
@@ -18,15 +16,13 @@ interface RowProps {
 export function SkeletonRow({ delay = 0, className }: RowProps) {
   return (
     <div
-      className={`bg-bg-1 border border-border-0 rounded-xl p-4 flex items-center gap-3 ${className ?? ''}`}
+      className={`h-6 px-2 border-b border-border-0 flex items-center gap-3 ${className ?? ''}`}
       style={{ animationDelay: `${delay}ms` }}
     >
       <SkeletonBox className="w-2 h-2" />
-      <div className="flex-1 space-y-2">
-        <SkeletonBox className="h-3.5 w-40" />
-        <SkeletonBox className="h-2.5 w-64" />
-      </div>
-      <SkeletonBox className="h-7 w-24" />
+      <SkeletonBox className="h-2.5 w-40" />
+      <SkeletonBox className="h-2.5 w-64 flex-1 max-w-[16rem]" />
+      <SkeletonBox className="h-2.5 w-16 ml-auto" />
     </div>
   )
 }

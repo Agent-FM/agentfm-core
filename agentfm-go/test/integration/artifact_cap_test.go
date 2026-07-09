@@ -104,26 +104,21 @@ func TestHandleArtifactStream_RejectsTruncatedShipment(t *testing.T) {
 	}
 	_ = stream.CloseWrite()
 
-	// The boss-side handler defers stream.Reset() on truncation (success
-	// flag stays false). Confirm by checking the artifact file is the
-	// 100-byte partial — but since success=false, the next collect_for_task
-	// would *currently* still see it on disk. The contract we need to pin
-	// is "the receiver did not mark this as success", which we approximate
-	// by requiring the partial file exists but is 100 bytes (not the
-	// declared 1 MiB).
+	// The receiver must NOT persist a truncated shipment at all: it streams
+	// to a .part temp and only renames into place on a complete transfer.
+	// On truncation it resets the stream, removes the temp, and leaves no
+	// artifact behind (so collect_for_task never picks up a partial).
+	path := filepath.Join(tmp, "agentfm_artifacts", "truncated-task.zip")
+	_ = netcore.Stream(stream) // keep the netcore import live
+
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		path := filepath.Join(tmp, "agentfm_artifacts", "truncated-task.zip")
-		if info, err := os.Stat(path); err == nil {
-			if info.Size() == 100 {
-				return // success: partial bounded at the actual shipped bytes
-			}
-			if info.Size() > 100 {
-				t.Fatalf("size=%d, expected to be capped at the actual shipped bytes (100)", info.Size())
-			}
+		if _, err := os.Stat(path); err == nil {
+			t.Fatalf("truncated shipment persisted an artifact at %s; want none", path)
 		}
-		_ = netcore.Stream(stream) // keep the import live
 		time.Sleep(20 * time.Millisecond)
 	}
-	t.Fatalf("expected partial artifact file at 100 bytes within 2s")
+	if _, err := os.Stat(path + ".part"); !os.IsNotExist(err) {
+		t.Fatalf("truncated shipment left a .part temp; want it cleaned up")
+	}
 }

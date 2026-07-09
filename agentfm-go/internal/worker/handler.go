@@ -34,6 +34,19 @@ func isDirEmpty(name string) bool {
 	return err != nil
 }
 
+type cancelOnWriteError struct {
+	w      io.Writer
+	cancel context.CancelFunc
+}
+
+func (c *cancelOnWriteError) Write(p []byte) (int, error) {
+	n, err := c.w.Write(p)
+	if err != nil {
+		c.cancel()
+	}
+	return n, err
+}
+
 func (w *Worker) handleTaskStream(rootCtx context.Context, s netcore.Stream) {
 	// Per-task observability — declared first so the deferred closure runs
 	// LAST (Go runs defers in LIFO), capturing the full lifetime including
@@ -164,7 +177,8 @@ func (w *Worker) handleTaskStream(rootCtx context.Context, s netcore.Stream) {
 
 	pterm.Info.Printfln("Executing task %s in Podman sandbox...", payload.TaskID)
 
-	outputDir := w.executePodman(taskCtx, payload.Data, s, s)
+	streamSink := &cancelOnWriteError{w: s, cancel: cancelTask}
+	outputDir := w.executePodman(taskCtx, payload.Data, streamSink, streamSink)
 	defer os.RemoveAll(outputDir)
 
 	if !isDirEmpty(outputDir) {
@@ -192,4 +206,3 @@ func (w *Worker) handleTaskStream(rootCtx context.Context, s netcore.Stream) {
 	reset = false
 	status = metrics.StatusOK
 }
-

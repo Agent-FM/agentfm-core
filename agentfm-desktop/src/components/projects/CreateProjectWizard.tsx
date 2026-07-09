@@ -40,7 +40,7 @@ export function CreateProjectWizard() {
 
   function generateKey() {
     setSwarmKey(randomSwarmHex())
-    toast.success('Generated swarm key — keep it secret')
+    toast.success('Generated swarm key, keep it secret')
   }
 
   async function copyKey() {
@@ -125,14 +125,14 @@ export function CreateProjectWizard() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[70] flex items-center justify-center"
+          className="fixed inset-0 bg-bg-0/70 z-[70] flex items-center justify-center"
         >
           <motion.div
             initial={{ scale: 0.96, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.96, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 380, damping: 28 }}
-            className="w-[520px] bg-bg-1 border border-border-0 rounded-xl p-7 shadow-2xl max-h-[90vh] overflow-y-auto"
+            className="w-[520px] glass-strong rounded-sheet p-7 max-h-[90vh] overflow-y-auto"
           >
             <div className="flex justify-between items-start mb-5">
               <div>
@@ -144,21 +144,21 @@ export function CreateProjectWizard() {
               <button onClick={() => { close(); reset() }} className="text-text-2 hover:text-text-0 text-lg"><X size={18} /></button>
             </div>
 
-            <label className="block text-xs uppercase tracking-wider text-text-2 mb-1.5">Name</label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Team Mesh" autoFocus />
+            <label className="block text-2xs font-medium text-text-2 mb-1.5">Name</label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Team Mesh" aria-label="Project name" autoFocus />
 
-            <label className="block text-xs uppercase tracking-wider text-text-2 mt-5 mb-1.5">Connection mode</label>
+            <label className="block text-2xs font-medium text-text-2 mt-5 mb-1.5">Connection mode</label>
             <div className="grid grid-cols-2 gap-2 mb-3">
               <button
                 type="button"
                 onClick={() => { setMode('public'); setUseDefault(true) }}
-                className={`flex items-start gap-2 border rounded-xl p-3 text-left transition-all ${
+                className={`flex items-start gap-2 border rounded-card p-3 text-left transition-colors ${
                   mode === 'public'
                     ? 'border-accent/40 bg-accent/8'
-                    : 'border-border-0 bg-bg-2 hover:border-border-1'
+                    : 'border-border-0 bg-bg-well hover:border-border-1'
                 }`}
               >
-                <Globe size={16} className={mode === 'public' ? 'text-accent' : 'text-text-2'} />
+                <Globe size={16} strokeWidth={1.5} className={mode === 'public' ? 'text-accent' : 'text-text-2'} />
                 <div>
                   <div className="text-sm text-text-0">Public</div>
                   <div className="text-2xs text-text-2 mt-0.5">Join the open mesh.</div>
@@ -167,13 +167,13 @@ export function CreateProjectWizard() {
               <button
                 type="button"
                 onClick={() => { setMode('private'); setUseDefault(false) }}
-                className={`flex items-start gap-2 border rounded-xl p-3 text-left transition-all ${
+                className={`flex items-start gap-2 border rounded-card p-3 text-left transition-colors ${
                   mode === 'private'
                     ? 'border-accent/40 bg-accent/8'
-                    : 'border-border-0 bg-bg-2 hover:border-border-1'
+                    : 'border-border-0 bg-bg-well hover:border-border-1'
                 }`}
               >
-                <Lock size={16} className={mode === 'private' ? 'text-accent-light' : 'text-text-2'} />
+                <Lock size={16} strokeWidth={1.5} className={mode === 'private' ? 'text-accent' : 'text-text-2'} />
                 <div>
                   <div className="text-sm text-text-0">Private</div>
                   <div className="text-2xs text-text-2 mt-0.5">PSK-gated swarm.</div>
@@ -183,8 +183,8 @@ export function CreateProjectWizard() {
 
             {mode === 'public' ? (
               <>
-                <label className="block text-xs uppercase tracking-wider text-text-2 mb-1.5">Relay</label>
-                <label className={`block border rounded-xl p-3 mb-2 cursor-pointer transition-all ${useDefault ? 'border-accent/40 bg-accent/8' : 'border-border-0 bg-bg-2 hover:border-border-1'}`}>
+                <label className="block text-2xs font-medium text-text-2 mb-1.5">Relay</label>
+                <label className={`block border rounded-card p-3 mb-2 cursor-pointer transition-colors ${useDefault ? 'border-accent/40 bg-accent/8' : 'border-border-0 bg-bg-well hover:border-border-1'}`}>
                   <div className="flex items-start gap-2">
                     <input type="radio" checked={useDefault} onChange={() => setUseDefault(true)} className="mt-1 accent-accent" />
                     <div>
@@ -193,7 +193,7 @@ export function CreateProjectWizard() {
                     </div>
                   </div>
                 </label>
-                <label className={`block border rounded-xl p-3 cursor-pointer transition-all ${!useDefault ? 'border-accent/40 bg-accent/8' : 'border-border-0 bg-bg-2 hover:border-border-1'}`}>
+                <label className={`block border rounded-card p-3 cursor-pointer transition-colors ${!useDefault ? 'border-accent/40 bg-accent/8' : 'border-border-0 bg-bg-well hover:border-border-1'}`}>
                   <div className="flex items-start gap-2">
                     <input type="radio" checked={!useDefault} onChange={() => setUseDefault(false)} className="mt-1 accent-accent" />
                     <div className="flex-1">
@@ -201,6 +201,7 @@ export function CreateProjectWizard() {
                       {!useDefault && (
                         <Input
                           className="mt-2 font-mono text-2xs"
+                          aria-label="Public relay multiaddress"
                           placeholder="/ip4/198.51.100.55/tcp/4001/p2p/12D3KooW…"
                           value={relay}
                           onChange={(e) => setRelay(e.target.value)}
@@ -212,26 +213,28 @@ export function CreateProjectWizard() {
               </>
             ) : (
               <>
-                <label className="block text-xs uppercase tracking-wider text-text-2 mb-1.5">
+                <label className="block text-2xs font-medium text-text-2 mb-1.5">
                   Private relay multiaddr
                 </label>
                 <Input
                   className="font-mono text-2xs"
+                  aria-label="Private relay multiaddress"
                   placeholder="/ip4/10.0.0.42/tcp/4001/p2p/12D3KooW…"
                   value={relay}
                   onChange={(e) => setRelay(e.target.value)}
                 />
                 <p className="text-2xs text-text-2 mt-1">
-                  Your private relay's address — the boss dials this on startup. Everyone in the
+                  Your private relay's address, the boss dials this on startup. Everyone in the
                   swarm must use the same one.
                 </p>
 
-                <label className="block text-xs uppercase tracking-wider text-text-2 mt-5 mb-1.5">
+                <label className="block text-2xs font-medium text-text-2 mt-5 mb-1.5">
                   Swarm key
                 </label>
                 <div className="flex gap-2">
                   <Input
                     className="font-mono text-2xs flex-1"
+                    aria-label="Swarm key"
                     placeholder="64 hex chars (256-bit PSK)"
                     value={swarmKey}
                     onChange={(e) => setSwarmKey(e.target.value)}
@@ -240,7 +243,7 @@ export function CreateProjectWizard() {
                     type="button"
                     onClick={generateKey}
                     title="Generate a fresh swarm key"
-                    className="inline-flex items-center gap-1 px-2.5 rounded-md text-xs text-text-0 border border-accent/30 hover:border-accent/55 bg-accent/5"
+                    className="inline-flex items-center gap-1 px-2.5 rounded-ctl text-xs text-text-0 border border-accent/30 hover:border-accent/55 bg-accent/5 transition-colors"
                   >
                     <Shuffle size={12} /> Generate
                   </button>
@@ -249,7 +252,7 @@ export function CreateProjectWizard() {
                     onClick={copyKey}
                     disabled={!swarmKey}
                     title="Copy"
-                    className="inline-flex items-center px-2.5 rounded-md text-xs text-text-1 border border-border-0 hover:text-text-0 disabled:opacity-40"
+                    className="inline-flex items-center px-2.5 rounded-ctl text-xs text-text-1 glass-inset hover:text-text-0 hover:border-accent/40 disabled:opacity-40 transition-colors"
                   >
                     <Copy size={12} />
                   </button>

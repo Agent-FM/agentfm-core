@@ -26,13 +26,13 @@ export function SnippetTabs({ endpoint, values, baseURL, apiKey }: Props) {
   const code = gen(active, endpoint, values, baseURL, apiKey)
 
   return (
-    <div className="bg-bg-2 border border-border-0 rounded-2xl p-3">
+    <div className="glass rounded-card p-3">
       <div className="flex gap-1 mb-2">
         {langs.map((l) => (
           <button
             key={l.id}
             onClick={() => setLang(l.id)}
-            className={`px-3 py-1 rounded-lg text-xs transition-colors ${
+            className={`px-3 py-1 rounded-ctl text-xs transition-colors ${
               l.id === active ? 'text-accent' : 'text-text-2 hover:text-text-0'
             }`}
           >
@@ -41,12 +41,12 @@ export function SnippetTabs({ endpoint, values, baseURL, apiKey }: Props) {
         ))}
         <button
           onClick={() => navigator.clipboard?.writeText(code)}
-          className="ml-auto px-3 py-1 rounded-lg text-xs text-text-2 hover:text-text-0"
+          className="ml-auto px-3 py-1 rounded-ctl text-xs text-text-2 hover:text-text-0"
         >
           Copy
         </button>
       </div>
-      <pre className="bg-bg-0 border border-border-0 rounded-xl p-3 font-mono text-xs overflow-auto whitespace-pre-wrap text-text-1">
+      <pre className="glass-inset rounded-card p-3 font-mono text-xs overflow-auto whitespace-pre-wrap text-text-1">
         {code}
       </pre>
     </div>

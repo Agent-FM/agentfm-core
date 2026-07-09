@@ -79,27 +79,43 @@ type apiWorker struct {
 
 // originAllowed reports whether a request Origin may perform a
 // state-changing call. A missing Origin (server-to-server, same-origin)
-// and the opaque "null" origin (Electron file:// renderer) are allowed,
-// as are loopback origins (desktop dev server, local tools). Any other
-// http(s) origin is a cross-site browser context and is refused on
+// and loopback origins (desktop dev server, local tools) are allowed. Any
+// other http(s) origin is a cross-site browser context and is refused on
 // unsafe methods — the token-less loopback boss would otherwise be
 // drivable by any web page the user visits (CSRF).
+//
+// The opaque "null" origin and file:// scheme are NOT trusted by default:
+// sandboxed iframes and data: URLs on any malicious site also serialize
+// their Origin as "null", so trusting it would reopen the exact CSRF this
+// guards. The packaged Electron renderer (loadFile → file://) legitimately
+// sends Origin: null, so the desktop opts in by setting
+// AGENTFM_ALLOW_FILE_ORIGIN=1 on the backend it spawns.
 func originAllowed(origin string) bool {
-	if origin == "" || origin == "null" {
+	if origin == "" {
 		return true
+	}
+	if origin == "null" {
+		return allowFileOrigin()
 	}
 	u, err := url.Parse(origin)
 	if err != nil {
 		return false
 	}
 	if u.Scheme == "file" {
-		return true
+		return allowFileOrigin()
 	}
 	switch u.Hostname() {
 	case "localhost", "127.0.0.1", "::1":
 		return true
 	}
 	return false
+}
+
+// allowFileOrigin reports whether the opaque null / file:// origin should be
+// trusted for state-changing requests. Off unless the host process opts in
+// (the desktop app sets AGENTFM_ALLOW_FILE_ORIGIN=1 for its file:// renderer).
+func allowFileOrigin() bool {
+	return os.Getenv("AGENTFM_ALLOW_FILE_ORIGIN") == "1"
 }
 
 // corsMiddleware wraps standard handlers to easily attach headers

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '../primitives/Button'
-import { Zap, Square } from 'lucide-react'
+import { ArrowUp, Square } from 'lucide-react'
 
 interface Props {
   onSend: (text: string) => void
@@ -39,10 +39,10 @@ export function Composer({ onSend, onStop, streaming, disabled }: Props) {
   const lineCount = text === '' ? 0 : text.split('\n').length
 
   return (
-    <div className="border-t border-border-0 px-4 py-4 bg-bg-0">
+    <div className="glass-bar border-t border-border-0 px-3 py-2.5">
       <div
-        className={`relative flex items-end gap-3 bg-bg-1 border rounded-2xl transition-colors ${
-          focused ? 'border-accent/40' : 'border-border-0 hover:border-border-1'
+        className={`relative flex items-end gap-2 bg-bg-well border rounded-ctl transition-colors duration-150 ${
+          focused ? 'border-accent/50' : 'border-border-0 hover:border-border-1'
         }`}
       >
         <textarea
@@ -55,27 +55,22 @@ export function Composer({ onSend, onStop, streaming, disabled }: Props) {
           placeholder="Type a message…   ⇧+↵ for newline"
           disabled={disabled}
           rows={1}
-          className="flex-1 bg-transparent px-4 py-3 text-sm text-text-0 placeholder:text-text-3 outline-none resize-none disabled:opacity-50 min-h-[48px]"
+          className="flex-1 bg-transparent px-2.5 py-1.5 text-sm text-text-0 placeholder:text-text-2 outline-none resize-none disabled:opacity-50 min-h-[30px]"
         />
-        <div className="flex items-center gap-2 px-2 py-2">
+        <div className="flex items-center gap-2 px-1.5 py-1">
           {lineCount > 1 && (
-            <span className="text-2xs font-mono text-text-3 select-none tabular-nums">
+            <span className="text-2xs font-mono text-text-2 select-none tabular-nums">
               {lineCount} lines
             </span>
           )}
           {streaming ? (
-            <button
-              onClick={onStop}
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5
-                rounded-xl font-semibold text-[13px] border border-bad/40
-                bg-bad/10 text-bad hover:bg-bad/20 hover:border-bad/60 transition-colors"
-            >
-              <Square size={12} />
+            <Button variant="danger" onClick={onStop}>
+              <Square size={12} strokeWidth={1.5} />
               <span>Stop</span>
-            </button>
+            </Button>
           ) : (
             <Button variant="primary" onClick={submit} disabled={!canSend}>
-              <Zap size={12} />
+              <ArrowUp size={12} strokeWidth={1.5} />
               <span>Send</span>
             </Button>
           )}

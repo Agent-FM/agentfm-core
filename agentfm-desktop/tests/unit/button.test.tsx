@@ -3,18 +3,17 @@ import { render } from '@testing-library/react'
 import { Button } from '../../src/components/primitives/Button'
 
 describe('Button', () => {
-  it('primary uses the brand orange gradient and dark fg', () => {
+  it('primary uses a solid accent fill with on-accent fg (no gradient)', () => {
     const { container } = render(<Button variant="primary">Go</Button>)
     const cls = (container.firstChild as HTMLElement).className
-    expect(cls).toMatch(/from-accent-light/)
-    expect(cls).toMatch(/to-accent\b/)
+    expect(cls).toMatch(/bg-accent\b/)
     expect(cls).toMatch(/text-accent-fg/)
+    expect(cls).not.toMatch(/gradient/)
   })
-  it('secondary uses a surface + hairline border', () => {
+  it('secondary uses the Xcode gray fill', () => {
     const { container } = render(<Button variant="secondary">Go</Button>)
     const cls = (container.firstChild as HTMLElement).className
-    expect(cls).toMatch(/bg-bg-1/)
-    expect(cls).toMatch(/border-border-0/)
+    expect(cls).toMatch(/bg-control\b/)
   })
   it('danger uses the bad token', () => {
     const { container } = render(<Button variant="danger">Del</Button>)

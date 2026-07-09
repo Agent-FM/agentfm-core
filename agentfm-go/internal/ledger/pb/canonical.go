@@ -2,7 +2,7 @@
 //
 // SECURITY: every signature in the verifiable-mesh design is computed as
 //
-//     sig = Ed25519.Sign(privkey, SHA-256(CanonicalX(msg)))
+//	sig = Ed25519.Sign(privkey, SHA-256(CanonicalX(msg)))
 //
 // CanonicalX zeroes the fields that are mutated after signing (Signature,
 // WitnessSigs, RekorAnchor) so verifiers reconstruct identical bytes from

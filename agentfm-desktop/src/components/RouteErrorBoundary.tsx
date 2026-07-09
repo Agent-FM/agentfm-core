@@ -26,8 +26,8 @@ class Boundary extends Component<Props & { onReset: () => void; onHome: () => vo
     if (this.state.error) {
       return (
         <div className="p-8 max-w-xl">
-          <div className="bg-rose-950/40 border border-rose-900/60 rounded-xl p-5">
-            <div className="text-rose-300 font-semibold text-sm mb-1">This view hit a snag</div>
+          <div className="bg-bad/10 border border-bad/30 rounded-card p-5">
+            <div className="text-bad font-semibold text-sm mb-1">This view hit a snag</div>
             <div className="text-text-1 text-sm mb-3">
               {this.state.error.message || 'Unknown error'}
             </div>
@@ -37,7 +37,7 @@ class Boundary extends Component<Props & { onReset: () => void; onHome: () => vo
                   this.setState({ error: null })
                   this.props.onReset()
                 }}
-                className="bg-bg-2 border border-border-0 rounded-md px-3 py-1.5 text-xs text-text-1 hover:text-text-0"
+                className="glass-inset rounded-md px-3 py-1.5 text-xs text-text-1 hover:text-text-0 hover:border-accent/40"
               >
                 Retry
               </button>

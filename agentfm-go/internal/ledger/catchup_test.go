@@ -28,9 +28,9 @@ import (
 // TestCatchUp_PullsAndIngestsFromRelay is the main happy-path integration
 // test for Phase 5 catch-up. Setup:
 //
-//   relay  = ledgerImpl with a real libp2p Host that serves both
-//            LedgerFetchProtocol and HeadFetchProtocol.
-//   boss   = fresh ledger, empty inbox, different host.
+//	relay  = ledgerImpl with a real libp2p Host that serves both
+//	         LedgerFetchProtocol and HeadFetchProtocol.
+//	boss   = fresh ledger, empty inbox, different host.
 //
 // Steps:
 //  1. Relay appends 3 ratings about a known subject.

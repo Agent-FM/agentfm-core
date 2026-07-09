@@ -139,25 +139,25 @@ func (w *Worker) startTelemetry(ctx context.Context) {
 			}
 
 			profile := types.WorkerProfile{
-				PeerID:       w.node.Host.ID().String(),
-				Author:       w.config.Author,
-				CPUCores:     totalCores,
-				CPUUsagePct:  snapCPU,
-				RAMFreeGB:    freeRAM,
-				Model:        w.config.ModelName,
-				AgentName:    w.config.AgentName,
-				AgentDesc:    safeDesc,
-				Status:       status,
-				HasGPU:       hasGPU,
-				GPUUsedGB:    gpuUsed,
-				GPUTotalGB:   gpuTotal,
-				GPUUsagePct:  gpuPct,
+				PeerID:           w.node.Host.ID().String(),
+				Author:           w.config.Author,
+				CPUCores:         totalCores,
+				CPUUsagePct:      snapCPU,
+				RAMFreeGB:        freeRAM,
+				Model:            w.config.ModelName,
+				AgentName:        w.config.AgentName,
+				AgentDesc:        safeDesc,
+				Status:           status,
+				HasGPU:           hasGPU,
+				GPUUsedGB:        gpuUsed,
+				GPUTotalGB:       gpuTotal,
+				GPUUsagePct:      gpuPct,
 				CurrentTasks:     activeTasks,
 				MaxTasks:         maxTasks,
 				IsWitness:        w.config.IsWitness,
-				AgentImageDigest: w.imageDigest,    // resolved once at Start
+				AgentImageDigest: w.imageDigest, // resolved once at Start
 				AgentImageRef:    w.config.ImageName,
-				AgentCapability:  w.capability,    // resolved once at Start
+				AgentCapability:  w.capability, // resolved once at Start
 			}
 
 			payloadBytes, marshalErr := json.Marshal(profile)

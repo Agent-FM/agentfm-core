@@ -101,8 +101,14 @@ func defaultWitnessLedgerPath() string {
 }
 
 // defaultWitnessIdentityPath returns the libp2p private-key file
-// used to derive the witness's stable peer id. Persisting it means
-// reconnecting bosses see the same witness across restarts.
+// used to derive the witness's stable peer id. Persisting it under
+// ~/.agentfm (home-scoped, like the relay) keeps the witness peer id
+// stable across restarts regardless of the launch directory — matching
+// the home-scoped witness ledger DB.
 func defaultWitnessIdentityPath() string {
-	return ".agentfm_witness_identity.key"
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return ".agentfm_witness_identity.key"
+	}
+	return filepath.Join(home, ".agentfm", "witness_identity.key")
 }

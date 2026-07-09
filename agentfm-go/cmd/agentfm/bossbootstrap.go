@@ -54,7 +54,15 @@ func bossOptionsFromFlags(
 	}
 
 	// --- ledger -------------------------------------------------------
-	keyPath := fmt.Sprintf(".agentfm_%s_identity.key", mode)
+	// Scope the signing identity to ~/.agentfm (like the ledger DB) so a
+	// boss launched from a different directory keeps the same own-log
+	// author. An existing cwd-relative key (older layout) is preferred so
+	// upgrading doesn't silently re-key an established log.
+	keyPath := defaultBossIdentityPath(mode)
+	legacyKeyPath := fmt.Sprintf(".agentfm_%s_identity.key", mode)
+	if _, statErr := os.Stat(legacyKeyPath); statErr == nil {
+		keyPath = legacyKeyPath
+	}
 	priv, err := network.LoadOrGenerateIdentity(keyPath)
 	if err != nil {
 		slog.Warn("boss bootstrap: identity load failed; ledger disabled",
@@ -87,18 +95,32 @@ func bossOptionsFromFlags(
 	slog.Info("boss bootstrap: ledger opened",
 		slog.String("path", dbPath))
 
+	// Cancellable context for the background catch-up + hourly rater so
+	// shutdown signals them to stop. cleanups run LIFO, so appending this
+	// cancel AFTER the l.Close cleanup guarantees it fires before the
+	// ledger is closed (avoiding "database is closed" errors on the bg
+	// paths that write through l).
+	bootstrapCtx, bootstrapCancel := context.WithCancel(ctx)
+	cleanups = append(cleanups, bootstrapCancel)
+
 	// P5-1: on restart, pull any entries the boss missed while offline.
 	// Non-fatal: if catch-up fails the boss continues normally.
 	go func() {
 		const waitBudget = 30 * time.Second
 		deadline := time.Now().Add(waitBudget)
 
+		poll := time.NewTicker(1 * time.Second)
+		defer poll.Stop()
 		for time.Now().Before(deadline) {
 			if node.RelayPeerID != "" &&
 				node.Host.Network().Connectedness(node.RelayPeerID) == netcore.Connected {
 				break
 			}
-			time.Sleep(1 * time.Second)
+			select {
+			case <-bootstrapCtx.Done():
+				return
+			case <-poll.C:
+			}
 		}
 		if node.RelayPeerID == "" ||
 			node.Host.Network().Connectedness(node.RelayPeerID) != netcore.Connected {
@@ -113,9 +135,13 @@ func bossOptionsFromFlags(
 		// "protocols not supported" — silently truncating catch-up to zero
 		// entries. Two seconds is empirically enough on TCP loopback +
 		// public lighthouse; cheap insurance on a 30s budget.
-		time.Sleep(2 * time.Second)
+		select {
+		case <-bootstrapCtx.Done():
+			return
+		case <-time.After(2 * time.Second):
+		}
 
-		bgCtx, bgCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		bgCtx, bgCancel := context.WithTimeout(bootstrapCtx, 2*time.Minute)
 		defer bgCancel()
 
 		if err := ledger.CatchUp(bgCtx, l, node.Host, node.RelayPeerID); err != nil {
@@ -157,8 +183,10 @@ func bossOptionsFromFlags(
 	// bootstrap caller is responsible for: go opts.CompletionRater.RunTicker(ctx).
 	// We store the ticker in opts so the caller has a reference.
 	opts.CompletionRater = boss.NewCompletionRatingWriter(l, node.Host)
-	// Start the ticker in the background; cancel via the top-level ctx.
-	go opts.CompletionRater.RunTicker(ctx)
+	// Start the ticker in the background; cancelled on shutdown via
+	// bootstrapCancel (registered as a cleanup above) so it exits even
+	// when the caller passed a non-cancellable ctx (e.g. api mode).
+	go opts.CompletionRater.RunTicker(bootstrapCtx)
 
 	// Open a SECOND store handle on the same DB file for the
 	// reputation engine's read-only walks. SQLite under WAL mode
@@ -267,6 +295,18 @@ func defaultBossLedgerPath(mode string) string {
 		return fmt.Sprintf(".agentfm_%s_ledger.db", mode)
 	}
 	return filepath.Join(home, ".agentfm", fmt.Sprintf("%s_ledger.db", mode))
+}
+
+// defaultBossIdentityPath returns the home-scoped signing-identity key
+// path for a boss/api ledger, matching defaultBossLedgerPath so the key
+// and DB live together and the own-log author stays stable across launch
+// directories.
+func defaultBossIdentityPath(mode string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return fmt.Sprintf(".agentfm_%s_identity.key", mode)
+	}
+	return filepath.Join(home, ".agentfm", fmt.Sprintf("%s_identity.key", mode))
 }
 
 // defaultCommentsRoot returns ~/.agentfm/comments (or local fallback).

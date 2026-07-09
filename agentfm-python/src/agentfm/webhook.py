@@ -147,6 +147,11 @@ class WebhookReceiver:
         max_body_bytes = self.max_body_bytes
 
         class _Handler(BaseHTTPRequestHandler):
+            # Per-connection socket timeout: a slow-loris client that opens a
+            # connection and trickles (or never sends) bytes must not tie up a
+            # server thread indefinitely. rfile reads fail fast after this.
+            timeout = 15
+
             def do_POST(self) -> None:
                 if self.path != path:
                     self.send_response(404)

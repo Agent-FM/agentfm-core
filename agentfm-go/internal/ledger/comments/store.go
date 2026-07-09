@@ -20,10 +20,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 )
 
@@ -122,17 +120,16 @@ func (s *Store) Put(body []byte) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Idempotent: if the file already exists, we're done.
-	if _, err := os.Stat(path); err == nil {
-		return cid, nil
-	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("comments: mkdir bucket: %w", err)
 	}
 
-	// Write to a temp file in the same directory then rename — atomic
-	// on POSIX, so a concurrent reader either sees the old (absent)
-	// state or the new full file.
+	// Write to a temp file in the same directory then rename — atomic on
+	// POSIX. We write unconditionally (no exists fast-path): the body is
+	// content-addressed, so re-writing is idempotent, and a crash-corrupted
+	// file self-heals on the next Put instead of being permanently unreadable.
+	// fsync before rename makes the body durable — it is referenced by CID
+	// from immutable, signed ledger entries.
 	tmp, err := os.CreateTemp(filepath.Dir(path), "tmp-*")
 	if err != nil {
 		return nil, fmt.Errorf("comments: open tmp: %w", err)
@@ -141,6 +138,11 @@ func (s *Store) Put(body []byte) ([]byte, error) {
 		_ = tmp.Close()
 		_ = os.Remove(tmp.Name())
 		return nil, fmt.Errorf("comments: write tmp: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+		return nil, fmt.Errorf("comments: sync tmp: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
 		_ = os.Remove(tmp.Name())
@@ -202,29 +204,6 @@ func (s *Store) pathFor(cid []byte) string {
 	return filepath.Join(s.root, str[:2], str)
 }
 
-// WriteAtomic is exported for the fetch handler to stream a received
-// body to disk while validating against an expected CID before
-// commit. Used to avoid a write-then-validate-then-delete cycle on
-// the receive path.
-func (s *Store) WriteAtomic(expectedCID []byte, r io.Reader, maxBytes int64) error {
-	limited := &io.LimitedReader{R: r, N: maxBytes + 1}
-	body, err := io.ReadAll(limited)
-	if err != nil {
-		return fmt.Errorf("comments: read incoming: %w", err)
-	}
-	if int64(len(body)) > maxBytes {
-		return ErrBodyTooLarge
-	}
-	got := CIDOf(body)
-	if !equalBytes(got, expectedCID) {
-		return ErrCIDMismatch
-	}
-	if _, err := s.Put(body); err != nil {
-		return err
-	}
-	return nil
-}
-
 func equalBytes(a, b []byte) bool {
 	if len(a) != len(b) {
 		return false
@@ -235,14 +214,4 @@ func equalBytes(a, b []byte) bool {
 		}
 	}
 	return true
-}
-
-// DefaultRoot returns ~/.agentfm/comments — the convention all
-// agentfm binaries follow.
-func DefaultRoot() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("comments: user home dir: %w", err)
-	}
-	return strings.TrimRight(home, string(os.PathSeparator)) + "/.agentfm/comments", nil
 }

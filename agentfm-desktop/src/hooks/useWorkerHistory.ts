@@ -13,7 +13,7 @@ interface WorkerWithGPU extends WorkerProfile {
  * and queue depth from the existing useWorkers React Query poll.
  *
  * Call this from App.tsx so the buffer is always populated regardless of
- * which route is visible — when a user navigates to PeerView, charts
+ * which route is visible, when a user navigates to PeerView, charts
  * already have several minutes of history.
  */
 export function useWorkerHistory(): void {

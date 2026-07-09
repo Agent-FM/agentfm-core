@@ -163,8 +163,9 @@ func (b *Boss) runAsyncTask(ctx context.Context, peerID peer.ID, taskID string, 
 		metrics.TasksTotal.WithLabelValues(status).Inc()
 	}()
 
-	s := b.dialOmni(ctx, peerID)
-	if s == nil {
+	s, err := b.dialWorkerStream(ctx, peerID)
+	if err != nil {
+		slog.Error("async task dial worker", slog.Any(obs.FieldErr, err), slog.String(obs.FieldTaskID, taskID))
 		return
 	}
 
@@ -198,8 +199,7 @@ func (b *Boss) runAsyncTask(ctx context.Context, peerID peer.ID, taskID string, 
 	}
 
 	deadman := &timeoutReader{stream: s, timeout: network.TaskExecutionTimeout}
-	var outputBuffer bytes.Buffer
-	if _, err := io.Copy(&outputBuffer, deadman); err != nil {
+	if _, err := io.Copy(io.Discard, deadman); err != nil {
 		slog.Error("async task stream read", slog.Any(obs.FieldErr, err), slog.String(obs.FieldTaskID, taskID), slog.String(obs.FieldProtocol, "task"))
 		return
 	}

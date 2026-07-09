@@ -120,6 +120,7 @@ func newImpl(path string, key crypto.PrivKey, ps *pubsub.PubSub, opts Options) (
 	if ps != nil {
 		topic, err := ps.Join(network.FeedbackTopic)
 		if err != nil {
+			l.teardownFetchHandlers()
 			_ = s.Close()
 			return nil, fmt.Errorf("ledger: join feedback topic: %w", err)
 		}
@@ -127,6 +128,7 @@ func newImpl(path string, key crypto.PrivKey, ps *pubsub.PubSub, opts Options) (
 
 		sub, err := topic.Subscribe()
 		if err != nil {
+			l.teardownFetchHandlers()
 			_ = topic.Close()
 			_ = s.Close()
 			return nil, fmt.Errorf("ledger: subscribe feedback topic: %w", err)
@@ -173,7 +175,52 @@ func newImpl(path string, key crypto.PrivKey, ps *pubsub.PubSub, opts Options) (
 			slog.Any(obs.FieldErr, err))
 	}
 
+	// A crash between AppendEntry and WriteHead leaves the rebuilt tree
+	// ahead of the persisted head; re-sign a fresh head over the rebuilt
+	// tree so Prove doesn't emit proofs anchored to a stale size.
+	if err := l.resyncHeadIfBehind(context.Background()); err != nil {
+		slog.Warn("ledger: could not resync head after restart",
+			slog.Any(obs.FieldErr, err))
+	}
+
 	return l, nil
+}
+
+// teardownFetchHandlers unregisters the three ledger stream handlers from
+// the host they were registered on and clears fetchHost. Safe to call when
+// no handlers were registered (fetchHost nil).
+func (l *ledgerImpl) teardownFetchHandlers() {
+	if l.fetchHost != nil {
+		l.stopFetchHandler(l.fetchHost)
+		l.stopHeadFetchHandler(l.fetchHost)
+		l.stopInboxFetchHandler(l.fetchHost)
+		l.fetchHost = nil
+	}
+}
+
+// resyncHeadIfBehind re-signs and persists a fresh head when the persisted
+// head's TreeSize does not match the in-memory tree (e.g. after a crash
+// between the entry persist and the head persist). No-op when they agree
+// or when there is no head yet.
+func (l *ledgerImpl) resyncHeadIfBehind(ctx context.Context) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.lastHead == nil || l.lastHead.TreeSize == l.tree.Size() {
+		return nil
+	}
+	head, err := l.signNewHead()
+	if err != nil {
+		return fmt.Errorf("resign head: %w", err)
+	}
+	headBlob, err := proto.Marshal(head)
+	if err != nil {
+		return fmt.Errorf("marshal head: %w", err)
+	}
+	if err := l.store.WriteHead(ctx, head.TreeSize, root32(head.RootHash), head.TimestampUnixNs, headBlob); err != nil {
+		return fmt.Errorf("persist resynced head: %w", err)
+	}
+	l.lastHead = head
+	return nil
 }
 
 // rebuildTreeFromStore walks every persisted entry in idx order and
@@ -262,16 +309,15 @@ func (l *ledgerImpl) Append(ctx context.Context, payload *pb.SignedEntry) ([32]b
 		l.mu.Unlock()
 		return [32]byte{}, fmt.Errorf("sign new head: %w", err)
 	}
-	l.mu.Unlock()
-
-	// Phase 2 (under lock): persist the head and publish. We re-acquire
-	// because lastHead is read by Head() and we want a clean
-	// (old head → new head) transition.
+	// Keep the tree append, head persist, and lastHead update under a
+	// single lock so Prove/Head never observe the tree ahead of lastHead
+	// (a proof anchored to a stale head fails verification), and so two
+	// concurrent Appends can't commit head_N then head_{N-1}.
 	headBlob, err := proto.Marshal(head)
 	if err != nil {
+		l.mu.Unlock()
 		return [32]byte{}, fmt.Errorf("marshal head: %w", err)
 	}
-	l.mu.Lock()
 	if err := l.store.WriteHead(ctx, head.TreeSize, root32(head.RootHash), head.TimestampUnixNs, headBlob); err != nil {
 		l.mu.Unlock()
 		return [32]byte{}, fmt.Errorf("persist head: %w", err)
@@ -447,16 +493,16 @@ func (l *ledgerImpl) VerifyEntry(ctx context.Context, entry *pb.SignedEntry, kno
 // success, marks the offender as a permanent equivocator. The full
 // validation chain (Fix-2 audit finding):
 //
-//   1. WitnessSignature is valid for WitnessPeerID.
-//   2. HeadA and HeadB are non-nil and structurally sane.
-//   3. Both heads carry valid peer-own signatures from alert.PeerId
-//      (so a rogue witness cannot forge head pairs).
-//   4. The heads ACTUALLY conflict — either same TreeSize with
-//      different RootHash, OR overlapping size where the proof of
-//      extension would fail. Same exact head twice is NOT an
-//      equivocation (a witness sometimes self-emits this on
-//      bad-head-sig cases; we accept the rest of the validation but
-//      treat it as "no offence" rather than poisoning the marker).
+//  1. WitnessSignature is valid for WitnessPeerID.
+//  2. HeadA and HeadB are non-nil and structurally sane.
+//  3. Both heads carry valid peer-own signatures from alert.PeerId
+//     (so a rogue witness cannot forge head pairs).
+//  4. The heads ACTUALLY conflict — either same TreeSize with
+//     different RootHash, OR overlapping size where the proof of
+//     extension would fail. Same exact head twice is NOT an
+//     equivocation (a witness sometimes self-emits this on
+//     bad-head-sig cases; we accept the rest of the validation but
+//     treat it as "no offence" rather than poisoning the marker).
 //
 // Returns nil on accept-and-mark (or on idempotent no-op when the
 // alert is internally consistent but headA == headB). Returns a
@@ -652,12 +698,7 @@ func (l *ledgerImpl) Close() error {
 
 	// Unregister stream handlers first so no new requests arrive
 	// while we're shutting down the goroutines that service them.
-	if l.fetchHost != nil {
-		l.stopFetchHandler(l.fetchHost)
-		l.stopHeadFetchHandler(l.fetchHost)
-		l.stopInboxFetchHandler(l.fetchHost)
-		l.fetchHost = nil
-	}
+	l.teardownFetchHandlers()
 
 	// Drain subscriber goroutine BEFORE closing the subscription, so
 	// its in-flight Next() exits cleanly via context cancellation.

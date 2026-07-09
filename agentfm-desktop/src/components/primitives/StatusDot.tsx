@@ -1,11 +1,10 @@
-export type DotTone = 'cyan' | 'violet' | 'amber' | 'rose' | 'lime' | 'neutral'
+export type DotTone = 'accent' | 'ok' | 'warn' | 'bad' | 'neutral'
 
 const COLOR: Record<DotTone, string> = {
-  cyan:    'bg-accent shadow-[0_0_8px_rgba(247,147,30,.7)]',
-  violet:  'bg-accent shadow-[0_0_8px_rgba(247,147,30,.7)]',
-  amber:   'bg-warn shadow-[0_0_8px_rgba(245,158,11,.7)]',
-  rose:    'bg-bad shadow-[0_0_8px_rgba(244,63,94,.7)]',
-  lime:    'bg-ok shadow-[0_0_8px_rgba(132,204,22,.7)]',
+  accent:  'bg-accent',
+  ok:      'bg-ok',
+  warn:    'bg-warn',
+  bad:     'bg-bad',
   neutral: 'bg-text-3',
 }
 
@@ -16,7 +15,7 @@ interface Props {
   className?: string
 }
 
-export function StatusDot({ tone = 'cyan', pulse = false, size = 'md', className }: Props) {
+export function StatusDot({ tone = 'accent', pulse = false, size = 'md', className }: Props) {
   const dim = size === 'sm' ? 'w-1.5 h-1.5' : size === 'lg' ? 'w-3 h-3' : 'w-2 h-2'
   const animation = pulse ? 'animate-pulse-cyan' : ''
   return (

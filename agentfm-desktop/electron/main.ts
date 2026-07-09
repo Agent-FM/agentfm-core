@@ -33,12 +33,12 @@ function createWindow(): void {
     icon: appIcon,
     autoHideMenuBar: true,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    backgroundColor: process.platform === 'darwin' ? '#00000000' : '#0a0e16',
+    backgroundColor: '#1F1F24',
     vibrancy: process.platform === 'darwin' ? 'under-window' : undefined,
     visualEffectState: 'active',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
+      sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -61,7 +61,24 @@ function createWindow(): void {
   }
 }
 
+// Single-instance guard: a second launch must NOT spin up a rival backend on
+// the same port (which would SIGKILL the first instance's healthy backend via
+// the stale-port sweep and crash-loop both). Focus the existing window instead.
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+}
+
+app.on('second-instance', () => {
+  const win = BrowserWindow.getAllWindows()[0]
+  if (win) {
+    if (win.isMinimized()) win.restore()
+    win.focus()
+  }
+})
+
 app.whenReady().then(async () => {
+  if (!gotSingleInstanceLock) return
   if (process.platform === 'darwin' && app.dock) {
     const dockIcon = resolveAppIcon()
     if (dockIcon) app.dock.setIcon(dockIcon)
@@ -111,6 +128,13 @@ app.on('window-all-closed', () => {
   }
 })
 
-app.on('before-quit', async () => {
-  if (backend) await backend.stop()
+// Electron does not await async before-quit listeners, so preventDefault,
+// stop the backend (SIGTERM → 5s → SIGKILL escalation lives in stop()), then
+// exit for real. Guard against re-entry so the second before-quit is a no-op.
+let isQuitting = false
+app.on('before-quit', (event) => {
+  if (isQuitting || !backend) return
+  event.preventDefault()
+  isQuitting = true
+  backend.stop().finally(() => app.exit(0))
 })

@@ -277,4 +277,3 @@ func (b *Boss) renderRadar(ctx context.Context, w io.Writer) {
 		}
 	}
 }
-

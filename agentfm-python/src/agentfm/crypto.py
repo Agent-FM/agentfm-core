@@ -79,11 +79,18 @@ class SwarmKey:
         """Write the key to ``path`` with strict (owner-only) permissions."""
         p = Path(path).resolve()
         p.parent.mkdir(parents=True, exist_ok=True)
-        # Binary mode prevents Windows CRLF translation.
-        p.write_bytes(self.to_text().encode("utf-8"))
+        # Create the file 0600 from the start via os.open — write_bytes would
+        # create it with the process umask (typically 0644), leaving the key
+        # briefly world-readable before a follow-up chmod (TOCTOU).
+        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.write(fd, self.to_text().encode("utf-8"))
+        finally:
+            os.close(fd)
         with contextlib.suppress(OSError, NotImplementedError):
-            # Some Windows filesystems don't support chmod; key is still
-            # written, just without strict permissions.
+            # Belt-and-braces: tighten perms if the file already existed
+            # (O_CREAT's mode only applies on creation). Some Windows
+            # filesystems don't support chmod — the key is still written.
             os.chmod(p, 0o600)
         return p
 

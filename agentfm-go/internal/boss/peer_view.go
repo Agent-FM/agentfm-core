@@ -349,7 +349,7 @@ func formatEquiv(isEquiv bool) string {
 // whether currently online (in activeWorkers) or only seen via ledger entries
 // (offline / never-seen-alive).
 type KnownPeer struct {
-	PeerID        peer.ID
+	PeerID peer.ID
 	// PeerIDStr is the original string key used to look up the worker in
 	// activeWorkers. For properly-encoded peer IDs it equals PeerID.String();
 	// for legacy / test-injected raw-string keys it equals the raw string.
