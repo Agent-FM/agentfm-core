@@ -2,16 +2,17 @@
 
 Surface:
 
-    client.peers.list(include_offline=False)      -> list[KnownPeer]
-    client.peers.get(peer_id)                     -> PeerSummary
-    client.peers.log(peer_id, limit=50, offset=0) -> list[PeerEntry]
-    client.peers.comment_body(peer_id, cid)       -> str
+    client.peers.list(include_offline=False)         -> list[KnownPeer]
+    client.peers.get(peer_id)                        -> PeerSummary
+    client.peers.log(peer_id, limit=50, offset=0)    -> list[PeerEntry]
+    client.peers.comment_body(peer_id, cid)          -> str
+    client.peers.comment(peer_id, text, rating=None) -> CommentSubmitResult
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -50,6 +51,21 @@ class PeerSummary:
     advertised_image_digest: Optional[str] = None
     advertised_capability: Optional[str] = None
     rater_summary: Optional[RaterSummary] = None
+
+
+@dataclass(frozen=True)
+class CommentSubmitResult:
+    """Returned by ``peers.comment`` after a self-signed submission."""
+
+    cid: str
+    ledger_hash: str
+
+
+def _comment_payload(text: str, language: str, rating: Optional[float]) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {"text": text, "language": language}
+    if rating is not None:
+        payload["rating"] = rating
+    return payload
 
 
 @dataclass(frozen=True)
@@ -154,6 +170,28 @@ class PeersNamespace:
         raise_for_response(r)
         return r.text
 
+    def comment(
+        self,
+        peer_id: str,
+        *,
+        text: str,
+        rating: Optional[float] = None,
+        language: str = "en",
+    ) -> CommentSubmitResult:
+        """POST /v1/peers/{peer_id}/comments/self — leave a self-signed comment.
+
+        The gateway signs the ledger entry with its own libp2p identity; the
+        SDK holds no keys. When ``rating`` (in [-1.0, +1.0]) is given, the boss
+        also appends a paired honesty Rating entry.
+        """
+        r = self._http.post(
+            f"/v1/peers/{peer_id}/comments/self",
+            json=_comment_payload(text, language, rating),
+        )
+        raise_for_response(r)
+        body = r.json()
+        return CommentSubmitResult(cid=body["cid"], ledger_hash=body["ledger_hash"])
+
 
 class AsyncPeersNamespace:
     """``client.peers.*`` — async peer discovery and trust inspection (v1.3.1)."""
@@ -189,9 +227,27 @@ class AsyncPeersNamespace:
         raise_for_response(r)
         return r.text
 
+    async def comment(
+        self,
+        peer_id: str,
+        *,
+        text: str,
+        rating: Optional[float] = None,
+        language: str = "en",
+    ) -> CommentSubmitResult:
+        """POST /v1/peers/{peer_id}/comments/self — leave a self-signed comment."""
+        r = await self._http.post(
+            f"/v1/peers/{peer_id}/comments/self",
+            json=_comment_payload(text, language, rating),
+        )
+        raise_for_response(r)
+        body = r.json()
+        return CommentSubmitResult(cid=body["cid"], ledger_hash=body["ledger_hash"])
+
 
 __all__ = [
     "AsyncPeersNamespace",
+    "CommentSubmitResult",
     "KnownPeer",
     "PeerEntry",
     "PeerSummary",
