@@ -81,8 +81,15 @@ func bossOptionsFromFlags(
 		return opts, cleanup
 	}
 
+	cstore, err := comments.Open(defaultCommentsRoot())
+	if err != nil {
+		slog.Warn("boss bootstrap: comments store open failed; P4-3 disabled",
+			slog.Any(obs.FieldErr, err))
+	}
+
 	l, err := ledger.NewWithOptions(dbPath, priv, node.PubSub, ledger.Options{
-		Host: node.Host,
+		Host:     node.Host,
+		Comments: cstore,
 	})
 	if err != nil {
 		slog.Warn("boss bootstrap: ledger open failed; v1.3 endpoints will 503",
@@ -203,11 +210,9 @@ func bossOptionsFromFlags(
 	}
 
 	// --- comments store + submission handler --------------------------
-	cstore, err := comments.Open(defaultCommentsRoot())
-	if err != nil {
-		slog.Warn("boss bootstrap: comments store open failed; P4-3 disabled",
-			slog.Any(obs.FieldErr, err))
-	} else {
+	// cstore was opened before the ledger so Options.Comments could be
+	// wired; nil here means the open failed and P4-3 stays disabled.
+	if cstore != nil {
 		cserver := comments.NewServer(node.Host, cstore)
 		cserver.Start()
 		cleanups = append(cleanups, cserver.Stop)

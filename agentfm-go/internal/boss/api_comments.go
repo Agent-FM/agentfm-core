@@ -282,15 +282,16 @@ func (b *Boss) commentBodySources(ctx context.Context, cidBytes []byte) []peer.I
 	return sources
 }
 
+// errStopAuthorScan is the sentinel findCommentAuthor's callback returns
+// to stop iteration as soon as the matching Comment is found.
+var errStopAuthorScan = errors.New("stop author scan")
+
 // findCommentAuthor scans the inbox for a Comment entry whose text_cid
 // matches cidBytes and returns its rater peer ID.
 func findCommentAuthor(ctx context.Context, s *store.Store, cidBytes []byte) (peer.ID, bool) {
 	var author peer.ID
 	found := false
-	if err := s.IterateAllInboxEntries(ctx, func(e *store.InboxEntry) error {
-		if found {
-			return nil
-		}
+	err := s.IterateAllInboxEntries(ctx, func(e *store.InboxEntry) error {
 		var signed pb.SignedEntry
 		if uerr := proto.Unmarshal(e.Payload, &signed); uerr != nil {
 			return nil
@@ -299,9 +300,13 @@ func findCommentAuthor(ctx context.Context, s *store.Store, cidBytes []byte) (pe
 			body.Comment != nil && bytes.Equal(body.Comment.TextCid, cidBytes) {
 			author = peer.ID(body.Comment.RaterPeerId)
 			found = true
+			return errStopAuthorScan
 		}
 		return nil
-	}); err != nil {
+	})
+	if err != nil && !errors.Is(err, errStopAuthorScan) {
+		slog.Warn("boss: comment author inbox scan failed",
+			slog.Any(obs.FieldErr, err))
 		return "", false
 	}
 	return author, found
@@ -333,9 +338,9 @@ func (b *Boss) handleCommentBodyGet(w http.ResponseWriter, r *http.Request) {
 		writeOpenAIError(w, http.StatusBadRequest, errTypeInvalidRequest, "bad_request", "missing CID in path")
 		return
 	}
-	cidBytes, err := hex.DecodeString(cidHex)
+	cidBytes, err := comments.ParseCIDString(cidHex)
 	if err != nil {
-		writeOpenAIError(w, http.StatusBadRequest, errTypeInvalidRequest, "bad_cid", "CID is not valid hex: "+err.Error())
+		writeOpenAIError(w, http.StatusBadRequest, errTypeInvalidRequest, "bad_cid", "CID is not a valid multihash: "+err.Error())
 		return
 	}
 
@@ -401,9 +406,9 @@ func (b *Boss) handleCommentBodyGetJSON(w http.ResponseWriter, r *http.Request) 
 		writeOpenAIError(w, http.StatusBadRequest, errTypeInvalidRequest, "bad_request", "missing CID in path")
 		return
 	}
-	cidBytes, err := hex.DecodeString(cidHex)
+	cidBytes, err := comments.ParseCIDString(cidHex)
 	if err != nil {
-		writeOpenAIError(w, http.StatusBadRequest, errTypeInvalidRequest, "bad_cid", "CID is not valid hex: "+err.Error())
+		writeOpenAIError(w, http.StatusBadRequest, errTypeInvalidRequest, "bad_cid", "CID is not a valid multihash: "+err.Error())
 		return
 	}
 

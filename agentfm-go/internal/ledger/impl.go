@@ -145,6 +145,7 @@ func newImpl(path string, key crypto.PrivKey, ps *pubsub.PubSub, opts Options) (
 		if opts.Host != nil && opts.Comments != nil {
 			l.bodyFetcher = newBodyFetcher(opts.Host, opts.Comments)
 			go l.bodyFetcher.run(l.subCtx)
+			go l.bodyFetcher.runBackfill(l.subCtx, l.store)
 		}
 		// Pass sub + subCtx + subDone as args so the goroutine holds
 		// stable references — Close() races to nil the struct fields
@@ -727,6 +728,7 @@ func (l *ledgerImpl) Close() error {
 	}
 	if l.bodyFetcher != nil {
 		<-l.bodyFetcher.done
+		<-l.bodyFetcher.backfillDone
 	}
 
 	if equivSub != nil {

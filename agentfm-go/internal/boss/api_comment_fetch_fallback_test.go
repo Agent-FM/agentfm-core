@@ -100,6 +100,27 @@ func TestCommentBodyGet_FetchesFromRelayWhenAuthorUnknown(t *testing.T) {
 	}
 }
 
+func TestCommentBodyGet_400OnStructurallyInvalidCID(t *testing.T) {
+	relayHost := testutil.NewHost(t)
+	b, _ := newFallbackBoss(t, func(b *Boss) { b.node.RelayPeerID = relayHost.ID() })
+
+	subject := testutil.NewHost(t).ID()
+	for _, cid := range []string{"ab", "12ab34", "ff" + hex.EncodeToString(make([]byte, 33))} {
+		start := time.Now()
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET",
+			fmt.Sprintf("/v1/peers/%s/comments/%s", subject.String(), cid), nil)
+		b.handlePeersForTest(rec, req)
+
+		if rec.Code != 400 {
+			t.Fatalf("cid %q: status=%d; want 400", cid, rec.Code)
+		}
+		if elapsed := time.Since(start); elapsed > 2*time.Second {
+			t.Fatalf("cid %q: malformed CID took %v; must reject without remote fetches", cid, elapsed)
+		}
+	}
+}
+
 func TestCommentBodyGet_404WhenNoSourceHasIt(t *testing.T) {
 	b, _ := newFallbackBoss(t, nil)
 
