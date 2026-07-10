@@ -87,8 +87,17 @@ func (b *Boss) asyncExecuteHandler(rootCtx context.Context, wg *sync.WaitGroup) 
 			return
 		}
 
+		if req.WorkerID == "" {
+			http.Error(w, "worker_id is required", http.StatusBadRequest)
+			return
+		}
+		if req.Prompt == "" {
+			http.Error(w, "prompt is required", http.StatusBadRequest)
+			return
+		}
+
 		b.mu.RLock()
-		_, exists := b.activeWorkers[req.WorkerID]
+		profile, exists := b.activeWorkers[req.WorkerID]
 		b.mu.RUnlock()
 
 		if !exists {
@@ -99,6 +108,14 @@ func (b *Boss) asyncExecuteHandler(rootCtx context.Context, wg *sync.WaitGroup) 
 		peerID, err := peer.Decode(req.WorkerID)
 		if err != nil {
 			http.Error(w, "Invalid Worker ID format", http.StatusBadRequest)
+			return
+		}
+
+		// Trust gate BEFORE committing an async slot + goroutine — an
+		// equivocator or below-floor peer must be refused synchronously
+		// (same gate as /api/execute and the OpenAI-compat path).
+		if outcome := b.checkTrust(r.Context(), profile); !outcome.Allowed {
+			http.Error(w, "dispatch refused: "+outcome.Reason, http.StatusForbidden)
 			return
 		}
 

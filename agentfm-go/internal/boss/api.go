@@ -40,6 +40,11 @@ type ExecuteRequest struct {
 // AsyncExecuteRequest is the request body for POST /api/execute/async.
 // WebhookURL is optional; when empty the Boss finishes the task quietly
 // and writes artifacts to disk without notifying anyone.
+//
+// There is no client-supplied task_id: the async endpoint always mints its
+// own and returns it in the 202 body ("task_id"). Clients MUST read the
+// response for the id — it is the sole handle for artifact retrieval and
+// webhook correlation.
 type AsyncExecuteRequest struct {
 	WorkerID   string `json:"worker_id"`
 	Prompt     string `json:"prompt"`

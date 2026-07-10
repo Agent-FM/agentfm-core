@@ -185,6 +185,15 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.WorkerID == "" {
+		http.Error(w, "worker_id is required", http.StatusBadRequest)
+		return
+	}
+	if req.Prompt == "" {
+		http.Error(w, "prompt is required", http.StatusBadRequest)
+		return
+	}
+
 	if req.TaskID == "" {
 		req.TaskID = newCompletionID("task_")
 	}
@@ -194,7 +203,7 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	b.mu.RLock()
-	_, exists := b.activeWorkers[req.WorkerID]
+	profile, exists := b.activeWorkers[req.WorkerID]
 	b.mu.RUnlock()
 
 	if !exists {
@@ -206,6 +215,15 @@ func (b *Boss) handleExecuteTask(w http.ResponseWriter, r *http.Request) {
 	peerID, err := peer.Decode(req.WorkerID)
 	if err != nil {
 		http.Error(w, "Invalid Worker ID format", http.StatusBadRequest)
+		return
+	}
+
+	// Trust gate: equivocators and below-floor peers are refused before any
+	// dial. The OpenAI-compat path already gates here; direct /api/execute
+	// (and the desktop Dispatch button, which uses it) must not be a bypass.
+	if outcome := b.checkTrust(r.Context(), profile); !outcome.Allowed {
+		status = metrics.StatusRejected
+		http.Error(w, "dispatch refused: "+outcome.Reason, http.StatusForbidden)
 		return
 	}
 

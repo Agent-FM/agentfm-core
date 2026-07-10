@@ -39,6 +39,14 @@ func (b *Boss) ServeHTTPExecute(w http.ResponseWriter, r *http.Request) {
 	b.handleExecuteTask(w, r)
 }
 
+// ServeHTTPExecuteAsync exposes the async execute handler to test packages.
+// Reject paths (validation, trust gate) return before any goroutine spawns,
+// so no WaitGroup drain is required.
+func (b *Boss) ServeHTTPExecuteAsync(w http.ResponseWriter, r *http.Request) {
+	var wg sync.WaitGroup
+	b.asyncExecuteHandler(context.Background(), &wg)(w, r)
+}
+
 // HostForTest returns the boss's underlying libp2p host identity so test
 // helpers can write ledger entries attributed to the boss's own peer ID.
 // Must only be used in test code.
