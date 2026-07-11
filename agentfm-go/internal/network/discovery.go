@@ -18,6 +18,16 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/client"
 )
 
+// lighthouseConnTag protects the relay connection from connection-manager
+// trimming: without it, the connmgr prunes the (usually idle) lighthouse
+// connection under pressure and the node silently loses its relay.
+const lighthouseConnTag = "lighthouse"
+
+// LighthouseReconnectInterval is how often maintainLighthouseConnection
+// re-checks and, if dropped, re-dials the relay. Lives here (not in the
+// gitignored constants.go) so it stays version-controlled.
+const LighthouseReconnectInterval = 30 * time.Second
+
 // connectToLighthouse dials the bootstrap relay and, on success, reserves
 // a circuit-relay slot on it so this node can be reached via p2p-circuit
 // when direct NAT traversal fails. Both steps are bounded by
@@ -34,6 +44,9 @@ func connectToLighthouse(ctx context.Context, h host.Host, relayInfo *peer.AddrI
 		)
 		return
 	}
+	// Protect the relay from connmgr trimming so an idle lighthouse
+	// connection survives connection-count pressure. Idempotent.
+	h.ConnManager().Protect(relayInfo.ID, lighthouseConnTag)
 	fmt.Println("✅ Successfully connected to Bootstrap Node!")
 
 	reserveCtx, reserveCancel := context.WithTimeout(ctx, StreamDialTimeout)
@@ -45,6 +58,44 @@ func connectToLighthouse(ctx context.Context, h host.Host, relayInfo *peer.AddrI
 		)
 	} else {
 		fmt.Println("✅ Relay reservation secured! Ready for NAT traversal fallback.")
+	}
+}
+
+// maintainLighthouseConnection re-dials (and re-reserves) the relay whenever
+// the direct connection drops — an idle prune, a reservation TTL expiry, or a
+// transient network blip. Without it the node loses its relay for good after
+// the first disconnect, and boss /v1/about reports the relay as unreachable
+// ("Connecting to relay…") permanently. Exits on ctx cancellation.
+func maintainLighthouseConnection(ctx context.Context, h host.Host, relayInfo *peer.AddrInfo, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if h.Network().Connectedness(relayInfo.ID) == netcore.Connected {
+				continue
+			}
+			slog.Warn("lighthouse connection lost; re-dialing",
+				slog.String(obs.FieldPeerID, relayInfo.ID.String()))
+			dialCtx, dialCancel := context.WithTimeout(ctx, StreamDialTimeout)
+			err := h.Connect(dialCtx, *relayInfo)
+			dialCancel()
+			if err != nil {
+				slog.Warn("lighthouse re-dial failed",
+					slog.Any(obs.FieldErr, err),
+					slog.String(obs.FieldPeerID, relayInfo.ID.String()))
+				continue
+			}
+			h.ConnManager().Protect(relayInfo.ID, lighthouseConnTag)
+			reserveCtx, reserveCancel := context.WithTimeout(ctx, StreamDialTimeout)
+			if _, err := client.Reserve(reserveCtx, h, *relayInfo); err != nil {
+				slog.Warn("lighthouse re-reservation failed",
+					slog.Any(obs.FieldErr, err))
+			}
+			reserveCancel()
+		}
 	}
 }
 

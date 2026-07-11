@@ -70,6 +70,9 @@ func Setup(ctx context.Context, cfg Config) (*MeshNode, error) {
 		} else {
 			relayPeerID = relayInfo.ID
 			connectToLighthouse(ctx, h, relayInfo)
+			// Keep the relay connection alive for the node's lifetime:
+			// re-dial on drop so the mesh doesn't silently lose its relay.
+			go maintainLighthouseConnection(ctx, h, relayInfo, LighthouseReconnectInterval)
 		}
 	}
 
