@@ -11,8 +11,7 @@ interface Props {
 
 export function EntryRow({ entry, peerId }: Props) {
   const isComment = entry.kind === 'Comment';
-  const unverified = entry.rater_status === 'unverified';
-  const hasMeta = unverified || !!entry.context;
+  const hasMeta = !!entry.context;
 
   return (
     <div>
@@ -46,11 +45,6 @@ export function EntryRow({ entry, peerId }: Props) {
         <div className="min-w-0">
           {hasMeta && (
             <div className="flex gap-1.5 items-baseline">
-              {unverified && (
-                <span className="text-2xs bg-white/[0.06] text-text-2 px-1.5 py-0.5 rounded-full">
-                  unverified
-                </span>
-              )}
               {entry.context && <span className="text-text-2 text-xs">{entry.context}</span>}
             </div>
           )}
