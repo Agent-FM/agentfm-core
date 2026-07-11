@@ -20,7 +20,15 @@ export const qk = {
 }
 
 export function useAbout() {
-  return useQuery({ queryKey: qk.about(), queryFn: api.about, staleTime: 5000 })
+  // Poll: relay connectedness, ledger tree size, and uptime are all live.
+  // Without an interval the toolbar would latch onto the boot-time snapshot
+  // (relay not yet dialed) and show "Connecting to relay…" forever.
+  return useQuery({
+    queryKey: qk.about(),
+    queryFn: api.about,
+    staleTime: 5000,
+    refetchInterval: 5000,
+  })
 }
 
 export function useWorkers(includeOffline = false) {
