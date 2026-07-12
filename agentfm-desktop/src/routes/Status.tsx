@@ -87,8 +87,6 @@ export default function Status() {
             </div>
             <div className="flex items-center gap-3 text-xs text-text-2 mt-0.5 font-mono tabular-nums">
               <span>{onlineWorkers} agent{onlineWorkers === 1 ? '' : 's'} online</span>
-              <span>{isPrivate ? 'private swarm' : 'public mesh'}</span>
-              <span>up {formatUptime(uptime)}</span>
             </div>
           </div>
         </Card>
