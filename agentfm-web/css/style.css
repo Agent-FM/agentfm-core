@@ -379,8 +379,12 @@ html.js .reveal.in {
 }
 
 /* -------------------------------------------------------------- mobile */
-@media (max-width: 900px) {
+@media (max-width: 760px) {
+  /* Below tablet, drop the section links; the footer carries navigation. */
   .nav-links { display: none; }
+}
+@media (max-width: 900px) {
+  .nav-links { gap: 18px; font-size: 13.5px; }
   .nav .wrap { gap: 12px; }
   .nav-cta { margin-left: auto; }
   .brand img { height: 24px; }
