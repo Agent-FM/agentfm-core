@@ -1,5 +1,7 @@
+import { Copy } from 'lucide-react';
+import { toast } from 'sonner';
 import type { PeerEntry } from '../../types/api';
-import { compactAge } from '../../lib/peer';
+import { compactAge, shortenPeerID } from '../../lib/peer';
 import { CommentBody } from './CommentBody';
 import { StarRow } from '../primitives/StarRow';
 import { starsFromScore } from '../../lib/stars';
@@ -11,8 +13,6 @@ interface Props {
 
 export function EntryRow({ entry, peerId }: Props) {
   const isComment = entry.kind === 'Comment';
-  const unverified = entry.rater_status === 'unverified';
-  const hasMeta = unverified || !!entry.context;
 
   return (
     <div>
@@ -44,16 +44,24 @@ export function EntryRow({ entry, peerId }: Props) {
           ) : null}
         </div>
         <div className="min-w-0">
-          {hasMeta && (
-            <div className="flex gap-1.5 items-baseline">
-              {unverified && (
-                <span className="text-2xs bg-white/[0.06] text-text-2 px-1.5 py-0.5 rounded-full">
-                  unverified
-                </span>
-              )}
-              {entry.context && <span className="text-text-2 text-xs">{entry.context}</span>}
-            </div>
-          )}
+          <div className="flex gap-1.5 items-baseline">
+            {entry.rater_peer_id && (
+              <button
+                onClick={() =>
+                  navigator.clipboard
+                    .writeText(entry.rater_peer_id)
+                    .then(() => toast.success('Rater peer ID copied'))
+                    .catch(() => toast.error('Copy failed'))
+                }
+                title={`Copy rater peer ID ${entry.rater_peer_id}`}
+                className="group/rid inline-flex items-center gap-1 font-mono text-2xs text-text-2 hover:text-text-0 transition-colors shrink-0 cursor-pointer"
+              >
+                {shortenPeerID(entry.rater_peer_id, 3, 3)}
+                <Copy size={10} className="opacity-0 group-hover/rid:opacity-70 transition-opacity" />
+              </button>
+            )}
+            {entry.context && <span className="text-text-2 text-xs">{entry.context}</span>}
+          </div>
           {isComment && entry.text_cid && <CommentBody peerId={peerId} cid={entry.text_cid} />}
         </div>
         <div className="text-2xs text-text-2 text-right font-mono tabular-nums pt-0.5">

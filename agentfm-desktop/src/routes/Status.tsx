@@ -32,7 +32,7 @@ function StatCard({ label, icon: Icon, value, valueTone, sub }: StatCardProps) {
     ok: COLORS.ok, accent: COLORS.accent, bad: COLORS.bad,
   }[valueTone]
   return (
-    <Card live>
+    <Card>
       <div className="flex items-center justify-between mb-2">
         <div className="text-2xs font-medium text-text-2">{label}</div>
         <Avatar size="sm">
@@ -72,7 +72,6 @@ export default function Status() {
       {/* Health banner */}
       <motion.div {...staggerItem(0)}>
         <Card
-          live={healthy}
           className={`mt-4 mb-2 flex items-center gap-3 ${
             healthy ? '' : 'border-bad/40'
           }`}
@@ -88,8 +87,6 @@ export default function Status() {
             </div>
             <div className="flex items-center gap-3 text-xs text-text-2 mt-0.5 font-mono tabular-nums">
               <span>{onlineWorkers} agent{onlineWorkers === 1 ? '' : 's'} online</span>
-              <span>{isPrivate ? 'private swarm' : 'public mesh'}</span>
-              <span>up {formatUptime(uptime)}</span>
             </div>
           </div>
         </Card>

@@ -84,13 +84,6 @@ export function SummaryCard({ data }: { data: PeerSummary }) {
       <Field label="Total entries">
         <span className="font-mono text-xs text-text-0 tabular-nums">{data.entries_count}</span>
       </Field>
-      <Field label="Verified raters">
-        <span className="inline-flex items-center gap-2 font-mono text-xs text-text-1 tabular-nums">
-          <span>{data.rater_summary?.verified_raters_count ?? 0} verified</span>
-          <span className="w-px h-3 bg-border-1" aria-hidden="true" />
-          <span>{data.rater_summary?.unverified_raters_count ?? 0} unverified</span>
-        </span>
-      </Field>
     </Card>
   );
 }

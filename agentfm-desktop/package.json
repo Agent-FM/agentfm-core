@@ -7,6 +7,7 @@
   "license": "MIT",
   "main": "out/main/index.js",
   "scripts": {
+    "predev": "node scripts/brand-dev-bundle.mjs",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",

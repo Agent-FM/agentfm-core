@@ -6,6 +6,11 @@ import { BackendManager } from './backend-manager'
 import { registerIPC, isSafeExternalUrl } from './ipc'
 import { settingsStore } from './store'
 
+// Set before app 'ready' so the macOS menu bar, app switcher, and dock use
+// "AgentFM" instead of the default "Electron" in dev. The packaged app gets
+// this from electron-builder.yml (productName), but dev runs the raw bundle.
+app.setName('AgentFM')
+
 let backend: BackendManager | null = null
 
 function resolveAppIcon(): Electron.NativeImage | undefined {
@@ -30,6 +35,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    title: 'AgentFM',
     icon: appIcon,
     autoHideMenuBar: true,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',

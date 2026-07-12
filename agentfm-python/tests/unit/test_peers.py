@@ -255,8 +255,56 @@ def test_peers_comment_body_returns_unicode():
 
 
 # ---------------------------------------------------------------------------
+# Sync: comment (self-signed submission)
+# ---------------------------------------------------------------------------
+
+
+def test_peers_comment_submits_and_returns_result():
+    with respx.mock(base_url=GATEWAY, assert_all_called=True) as router:
+        route = router.post("/v1/peers/12D3KooWA/comments/self").mock(
+            return_value=Response(201, json={"cid": "1220abc", "ledger_hash": "deadbeef"})
+        )
+        with AgentFMClient(gateway_url=GATEWAY) as c:
+            res = c.peers.comment("12D3KooWA", text="Solid work", rating=0.6)
+
+    assert res.cid == "1220abc"
+    assert res.ledger_hash == "deadbeef"
+    import json as _json
+
+    sent = _json.loads(route.calls.last.request.content)
+    assert sent["text"] == "Solid work"
+    assert sent["rating"] == 0.6
+
+
+def test_peers_comment_omits_rating_when_none():
+    with respx.mock(base_url=GATEWAY, assert_all_called=True) as router:
+        route = router.post("/v1/peers/12D3KooWA/comments/self").mock(
+            return_value=Response(201, json={"cid": "1220x", "ledger_hash": "h"})
+        )
+        with AgentFMClient(gateway_url=GATEWAY) as c:
+            c.peers.comment("12D3KooWA", text="No rating")
+
+    import json as _json
+
+    sent = _json.loads(route.calls.last.request.content)
+    assert "rating" not in sent
+
+
+# ---------------------------------------------------------------------------
 # Async: mirrors of sync tests
 # ---------------------------------------------------------------------------
+
+
+async def test_async_peers_comment_submits_and_returns_result():
+    with respx.mock(base_url=GATEWAY, assert_all_called=True) as router:
+        router.post("/v1/peers/12D3KooWA/comments/self").mock(
+            return_value=Response(201, json={"cid": "1220y", "ledger_hash": "z"})
+        )
+        async with AsyncAgentFMClient(gateway_url=GATEWAY) as c:
+            res = await c.peers.comment("12D3KooWA", text="Async solid", rating=-0.3)
+
+    assert res.cid == "1220y"
+    assert res.ledger_hash == "z"
 
 
 async def test_async_peers_list_returns_online_and_offline():

@@ -163,8 +163,8 @@ func TestCommentBodyHydration_BadHexCID(t *testing.T) {
 // TestCommentBodyHydration_NotFound returns 404.
 func TestCommentBodyHydration_NotFound(t *testing.T) {
 	cbr := newCommentBodyRig(t)
-	// CID that doesn't exist: 34 zero bytes as hex.
-	cidHex := hex.EncodeToString(make([]byte, 34))
+	// Structurally valid CID whose body was never stored.
+	cidHex := comments.CIDString(comments.CIDOf([]byte("no body stored for this")))
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet,
 		"/v1/peers/"+cbr.subject.String()+"/comments/"+cidHex, nil)

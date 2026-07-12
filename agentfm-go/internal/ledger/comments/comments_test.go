@@ -8,9 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"agentfm/internal/ledger/comments"
+	"agentfm/internal/network"
 	"agentfm/test/testutil"
+
+	libnet "github.com/libp2p/go-libp2p/core/network"
 )
 
 func TestCIDOf_Deterministic(t *testing.T) {
@@ -163,6 +167,63 @@ func TestFetch_RoundTrip(t *testing.T) {
 	}
 	if string(body) != "hello from the other peer" {
 		t.Fatalf("body mismatch: %q", body)
+	}
+}
+
+func TestFetch_CtxBoundsStalledServer(t *testing.T) {
+	hosts := testutil.NewConnectedMesh(t, 2)
+	srvHost, cliHost := hosts[0], hosts[1]
+
+	stall := make(chan struct{})
+	t.Cleanup(func() { close(stall) })
+	srvHost.SetStreamHandler(network.CommentFetchProtocol, func(s libnet.Stream) {
+		<-stall
+		_ = s.Reset()
+	})
+
+	cid := comments.CIDOf([]byte("body the server will never send"))
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	_, err := comments.Fetch(ctx, cliHost, srvHost.ID(), cid)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("Fetch against a stalled server should fail")
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("Fetch ignored ctx deadline: took %v against a stalled server (want ~1s)", elapsed)
+	}
+}
+
+func TestFetch_CancelUnblocksImmediately(t *testing.T) {
+	hosts := testutil.NewConnectedMesh(t, 2)
+	srvHost, cliHost := hosts[0], hosts[1]
+
+	stall := make(chan struct{})
+	t.Cleanup(func() { close(stall) })
+	srvHost.SetStreamHandler(network.CommentFetchProtocol, func(s libnet.Stream) {
+		<-stall
+		_ = s.Reset()
+	})
+
+	cid := comments.CIDOf([]byte("never delivered"))
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	_, err := comments.Fetch(ctx, cliHost, srvHost.ID(), cid)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("Fetch should fail when ctx is cancelled mid-flight")
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("Fetch did not unblock on ctx cancel: took %v (want ~300ms)", elapsed)
 	}
 }
 

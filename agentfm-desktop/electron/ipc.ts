@@ -21,6 +21,19 @@ const ALLOWED_SETTINGS_KEYS = new Set([
   'activeProjectId',
 ])
 
+// Chat sessions persist under a per-project key (chat:sessions:<projectId>),
+// so they can't live in the static allowlist. Permit exactly that shape with
+// a conservative project-id suffix (matches the ids minted in projectStore).
+const CHAT_SESSIONS_KEY = /^chat:sessions:[A-Za-z0-9_-]{1,64}$/
+
+// isAllowedSettingsKey gates every renderer settings:set. A key passes when it
+// is a dot-free member of the static allowlist OR a well-formed per-project
+// chat-sessions key. Exported for unit testing.
+export function isAllowedSettingsKey(key: unknown): key is string {
+  if (typeof key !== 'string' || key.includes('.')) return false
+  return ALLOWED_SETTINGS_KEYS.has(key) || CHAT_SESSIONS_KEY.test(key)
+}
+
 const SWARM_KEY_HEX = /^[0-9a-fA-F]{64}$/
 
 // validateProjects checks the security-relevant fields of each stored project
@@ -78,7 +91,7 @@ export function registerIPC(backend: BackendManager): void {
   // Persistent settings
   ipcMain.handle('settings:get', (_event, key: string) => settingsStore.get(key as never))
   ipcMain.handle('settings:set', (_event, key: string, value: unknown) => {
-    if (typeof key !== 'string' || key.includes('.') || !ALLOWED_SETTINGS_KEYS.has(key)) {
+    if (!isAllowedSettingsKey(key)) {
       throw new Error(`refused settings key: ${JSON.stringify(key)}`)
     }
     let safeValue = value

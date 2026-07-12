@@ -1,6 +1,8 @@
 package boss
 
 import (
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -16,9 +18,11 @@ import (
 
 	"agentfm/internal/ledger/comments"
 	pb "agentfm/internal/ledger/pb"
+	"agentfm/internal/ledger/store"
 	"agentfm/internal/obs"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"google.golang.org/protobuf/proto"
 )
 
 // base64StdDecoder is captured at package scope so the inline
@@ -223,6 +227,91 @@ func base64Decode(s string) ([]byte, error) {
 	return base64StdDecoder.DecodeString(s)
 }
 
+const commentFetchPerPeerTimeout = 10 * time.Second
+
+// getCommentBody returns the body for cidBytes, first from the local
+// store, then — on a miss — fetched over CommentFetchProtocol from the
+// comment's author (resolved via the inbox) or the relay, caching any
+// fetched body locally.
+func (b *Boss) getCommentBody(ctx context.Context, cidBytes []byte) ([]byte, error) {
+	body, err := b.commentsStore.Get(cidBytes)
+	if err == nil {
+		return body, nil
+	}
+	if !errors.Is(err, comments.ErrNotFound) && !errors.Is(err, comments.ErrCIDMismatch) {
+		return nil, err
+	}
+	if b.node == nil || b.node.Host == nil {
+		return nil, err
+	}
+	for _, source := range b.commentBodySources(ctx, cidBytes) {
+		fetchCtx, cancel := context.WithTimeout(ctx, commentFetchPerPeerTimeout)
+		fetched, ferr := comments.Fetch(fetchCtx, b.node.Host, source, cidBytes)
+		cancel()
+		if ferr != nil {
+			slog.Debug("boss: remote comment body fetch failed",
+				slog.String("peer", source.String()),
+				slog.Any(obs.FieldErr, ferr))
+			continue
+		}
+		if _, perr := b.commentsStore.Put(fetched); perr != nil {
+			slog.Warn("boss: caching fetched comment body failed",
+				slog.Any(obs.FieldErr, perr))
+		}
+		return fetched, nil
+	}
+	return nil, comments.ErrNotFound
+}
+
+// commentBodySources returns candidate peers to fetch a body from:
+// the comment's author first (when resolvable from the inbox), then
+// the relay archive.
+func (b *Boss) commentBodySources(ctx context.Context, cidBytes []byte) []peer.ID {
+	self := b.node.Host.ID()
+	sources := make([]peer.ID, 0, 2)
+	if b.readStore != nil {
+		if author, ok := findCommentAuthor(ctx, b.readStore, cidBytes); ok && author != self {
+			sources = append(sources, author)
+		}
+	}
+	if relay := b.node.RelayPeerID; relay != "" && relay != self {
+		if len(sources) == 0 || sources[0] != relay {
+			sources = append(sources, relay)
+		}
+	}
+	return sources
+}
+
+// errStopAuthorScan is the sentinel findCommentAuthor's callback returns
+// to stop iteration as soon as the matching Comment is found.
+var errStopAuthorScan = errors.New("stop author scan")
+
+// findCommentAuthor scans the inbox for a Comment entry whose text_cid
+// matches cidBytes and returns its rater peer ID.
+func findCommentAuthor(ctx context.Context, s *store.Store, cidBytes []byte) (peer.ID, bool) {
+	var author peer.ID
+	found := false
+	err := s.IterateAllInboxEntries(ctx, func(e *store.InboxEntry) error {
+		var signed pb.SignedEntry
+		if uerr := proto.Unmarshal(e.Payload, &signed); uerr != nil {
+			return nil
+		}
+		if body, ok := signed.GetBody().(*pb.SignedEntry_Comment); ok &&
+			body.Comment != nil && bytes.Equal(body.Comment.TextCid, cidBytes) {
+			author = peer.ID(body.Comment.RaterPeerId)
+			found = true
+			return errStopAuthorScan
+		}
+		return nil
+	})
+	if err != nil && !errors.Is(err, errStopAuthorScan) {
+		slog.Warn("boss: comment author inbox scan failed",
+			slog.Any(obs.FieldErr, err))
+		return "", false
+	}
+	return author, found
+}
+
 // handleCommentBodyGet services GET /v1/peers/{id}/comments/{cid}.
 //
 // The CID is hex-encoded (same format as CommentSubmitResponse.CID and the
@@ -231,7 +320,7 @@ func base64Decode(s string) ([]byte, error) {
 //
 // Errors:
 //   - 400: CID is malformed hex
-//   - 404: CID not found in local body store
+//   - 404: CID not found locally, from the author, or from the relay
 //   - 503: commentsStore not wired on this boss
 func (b *Boss) handleCommentBodyGet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -249,13 +338,13 @@ func (b *Boss) handleCommentBodyGet(w http.ResponseWriter, r *http.Request) {
 		writeOpenAIError(w, http.StatusBadRequest, errTypeInvalidRequest, "bad_request", "missing CID in path")
 		return
 	}
-	cidBytes, err := hex.DecodeString(cidHex)
+	cidBytes, err := comments.ParseCIDString(cidHex)
 	if err != nil {
-		writeOpenAIError(w, http.StatusBadRequest, errTypeInvalidRequest, "bad_cid", "CID is not valid hex: "+err.Error())
+		writeOpenAIError(w, http.StatusBadRequest, errTypeInvalidRequest, "bad_cid", "CID is not a valid multihash: "+err.Error())
 		return
 	}
 
-	body, err := b.commentsStore.Get(cidBytes)
+	body, err := b.getCommentBody(r.Context(), cidBytes)
 	if err != nil {
 		if errors.Is(err, comments.ErrNotFound) || errors.Is(err, comments.ErrCIDMismatch) {
 			writeOpenAIError(w, http.StatusNotFound, errTypeInvalidRequest, "comment_not_found", "comment body not found for this CID")
@@ -317,13 +406,13 @@ func (b *Boss) handleCommentBodyGetJSON(w http.ResponseWriter, r *http.Request) 
 		writeOpenAIError(w, http.StatusBadRequest, errTypeInvalidRequest, "bad_request", "missing CID in path")
 		return
 	}
-	cidBytes, err := hex.DecodeString(cidHex)
+	cidBytes, err := comments.ParseCIDString(cidHex)
 	if err != nil {
-		writeOpenAIError(w, http.StatusBadRequest, errTypeInvalidRequest, "bad_cid", "CID is not valid hex: "+err.Error())
+		writeOpenAIError(w, http.StatusBadRequest, errTypeInvalidRequest, "bad_cid", "CID is not a valid multihash: "+err.Error())
 		return
 	}
 
-	body, err := b.commentsStore.Get(cidBytes)
+	body, err := b.getCommentBody(r.Context(), cidBytes)
 	if err != nil {
 		if errors.Is(err, comments.ErrNotFound) || errors.Is(err, comments.ErrCIDMismatch) {
 			writeOpenAIError(w, http.StatusNotFound, errTypeInvalidRequest, "comment_not_found", "comment body not found for this CID")

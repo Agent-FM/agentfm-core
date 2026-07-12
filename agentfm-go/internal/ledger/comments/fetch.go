@@ -116,6 +116,10 @@ func writeNotFound(w io.Writer, reason string) {
 // body for cid. Returns (body, nil) on success; ErrNotFound when
 // the remote doesn't have the body; or a transport / decode error.
 //
+// The stream deadline is the sooner of fetchTimeout and ctx's own
+// deadline, and ctx cancellation resets the stream immediately — a
+// stalled remote can never pin the caller past its context bound.
+//
 // Validates the returned body against cid before returning —
 // callers can trust the bytes match what they asked for without
 // re-hashing.
@@ -125,7 +129,13 @@ func Fetch(ctx context.Context, h host.Host, remote peer.ID, cid []byte) ([]byte
 		return nil, fmt.Errorf("comments fetch: open stream: %w", err)
 	}
 	defer func() { _ = s.Close() }()
-	if err := s.SetDeadline(time.Now().Add(fetchTimeout)); err != nil {
+	stop := context.AfterFunc(ctx, func() { _ = s.Reset() })
+	defer stop()
+	deadline := time.Now().Add(fetchTimeout)
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		deadline = d
+	}
+	if err := s.SetDeadline(deadline); err != nil {
 		return nil, fmt.Errorf("comments fetch: set deadline: %w", err)
 	}
 
