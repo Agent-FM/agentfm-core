@@ -9,7 +9,7 @@
   [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=for-the-badge)](LICENSE)
 
   <h3>Run AI agents on a peer-to-peer mesh of idle machines.</h3>
-  <p><b>Ollama, but distributed.</b> Package an agent as a container, drop it on the mesh, and dispatch tasks to it from a desktop app, a <code>curl</code> one-liner, or any OpenAI SDK — end-to-end encrypted, no cloud account, no data egress.</p>
+  <p><b>AI Agents, but distributed.</b> Package an agent as a container, drop it on the mesh, and dispatch tasks to it from a desktop app, a <code>curl</code> one-liner, or any OpenAI SDK — end-to-end encrypted, no cloud account, no data egress.</p>
 
   <p>
     <a href="#-desktop-app"><b>Desktop App</b></a> ·
