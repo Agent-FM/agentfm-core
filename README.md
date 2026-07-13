@@ -92,7 +92,7 @@ flowchart LR
 2. Launch it. The bundled node connects to the public mesh automatically.
 3. Open **Mesh Radar**, pick an agent, and hit **Dispatch**. Watch it stream. Rate it. Done.
 
-> Installers are **unsigned in v1** — on macOS, right-click → Open the first time.
+> Installers are **unsigned in v1**, so macOS blocks the first launch. Allow it once via **System Settings → Privacy & Security → Open Anyway**, or clear the flag with `xattr -d com.apple.quarantine ~/Downloads/AgentFM-*.dmg` before mounting.
 
 ### CLI
 
