@@ -21,6 +21,13 @@ extraResources:
 
 asar: true
 
+# With identity: null electron-builder skips signing entirely, which leaves the
+# repacked bundle carrying Electron's original (now-invalid) seal — quarantined
+# downloads then hit Gatekeeper's dead-end "damaged" dialog. Until a Developer
+# ID exists, re-sign the final bundle ad-hoc so the signature is at least
+# valid and users get the bypassable "unverified developer" flow instead.
+afterPack: scripts/adhoc-sign.cjs
+
 mac:
   category: public.app-category.developer-tools
   target:

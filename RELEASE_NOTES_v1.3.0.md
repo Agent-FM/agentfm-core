@@ -65,6 +65,22 @@ Or grab a binary for your platform from the release assets and `chmod +x` it. Th
 
 Verify your download against `checksums.txt` (SHA-256).
 
+### Desktop app on macOS
+
+Download the installer for your chip from the assets below — `AgentFM-0.1.0-arm64.dmg` (Apple Silicon) or `AgentFM-0.1.0.dmg` (Intel) — mount it, and drag **AgentFM** to Applications.
+
+The app is not notarized with Apple yet, so macOS blocks the first launch with *"Apple could not verify AgentFM is free of malware."* Allowing it is a one-time step:
+
+1. Double-click **AgentFM** once and dismiss the warning with **Done**.
+2. Open **System Settings → Privacy & Security** and scroll down to the Security section — it will say *"AgentFM" was blocked to protect your Mac*. Click **Open Anyway**.
+3. Confirm in the dialog that follows (it may ask for your password or Touch ID).
+
+AgentFM opens normally from then on. Prefer the terminal? Clear the download flag before mounting instead:
+
+```sh
+xattr -d com.apple.quarantine ~/Downloads/AgentFM-0.1.0-arm64.dmg
+```
+
 ## Coming later
 
 A few pieces are intentionally deferred: salt-challenge image probes and the real Sigstore Rekor client (v1.3.1); golden-prompt probes, an LLM-judge grader, delegated comments, and an optional TEE attestation tier (v1.4).

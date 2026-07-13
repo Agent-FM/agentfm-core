@@ -112,6 +112,28 @@
     box.addEventListener('close', () => full.removeAttribute('src'));
   }
 
+  const installBtn = document.querySelector('.install-copy');
+  if (installBtn) {
+    const installCmd = document.querySelector('.hero-install code');
+    installBtn.addEventListener('click', () => {
+      navigator.clipboard
+        .writeText(installCmd.textContent.trim())
+        .then(() => {
+          installBtn.textContent = 'copied';
+          setTimeout(() => (installBtn.textContent = 'copy'), 1400);
+        })
+        .catch(() => {
+          const range = document.createRange();
+          range.selectNodeContents(installCmd);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+          installBtn.textContent = 'press ⌘C';
+          setTimeout(() => (installBtn.textContent = 'copy'), 2200);
+        });
+    });
+  }
+
   // Live GitHub stars with graceful fallback.
   fetch('https://api.github.com/repos/Agent-FM/agentfm-core')
     .then((r) => (r.ok ? r.json() : null))

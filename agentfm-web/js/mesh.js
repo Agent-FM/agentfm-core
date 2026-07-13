@@ -25,9 +25,14 @@
     ['boss', 'relay'], ['w3', 'relay'], ['w1', 'relay'],
   ];
 
-  let W = 0, H = 0, dpr = 1, t0 = performance.now();
+  let W = 0, H = 0, dpr = 1, bandPx = 0, t0 = performance.now();
   let packets = [];
   let raf = 0, running = false;
+  let energy = 0;
+
+  window.agentfmMesh = {
+    setEnergy(e) { energy = Math.max(0, Math.min(1, e)); },
+  };
 
   function resize() {
     const rect = canvas.getBoundingClientRect();
@@ -36,6 +41,15 @@
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // keep the graph clear of the hero copy: never let the lowest node's
+    // label reach the copy block, whatever the viewport or copy height
+    const copy = document.querySelector('.hero-copy');
+    if (W < 640 || !copy) {
+      bandPx = H * 0.42;
+    } else {
+      const copyTop = copy.getBoundingClientRect().top - rect.top;
+      bandPx = Math.max(H * 0.28, Math.min(H * 0.62, copyTop - 74));
+    }
   }
 
   function nodePos(n, t) {
@@ -43,10 +57,7 @@
     const seed = n.id.charCodeAt(0) * 13.7;
     const dx = reduce ? 0 : Math.sin(t / 4200 + seed) * 9;
     const dy = reduce ? 0 : Math.cos(t / 5200 + seed * 1.7) * 7;
-    // keep the graph clear of the hero copy: upper 72% on desktop,
-    // upper 42% on narrow screens where the copy stacks taller
-    const band = W < 640 ? 0.42 : 0.72;
-    return { x: n.x * W + dx, y: n.y * H * band + dy };
+    return { x: n.x * W + dx, y: n.y * bandPx + dy };
   }
 
   function curve(a, b) {
@@ -76,7 +87,7 @@
       v: 0.0035 + Math.random() * 0.004,
       amber: fromBoss,
     });
-    if (packets.length > 7) packets.shift();
+    if (packets.length > 7 + Math.round(energy * 5)) packets.shift();
   }
 
   function byId(id) { return NODES.find((n) => n.id === id); }
@@ -92,7 +103,7 @@
     for (const [ai, bi] of LINKS) {
       const a = pos[ai], b = pos[bi];
       const c = curve(a, b);
-      ctx.strokeStyle = FAINT;
+      ctx.strokeStyle = energy > 0 ? 'rgba(255,255,255,' + (0.16 + 0.13 * energy).toFixed(3) + ')' : FAINT;
       ctx.setLineDash([4, 7]);
       ctx.lineDashOffset = reduce ? 0 : -(t / 60) % 11;
       ctx.beginPath();
@@ -187,7 +198,7 @@
   let spawnTimer = 0;
   function loop(now) {
     if (!running) return;
-    if (!reduce && now - spawnTimer > 900) { spawnPacket(); spawnTimer = now; }
+    if (!reduce && now - spawnTimer > 900 - 620 * energy) { spawnPacket(); spawnTimer = now; }
     draw(now);
     if (reduce) { running = false; return; } // single static frame
     raf = requestAnimationFrame(loop);
@@ -206,10 +217,13 @@
   resize();
   window.addEventListener('resize', () => { resize(); if (reduce) { running = true; raf = requestAnimationFrame(loop); } });
 
-  // Reduced-motion users get exactly one frame; redraw it once the web
-  // fonts land so labels don't stay in the fallback font forever.
-  if (reduce && document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(() => { running = true; raf = requestAnimationFrame(loop); });
+  // Recompute the copy-clearance band once web fonts land (the copy block
+  // changes height), and give reduced-motion users their single fresh frame.
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+      resize();
+      if (reduce) { running = true; raf = requestAnimationFrame(loop); }
+    });
   }
 
   // Only animate while the hero is on screen; pause in background tabs.

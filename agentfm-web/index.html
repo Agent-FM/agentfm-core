@@ -11,7 +11,8 @@
   <meta property="og:url" content="https://agentfm.net/" />
   <meta property="og:image" content="https://agentfm.net/assets/img/shot-radar.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <link rel="icon" type="image/png" href="assets/img/logo.png" />
+  <link rel="icon" type="image/png" href="assets/img/favicon.png" />
+  <link rel="apple-touch-icon" href="assets/img/favicon.png" />
   <link rel="preload" href="assets/fonts/space-grotesk-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="assets/fonts/space-grotesk-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
@@ -38,7 +39,6 @@
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
           <span id="gh-stars">Star</span>
         </a>
-        <a class="btn btn-amber" href="https://github.com/Agent-FM/agentfm-core/releases">Download</a>
       </div>
     </div>
   </nav>
@@ -50,10 +50,36 @@
         <h1>Idle machines,<br />working as <span class="accent">one mesh</span>.</h1>
         <p>Package an agent as a container, drop it on the mesh, and dispatch tasks from a desktop app or any OpenAI SDK.</p>
         <div class="hero-actions">
-          <a class="btn btn-amber btn-lg" href="https://github.com/Agent-FM/agentfm-core/releases">Download</a>
+          <a class="btn btn-amber btn-lg" href="https://github.com/Agent-FM/agentfm-core/releases/download/AgentFMV1.3.0/AgentFM-0.1.0-arm64.dmg">Download for macOS &middot; M-series</a>
+          <a class="btn btn-amber btn-lg" href="https://github.com/Agent-FM/agentfm-core/releases/download/AgentFMV1.3.0/AgentFM-0.1.0.dmg">Download for macOS &middot; Intel</a>
           <a class="btn btn-ghost btn-lg" href="#how">See how it works</a>
         </div>
+        <div class="hero-install">
+          <span aria-hidden="true">$</span>
+          <code>curl -fsSL https://api.agentfm.net/install.sh | bash</code>
+          <button class="install-copy" type="button" aria-label="Copy install command">copy</button>
+        </div>
+        <details class="gk-note">
+          <summary>macOS blocks the first launch?</summary>
+          <p>The beta is not notarized with Apple yet. Approve it once via System Settings &rarr; Privacy &amp; Security &rarr; <b>Open Anyway</b>, or clear the download flag before mounting:</p>
+          <code>xattr -d com.apple.quarantine ~/Downloads/AgentFM-0.1.0-arm64.dmg</code>
+        </details>
       </div>
+    </div>
+    <div class="hero-veil" aria-hidden="true"></div>
+    <div class="hero-phases" aria-hidden="true">
+      <div class="hero-phase" data-phase="0">
+        <h2>Run agents on hardware <span class="accent">you already own</span>.</h2>
+        <p>a spare workstation &middot; a gaming rig &middot; the office mini pc</p>
+      </div>
+      <div class="hero-phase" data-phase="1">
+        <h2>No cloud account. <span class="accent">No data egress.</span></h2>
+        <p>end-to-end encrypted libp2p streams between machines you choose</p>
+      </div>
+    </div>
+    <div class="hero-hint" aria-hidden="true">
+      <span>scroll</span>
+      <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4l4 4 4-4"/></svg>
     </div>
   </header>
 
@@ -90,24 +116,112 @@
 
   <section class="scrolly divide" id="dispatch" aria-label="Anatomy of a dispatch">
     <div class="scrolly-inner">
-      <div class="wrap scrolly-grid">
-        <div class="scrolly-viz" aria-hidden="true">
-          <svg viewBox="0 0 240 520" class="pipe" preserveAspectRatio="xMidYMid meet">
-            <defs>
-              <linearGradient id="conduit" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#f0a12e" stop-opacity="0.9" />
-                <stop offset="1" stop-color="#f0a12e" stop-opacity="0.25" />
-              </linearGradient>
-            </defs>
-            <line class="pipe-rail" x1="40" y1="40" x2="40" y2="480" />
-            <line class="pipe-fill" x1="40" y1="40" x2="40" y2="40" stroke="url(#conduit)" />
-            <g class="stop" data-stop="0" transform="translate(40 40)"><circle class="stop-dot" r="12" /><circle class="stop-core" r="4" /></g>
-            <g class="stop" data-stop="1" transform="translate(40 150)"><circle class="stop-dot" r="12" /><circle class="stop-core" r="4" /></g>
-            <g class="stop" data-stop="2" transform="translate(40 260)"><circle class="stop-dot" r="12" /><circle class="stop-core" r="4" /></g>
-            <g class="stop" data-stop="3" transform="translate(40 370)"><circle class="stop-dot" r="12" /><circle class="stop-core" r="4" /></g>
-            <g class="stop" data-stop="4" transform="translate(40 480)"><circle class="stop-dot" r="12" /><circle class="stop-core" r="4" /></g>
-            <circle class="packet" cx="40" cy="40" r="5" />
+      <div class="wrap">
+        <div class="stage" aria-hidden="true">
+          <div class="stage-head">
+            <p class="kicker">Anatomy of a dispatch</p>
+            <div class="stage-titles">
+              <div class="stage-title" data-title="0">
+                <h2>You hit <span class="accent">send</span>.</h2>
+                <p>The trust gate checks reputation first, then routes to the least-loaded worker.</p>
+              </div>
+              <div class="stage-title" data-title="1">
+                <h2>A fresh sandbox. <span class="accent">Every time.</span></h2>
+                <p>Your agent runs in a throwaway Podman container. Nothing touches the host.</p>
+              </div>
+              <div class="stage-title" data-title="2">
+                <h2>Output streams back <span class="accent">live</span>.</h2>
+                <p>Token by token, over a direct end-to-end encrypted libp2p channel.</p>
+              </div>
+              <div class="stage-title" data-title="3">
+                <h2>Files come <span class="accent">home</span>.</h2>
+                <p>Everything the agent writes returns as a zip on the artifact protocol.</p>
+              </div>
+              <div class="stage-title" data-title="4">
+                <h2>Every result leaves a <span class="accent">signed receipt</span>.</h2>
+                <p>Your rating is Ed25519-signed and appended to a tamper-evident Merkle log.</p>
+              </div>
+            </div>
+          </div>
+          <svg class="scene" viewBox="0 0 960 470" preserveAspectRatio="xMidYMid meet">
+            <path class="sc-path" id="route-gate" d="M172,240 Q290,208 384,238" />
+            <path class="sc-path" id="route-w1" d="M456,236 Q630,150 772,112" />
+            <path class="sc-path" id="route-w2" d="M456,240 Q620,258 772,241" />
+            <path class="sc-path" id="route-w3" d="M456,244 Q630,334 772,368" />
+            <path class="sc-path sc-return" id="route-back" d="M782,88 Q470,26 168,206" />
+            <g class="sc-node sc-boss">
+              <circle cx="140" cy="240" r="30" class="sc-ring sc-ring-amber" />
+              <path d="M128,248 L152,232 M152,232 L141,231 M152,232 L150,243" class="sc-glyph sc-glyph-amber" />
+              <text x="140" y="292" class="sc-name">you</text>
+              <text x="140" y="308" class="sc-sub">desktop &middot; boss</text>
+            </g>
+            <g class="sc-gate">
+              <path d="M420,206 l24,10 v17 c0,19 -10,30 -24,37 c-14,-7 -24,-18 -24,-37 v-17 z" class="sc-shield" />
+              <path d="M410,238 l7,8 l14,-16" class="sc-check" />
+              <text x="420" y="298" class="sc-sub">trust gate</text>
+              <circle cx="420" cy="238" r="34" class="sc-pulse" />
+              <g class="sc-chip gate-chip">
+                <rect x="348" y="156" width="144" height="26" rx="13" />
+                <text x="420" y="173">+0.67 &middot; allowed</text>
+              </g>
+            </g>
+            <g class="sc-node sc-worker" data-worker="0">
+              <circle cx="800" cy="105" r="24" class="sc-ring" />
+              <path d="M789,98 h22 v15 h-22 z M789,104 h22" class="sc-glyph" />
+              <text x="800" y="150" class="sc-name">hr bot</text>
+              <text x="800" y="165" class="sc-sub">queue 0/9</text>
+              <g class="sc-chip q-chip"><rect x="832" y="92" width="52" height="22" rx="11" /><text x="858" y="107">0/9</text></g>
+            </g>
+            <g class="sc-node sc-worker" data-worker="1">
+              <circle cx="800" cy="240" r="24" class="sc-ring" />
+              <path d="M789,233 h22 v15 h-22 z M789,239 h22" class="sc-glyph" />
+              <text x="800" y="285" class="sc-name">code bot</text>
+              <text x="800" y="300" class="sc-sub">queue 3/4</text>
+              <g class="sc-chip q-chip"><rect x="832" y="227" width="52" height="22" rx="11" /><text x="858" y="242">3/4</text></g>
+            </g>
+            <g class="sc-node sc-worker" data-worker="2">
+              <circle cx="800" cy="375" r="24" class="sc-ring" />
+              <path d="M789,368 h22 v15 h-22 z M789,374 h22" class="sc-glyph" />
+              <text x="800" y="420" class="sc-name">render bot</text>
+              <text x="800" y="435" class="sc-sub">queue 2/2</text>
+              <g class="sc-chip q-chip"><rect x="832" y="362" width="52" height="22" rx="11" /><text x="858" y="377">2/2</text></g>
+            </g>
+            <g class="sandbox">
+              <rect x="738" y="48" width="176" height="128" rx="10" class="sandbox-rect" />
+              <text x="746" y="42" class="sc-mono sandbox-tag">podman run --rm</text>
+              <text x="750" y="190" class="sc-mono sandbox-line" data-sl="0">no host access</text>
+              <text x="750" y="205" class="sc-mono sandbox-line" data-sl="1">.env injected &middot; gpu attached</text>
+            </g>
+            <g class="term">
+              <rect x="56" y="330" width="252" height="98" rx="8" class="term-box" />
+              <circle cx="72" cy="346" r="3" class="term-dot" />
+              <circle cx="84" cy="346" r="3" class="term-dot" />
+              <text x="70" y="372" class="sc-mono term-line" data-tl="0">&gt; drafting summary&#8230;</text>
+              <text x="70" y="390" class="sc-mono term-line" data-tl="1">| tokens 412 &middot; 38 t/s</text>
+              <text x="70" y="408" class="sc-mono term-line" data-tl="2">| PDF artifact saved</text>
+              <rect x="70" y="414" width="7" height="10" class="term-cursor" />
+            </g>
+            <g class="sc-chip file-chip" data-file="0"><rect x="672" y="120" width="88" height="22" rx="6" /><text x="716" y="135">report.pdf</text></g>
+            <g class="sc-chip file-chip" data-file="1"><rect x="688" y="196" width="88" height="22" rx="6" /><text x="732" y="211">chart.png</text></g>
+            <g class="sc-chip zip-chip"><rect x="-56" y="-12" width="112" height="24" rx="7" /><text x="0" y="4">task_ab12.zip</text></g>
+            <g class="ledger-mini">
+              <rect x="330" y="336" width="330" height="76" rx="8" class="ledger-box" />
+              <text x="348" y="366" class="sc-mono ledger-row" data-lr="0">entry 21  rating +0.80 honesty  <tspan class="ok">sig ok</tspan></text>
+              <text x="348" y="392" class="sc-mono ledger-row" data-lr="1">merkle root 3bced30e&#8230;76da  <tspan class="ok">verified</tspan></text>
+            </g>
+            <circle class="sc-packet" r="5" />
+            <g class="stream-dots">
+              <circle class="stream-dot" r="2.6" /><circle class="stream-dot" r="2.6" /><circle class="stream-dot" r="2.6" />
+              <circle class="stream-dot" r="2.6" /><circle class="stream-dot" r="2.6" /><circle class="stream-dot" r="2.6" />
+            </g>
           </svg>
+          <div class="stage-rail">
+            <span class="rail-item" data-rail="0">dispatch</span>
+            <span class="rail-item" data-rail="1">sandbox</span>
+            <span class="rail-item" data-rail="2">stream</span>
+            <span class="rail-item" data-rail="3">artifact</span>
+            <span class="rail-item" data-rail="4">verify</span>
+          </div>
         </div>
         <div class="scrolly-steps">
           <p class="kicker">Anatomy of a dispatch</p>
@@ -158,7 +272,7 @@
   <section class="section divide" id="trust">
     <div class="wrap trust">
       <div>
-        <h2 class="reveal">Strangers you can check the math on.</h2>
+        <h2 class="reveal">Proof, not promises.</h2>
         <p class="lede reveal">An open mesh needs more than vibes. Every rating is a signed receipt, and anyone can verify the chain.</p>
         <div class="trust-points">
           <div class="trust-point reveal">
@@ -201,12 +315,16 @@
         </div>
         <div class="codebox">
           <button class="copy-btn" data-copy aria-live="polite">copy</button>
-          <pre id="pane-curl" role="tabpanel" aria-labelledby="tab-curl" data-pane-content="curl"><code><span class="c"># start the gateway, then talk to it like it's OpenAI</span>
+          <pre id="pane-curl" role="tabpanel" aria-labelledby="tab-curl" data-pane-content="curl"><code><span class="c"># start the gateway</span>
 agentfm -mode api -apiport 8080
 
-curl http://127.0.0.1:8080/v1/chat/completions \
+<span class="c"># list agents on the mesh and copy the peer id you want</span>
+curl http://127.0.0.1:8080/api/workers
+
+<span class="c"># dispatch to that agent by peer id — stdout streams straight back</span>
+curl -N http://127.0.0.1:8080/api/execute \
   -H <span class="s">'Content-Type: application/json'</span> \
-  -d <span class="s">'{"model":"llama3.2","messages":[{"role":"user","content":"Draft a sick-leave email"}]}'</span></code></pre>
+  -d <span class="s">'{"worker_id":"12D3KooWQ9BD…8qQrh","prompt":"Draft a sick-leave email"}'</span></code></pre>
           <pre id="pane-python" role="tabpanel" aria-labelledby="tab-python" data-pane-content="python" hidden><code><span class="c"># pip install agentfm-sdk</span>
 <span class="k">from</span> agentfm <span class="k">import</span> AgentFMClient
 
@@ -218,9 +336,20 @@ curl http://127.0.0.1:8080/v1/chat/completions \
           <pre id="pane-worker" role="tabpanel" aria-labelledby="tab-worker" data-pane-content="worker" hidden><code><span class="c"># share your idle machine with the mesh</span>
 curl -fsSL https://api.agentfm.net/install.sh | bash
 
-agentfm -mode worker -agentdir ./my-agent \
-  -image ghcr.io/you/myagent:v1 \
-  -agent <span class="s">"My Agent"</span> -model llama3.2 -maxtasks 4</code></pre>
+<span class="c"># -agentdir   folder with your agent's Dockerfile / Containerfile</span>
+<span class="c"># -image      container image the tasks run in</span>
+<span class="c"># -agent      display name shown on the mesh radar</span>
+<span class="c"># -desc       what your agent does, shown to dispatchers</span>
+<span class="c"># -capability kebab-case tag the trust gate matches on</span>
+<span class="c"># -model      model your agent advertises for routing</span>
+<span class="c"># -author     attribution on your agent's profile</span>
+<span class="c"># -maxtasks   queue slots before the node reports BUSY</span>
+<span class="c"># -maxcpu/-maxgpu   load % circuit breakers</span>
+agentfm -mode worker \
+  -agentdir ./my-agent -image ghcr.io/you/myagent:v1 \
+  -agent <span class="s">"HR Bot"</span> -desc <span class="s">"Reviews contracts and drafts HR comms"</span> \
+  -capability legal-review -model llama3.2 -author <span class="s">"you"</span> \
+  -maxtasks 4 -maxcpu 60 -maxgpu 70</code></pre>
         </div>
       </div>
 
@@ -240,7 +369,8 @@ agentfm -mode worker -agentdir ./my-agent \
       <div class="cta reveal">
         <h2>Your hardware already wants the job.</h2>
         <div class="btn-row">
-          <a class="btn btn-amber btn-lg" href="https://github.com/Agent-FM/agentfm-core/releases">Download</a>
+          <a class="btn btn-amber btn-lg" href="https://github.com/Agent-FM/agentfm-core/releases/download/AgentFMV1.3.0/AgentFM-0.1.0-arm64.dmg">Download for macOS &middot; M-series</a>
+          <a class="btn btn-amber btn-lg" href="https://github.com/Agent-FM/agentfm-core/releases/download/AgentFMV1.3.0/AgentFM-0.1.0.dmg">Download for macOS &middot; Intel</a>
           <a class="btn btn-ghost btn-lg" href="https://github.com/Agent-FM/agentfm-core">View source</a>
         </div>
       </div>
