@@ -231,6 +231,48 @@ h2 {
 }
 .skip-link:focus { left: 0; }
 
+/* ------------------------------------------- scrollytelling (dispatch) */
+/* Pinned, scroll-scrubbed storyboard. Without JS/GSAP it collapses to a
+   normal readable section (no pin, all steps visible). */
+.scrolly { position: relative; }
+.scrolly-inner { min-height: 100dvh; display: flex; align-items: center; padding: 80px 0; }
+.scrolly-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 64px;
+  align-items: center;
+}
+.scrolly-viz { display: flex; justify-content: center; }
+.pipe { width: 200px; height: auto; max-height: 62vh; overflow: visible; }
+.pipe-rail { stroke: var(--line-strong); stroke-width: 2; }
+.pipe-fill { stroke-width: 2.5; stroke-linecap: round; }
+.stop-dot { fill: var(--bg-2); stroke: var(--line-strong); stroke-width: 2; transition: stroke .3s ease, fill .3s ease; }
+.stop-core { fill: var(--text-2); transition: fill .3s ease; }
+.stop.active .stop-dot { stroke: var(--amber); fill: var(--amber-soft); }
+.stop.active .stop-core { fill: var(--amber); }
+.packet { fill: var(--amber); filter: drop-shadow(0 0 6px rgba(240,161,46,0.8)); }
+
+.scrolly-steps .kicker { margin-bottom: 14px; display: block; }
+.steps { list-style: none; margin-top: 30px; display: grid; gap: 6px; }
+.step {
+  padding: 16px 20px;
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  transition: border-color .35s ease, background .35s ease, color .35s ease;
+}
+/* Inactive steps stay fully readable (AA); active state is signalled by the
+   amber border + tint + brighter text, not by dimming below contrast. */
+.step b { display: block; font-size: 17px; letter-spacing: -0.01em; margin-bottom: 3px; color: var(--text-1); transition: color .35s ease; }
+.step span { color: var(--text-2); font-size: 14.5px; transition: color .35s ease; }
+html.js .step.active {
+  border-color: var(--amber-line);
+  background: linear-gradient(90deg, var(--amber-soft), transparent 70%);
+}
+html.js .step.active b { color: var(--text-0); }
+html.js .step.active span { color: var(--text-1); }
+.packet { will-change: transform; }
+
 /* ------------------------------------------------------------ showcase */
 .showcase-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
 .frame {
@@ -376,6 +418,7 @@ html.js .reveal.in {
 @media (prefers-reduced-motion: reduce) {
   html.js .reveal { opacity: 1; transform: none; }
   html.js .ledger .row { opacity: 1; transform: none; }
+  .packet { display: none; }
 }
 
 /* -------------------------------------------------------------- mobile */
@@ -397,6 +440,9 @@ html.js .reveal.in {
   .section { padding: 76px 0; }
   .hero .wrap { padding-bottom: 9vh; }
   .hero h1 .accent { white-space: nowrap; }
+  .scrolly-grid { grid-template-columns: 1fr; gap: 32px; }
+  .scrolly-viz { display: none; }
+  .scrolly-inner { min-height: 0; }
 }
 @media (max-width: 480px) {
   .gh-pill { display: none; }

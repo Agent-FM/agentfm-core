@@ -1,32 +1,39 @@
 // AgentFM landing — reveals, tabs, copy buttons, live GitHub stars.
 (function () {
-  // Scroll reveals via IntersectionObserver (no scroll listeners).
-  const io = new IntersectionObserver(
-    (entries) => {
-      for (const e of entries) {
-        if (e.isIntersecting) {
-          e.target.classList.add('in');
-          io.unobserve(e.target);
-        }
-      }
-    },
-    { threshold: 0.18, rootMargin: '0px 0px -40px 0px' }
-  );
-  document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+  // When GSAP + ScrollTrigger are present and motion is allowed, scroll.js
+  // owns the reveals and ledger animation (scroll-scrubbed). Fall back to
+  // these IntersectionObservers otherwise, so content always appears.
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const gsapDrivesReveals = !!(window.gsap && window.ScrollTrigger) && !reduce;
 
-  // Ledger rows type in one by one when visible.
-  const ledger = document.getElementById('ledger');
-  if (ledger) {
-    const rows = ledger.querySelectorAll('.row');
-    const lio = new IntersectionObserver(
+  if (!gsapDrivesReveals) {
+    const io = new IntersectionObserver(
       (entries) => {
-        if (!entries[0].isIntersecting) return;
-        rows.forEach((r, i) => setTimeout(() => r.classList.add('on'), 220 * i));
-        lio.disconnect();
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            e.target.classList.add('in');
+            io.unobserve(e.target);
+          }
+        }
       },
-      { threshold: 0.4 }
+      { threshold: 0.18, rootMargin: '0px 0px -40px 0px' }
     );
-    lio.observe(ledger);
+    document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+
+    // Ledger rows type in one by one when visible.
+    const ledger = document.getElementById('ledger');
+    if (ledger) {
+      const rows = ledger.querySelectorAll('.row');
+      const lio = new IntersectionObserver(
+        (entries) => {
+          if (!entries[0].isIntersecting) return;
+          rows.forEach((r, i) => setTimeout(() => r.classList.add('on'), 220 * i));
+          lio.disconnect();
+        },
+        { threshold: 0.4 }
+      );
+      lio.observe(ledger);
+    }
   }
 
   // Quickstart tabs — full ARIA tabs pattern with roving tabindex + arrows.

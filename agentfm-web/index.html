@@ -65,19 +65,19 @@
       <p class="lede reveal">Every node runs the same <code>agentfm</code> binary. A flag picks the role, libp2p does the rest.</p>
 
       <div class="flow">
-        <div class="lane reveal">
+        <div class="lane">
           <svg class="lane-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
           <span class="mono-tag">-mode worker</span>
           <h3>Workers run your agent</h3>
           <p>Each task executes in a fresh Podman sandbox. Workers broadcast live CPU, GPU, RAM and queue depth every two seconds.</p>
         </div>
-        <div class="lane reveal">
+        <div class="lane">
           <svg class="lane-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
           <span class="mono-tag">-mode relay</span>
           <h3>The relay keeps everyone found</h3>
           <p>A lighthouse on a public IP handles discovery, punches through NAT, and archives the trust ledger so history survives restarts.</p>
         </div>
-        <div class="lane reveal">
+        <div class="lane">
           <svg class="lane-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4Z"/></svg>
           <span class="mono-tag">-mode api</span>
           <h3>You dispatch from anywhere</h3>
@@ -85,6 +85,42 @@
         </div>
       </div>
 
+    </div>
+  </section>
+
+  <section class="scrolly divide" id="dispatch" aria-label="Anatomy of a dispatch">
+    <div class="scrolly-inner">
+      <div class="wrap scrolly-grid">
+        <div class="scrolly-viz" aria-hidden="true">
+          <svg viewBox="0 0 240 520" class="pipe" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <linearGradient id="conduit" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#f0a12e" stop-opacity="0.9" />
+                <stop offset="1" stop-color="#f0a12e" stop-opacity="0.25" />
+              </linearGradient>
+            </defs>
+            <line class="pipe-rail" x1="40" y1="40" x2="40" y2="480" />
+            <line class="pipe-fill" x1="40" y1="40" x2="40" y2="40" stroke="url(#conduit)" />
+            <g class="stop" data-stop="0" transform="translate(40 40)"><circle class="stop-dot" r="12" /><circle class="stop-core" r="4" /></g>
+            <g class="stop" data-stop="1" transform="translate(40 150)"><circle class="stop-dot" r="12" /><circle class="stop-core" r="4" /></g>
+            <g class="stop" data-stop="2" transform="translate(40 260)"><circle class="stop-dot" r="12" /><circle class="stop-core" r="4" /></g>
+            <g class="stop" data-stop="3" transform="translate(40 370)"><circle class="stop-dot" r="12" /><circle class="stop-core" r="4" /></g>
+            <g class="stop" data-stop="4" transform="translate(40 480)"><circle class="stop-dot" r="12" /><circle class="stop-core" r="4" /></g>
+            <circle class="packet" cx="40" cy="40" r="5" />
+          </svg>
+        </div>
+        <div class="scrolly-steps">
+          <p class="kicker">Anatomy of a dispatch</p>
+          <h2>What happens when you hit send.</h2>
+          <ol class="steps">
+            <li class="step" data-step="0"><b>Dispatch</b><span>Your task routes to the least-loaded worker that advertises the right model. The trust gate checks its reputation first.</span></li>
+            <li class="step" data-step="1"><b>Sandbox</b><span>The worker spins up a fresh Podman container and runs your agent inside it. Nothing touches the host.</span></li>
+            <li class="step" data-step="2"><b>Stream</b><span>Standard output streams back to you live, token by token, over the direct libp2p task channel.</span></li>
+            <li class="step" data-step="3"><b>Artifact</b><span>Any files the agent writes come back as a zip, dropped into your artifacts folder by task id.</span></li>
+            <li class="step" data-step="4"><b>Verify</b><span>You rate the result. The score is Ed25519-signed and appended to a tamper-evident Merkle log.</span></li>
+          </ol>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -225,7 +261,10 @@ agentfm -mode worker -agentdir ./my-agent \
     </div>
   </footer>
 
+  <script src="js/vendor/gsap.min.js" defer></script>
+  <script src="js/vendor/ScrollTrigger.min.js" defer></script>
   <script src="js/mesh.js" defer></script>
   <script src="js/main.js" defer></script>
+  <script src="js/scroll.js" defer></script>
 </body>
 </html>
