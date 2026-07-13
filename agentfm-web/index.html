@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <title>AgentFM: run AI agents on a peer-to-peer mesh of idle machines</title>
+  <meta name="description" content="Package an agent as a container, drop it on the mesh, and dispatch tasks from a desktop app or any OpenAI SDK. No cloud account. Nothing leaves machines you choose." />
+  <meta property="og:title" content="AgentFM" />
+  <meta property="og:description" content="Run AI agents on a peer-to-peer mesh of idle machines. Ollama, but distributed." />
+  <meta property="og:url" content="https://agentfm.net/" />
+  <meta property="og:image" content="https://agentfm.net/assets/img/shot-radar.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/png" href="assets/img/logo.png" />
+  <link rel="preload" href="assets/fonts/space-grotesk-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="assets/fonts/space-grotesk-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="css/style.css" />
+  <script>document.documentElement.classList.add('js')</script>
+</head>
+<body>
+  <a class="skip-link" href="#how">Skip to content</a>
+  <div class="grid-bg" aria-hidden="true"></div>
+
+  <nav class="nav">
+    <div class="wrap">
+      <a class="brand" href="#top" aria-label="AgentFM home">
+        <img src="assets/img/logo.png" alt="AgentFM" width="120" height="26" />
+      </a>
+      <div class="nav-links">
+        <a href="#desktop">Desktop</a>
+        <a href="#how">How it works</a>
+        <a href="#trust">Trust</a>
+        <a href="https://github.com/Agent-FM/agentfm-core/tree/main/docs">Docs</a>
+      </div>
+      <div class="nav-cta">
+        <a class="gh-pill" href="https://github.com/Agent-FM/agentfm-core" aria-label="AgentFM on GitHub">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          <span id="gh-stars">Star</span>
+        </a>
+        <a class="btn btn-amber" href="https://github.com/Agent-FM/agentfm-core/releases">Download</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero" id="top">
+    <canvas id="mesh" aria-hidden="true"></canvas>
+    <div class="wrap">
+      <div class="hero-copy">
+        <h1>Idle machines,<br />working as <span class="accent">one mesh</span>.</h1>
+        <p>Package an agent as a container, drop it on the mesh, and dispatch tasks from a desktop app or any OpenAI SDK.</p>
+        <div class="hero-actions">
+          <a class="btn btn-amber btn-lg" href="https://github.com/Agent-FM/agentfm-core/releases">Download</a>
+          <a class="btn btn-ghost btn-lg" href="#how">See how it works</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+  <section class="section divide" id="how">
+    <div class="wrap">
+      <p class="kicker reveal">How it works</p>
+      <h2 class="reveal">Three roles. One binary.</h2>
+      <p class="lede reveal">Every node runs the same <code>agentfm</code> binary. A flag picks the role, libp2p does the rest.</p>
+
+      <div class="flow">
+        <div class="lane">
+          <svg class="lane-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+          <span class="mono-tag">-mode worker</span>
+          <h3>Workers run your agent</h3>
+          <p>Each task executes in a fresh Podman sandbox. Workers broadcast live CPU, GPU, RAM and queue depth every two seconds.</p>
+        </div>
+        <div class="lane">
+          <svg class="lane-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+          <span class="mono-tag">-mode relay</span>
+          <h3>The relay keeps everyone found</h3>
+          <p>A lighthouse on a public IP handles discovery, punches through NAT, and archives the trust ledger so history survives restarts.</p>
+        </div>
+        <div class="lane">
+          <svg class="lane-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4Z"/></svg>
+          <span class="mono-tag">-mode api</span>
+          <h3>You dispatch from anywhere</h3>
+          <p>The desktop app, a curl one-liner, or any OpenAI SDK. Output streams back live and files return as zipped artifacts.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="scrolly divide" id="dispatch" aria-label="Anatomy of a dispatch">
+    <div class="scrolly-inner">
+      <div class="wrap scrolly-grid">
+        <div class="scrolly-viz" aria-hidden="true">
+          <svg viewBox="0 0 240 520" class="pipe" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <linearGradient id="conduit" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#f0a12e" stop-opacity="0.9" />
+                <stop offset="1" stop-color="#f0a12e" stop-opacity="0.25" />
+              </linearGradient>
+            </defs>
+            <line class="pipe-rail" x1="40" y1="40" x2="40" y2="480" />
+            <line class="pipe-fill" x1="40" y1="40" x2="40" y2="40" stroke="url(#conduit)" />
+            <g class="stop" data-stop="0" transform="translate(40 40)"><circle class="stop-dot" r="12" /><circle class="stop-core" r="4" /></g>
+            <g class="stop" data-stop="1" transform="translate(40 150)"><circle class="stop-dot" r="12" /><circle class="stop-core" r="4" /></g>
+            <g class="stop" data-stop="2" transform="translate(40 260)"><circle class="stop-dot" r="12" /><circle class="stop-core" r="4" /></g>
+            <g class="stop" data-stop="3" transform="translate(40 370)"><circle class="stop-dot" r="12" /><circle class="stop-core" r="4" /></g>
+            <g class="stop" data-stop="4" transform="translate(40 480)"><circle class="stop-dot" r="12" /><circle class="stop-core" r="4" /></g>
+            <circle class="packet" cx="40" cy="40" r="5" />
+          </svg>
+        </div>
+        <div class="scrolly-steps">
+          <p class="kicker">Anatomy of a dispatch</p>
+          <h2>What happens when you hit send.</h2>
+          <ol class="steps">
+            <li class="step" data-step="0"><b>Dispatch</b><span>Your task routes to the least-loaded worker that advertises the right model. The trust gate checks its reputation first.</span></li>
+            <li class="step" data-step="1"><b>Sandbox</b><span>The worker spins up a fresh Podman container and runs your agent inside it. Nothing touches the host.</span></li>
+            <li class="step" data-step="2"><b>Stream</b><span>Standard output streams back to you live, token by token, over the direct libp2p task channel.</span></li>
+            <li class="step" data-step="3"><b>Artifact</b><span>Any files the agent writes come back as a zip, dropped into your artifacts folder by task id.</span></li>
+            <li class="step" data-step="4"><b>Verify</b><span>You rate the result. The score is Ed25519-signed and appended to a tamper-evident Merkle log.</span></li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section divide" id="desktop">
+    <div class="wrap">
+      <div class="showcase-head">
+        <div>
+          <h2 class="reveal">A calm console for your mesh.</h2>
+          <p class="lede reveal">The desktop app bundles a full node. Install it and you can see every agent, dispatch work, and rate results without touching a terminal.</p>
+        </div>
+        <a class="btn btn-ghost reveal" href="https://github.com/Agent-FM/agentfm-core/blob/main/docs/DESKTOP.md">Read the tour</a>
+      </div>
+
+      <figure class="frame reveal">
+        <img src="assets/img/shot-radar.png" alt="AgentFM desktop Mesh Radar showing two live agents with hardware telemetry and honesty ratings" loading="lazy" width="1200" height="800" />
+      </figure>
+
+      <div class="shot-row">
+        <figure class="shot reveal">
+          <a href="assets/img/shot-dispatch.png"><img src="assets/img/shot-dispatch.png" alt="Dispatch drawer streaming live agent output with a trust badge" loading="lazy" width="1200" height="800" /></a>
+          <figcaption><b>Dispatch</b> streams output live, with a trust badge on every agent.</figcaption>
+        </figure>
+        <figure class="shot reveal">
+          <a href="assets/img/shot-history.png"><img src="assets/img/shot-history.png" alt="Agent profile with signed ratings, comments and live telemetry" loading="lazy" width="1200" height="800" /></a>
+          <figcaption><b>History</b> shows signed ratings and comments, backed by a Merkle log.</figcaption>
+        </figure>
+        <figure class="shot reveal">
+          <a href="assets/img/shot-assets.png"><img src="assets/img/shot-assets.png" alt="Artifacts browser listing files produced by agents across projects" loading="lazy" width="1200" height="800" /></a>
+          <figcaption><b>Artifacts</b> collects every file your agents produce, by project.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="section divide" id="trust">
+    <div class="wrap trust">
+      <div>
+        <h2 class="reveal">Strangers you can check the math on.</h2>
+        <p class="lede reveal">An open mesh needs more than vibes. Every rating is a signed receipt, and anyone can verify the chain.</p>
+        <div class="trust-points">
+          <div class="trust-point reveal">
+            <h3>Signatures bound to identity</h3>
+            <p>The verifying key is derived from the rater's peer id. You cannot forge another peer's rating or edit one after the fact.</p>
+          </div>
+          <div class="trust-point reveal">
+            <h3>Append-only Merkle log</h3>
+            <p>Ratings and comments land on a per-peer log with RFC 6962 inclusion proofs. Tampering breaks the root.</p>
+          </div>
+          <div class="trust-point reveal">
+            <h3>Reputation that gates dispatch</h3>
+            <p>EigenTrust weighs every rater by their own standing. Equivocators get caught by witnesses and refused work, mesh-wide.</p>
+          </div>
+        </div>
+      </div>
+      <div class="ledger reveal" id="ledger" role="img" aria-label="Example of signed ledger entries: ratings and comments, each with a verified signature, anchored to a Merkle root">
+        <div class="row"><span class="h">entry 14</span><span class="score">rating +0.80 honesty</span><span class="sig">sig ok</span></div>
+        <div class="row"><span class="h">entry 15</span><span class="cmt">comment "clean, well-cited summary"</span><span class="sig">sig ok</span></div>
+        <div class="row"><span class="h">entry 16</span><span class="score">rating +0.67 honesty</span><span class="sig">sig ok</span></div>
+        <div class="row"><span class="h">entry 17</span><span class="cmt">comment "handled the contract review"</span><span class="sig">sig ok</span></div>
+        <div class="row"><span class="h">entry 18</span><span class="score">rating -0.30 honesty</span><span class="sig">sig ok</span></div>
+        <div class="row"><span class="h">entry 19</span><span class="score">rating +0.55 honesty</span><span class="sig">sig ok</span></div>
+        <div class="row"><span class="h">entry 20</span><span class="cmt">comment "fast artifact turnaround"</span><span class="sig">sig ok</span></div>
+        <div class="row root"><span>merkle root 3bced30e…76da</span><span class="sig">verified</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section divide" id="quickstart">
+    <div class="wrap qs">
+      <h2 class="reveal">Speak OpenAI to your own hardware.</h2>
+      <p class="lede reveal">Point any OpenAI client at the gateway and the mesh answers. Nothing leaves machines you chose.</p>
+
+      <div class="reveal">
+        <div class="tabs" role="tablist" aria-label="Quickstart examples">
+          <button class="tab" role="tab" id="tab-curl" aria-controls="pane-curl" aria-selected="true" data-pane="curl">curl</button>
+          <button class="tab" role="tab" id="tab-python" aria-controls="pane-python" aria-selected="false" tabindex="-1" data-pane="python">python</button>
+          <button class="tab" role="tab" id="tab-worker" aria-controls="pane-worker" aria-selected="false" tabindex="-1" data-pane="worker">run a worker</button>
+        </div>
+        <div class="codebox">
+          <button class="copy-btn" data-copy aria-live="polite">copy</button>
+          <pre id="pane-curl" role="tabpanel" aria-labelledby="tab-curl" data-pane-content="curl"><code><span class="c"># start the gateway, then talk to it like it's OpenAI</span>
+agentfm -mode api -apiport 8080
+
+curl http://127.0.0.1:8080/v1/chat/completions \
+  -H <span class="s">'Content-Type: application/json'</span> \
+  -d <span class="s">'{"model":"llama3.2","messages":[{"role":"user","content":"Draft a sick-leave email"}]}'</span></code></pre>
+          <pre id="pane-python" role="tabpanel" aria-labelledby="tab-python" data-pane-content="python" hidden><code><span class="c"># pip install agentfm-sdk</span>
+<span class="k">from</span> agentfm <span class="k">import</span> AgentFMClient
+
+<span class="k">with</span> AgentFMClient(gateway_url=<span class="s">"http://127.0.0.1:8080"</span>) <span class="k">as</span> client:
+    workers = client.workers.list(available_only=<span class="k">True</span>)
+    result = client.tasks.run(worker_id=workers[0].peer_id,
+                              prompt=<span class="s">"Draft a leave policy."</span>)
+    <span class="k">print</span>(result.text, result.artifacts)</code></pre>
+          <pre id="pane-worker" role="tabpanel" aria-labelledby="tab-worker" data-pane-content="worker" hidden><code><span class="c"># share your idle machine with the mesh</span>
+curl -fsSL https://api.agentfm.net/install.sh | bash
+
+agentfm -mode worker -agentdir ./my-agent \
+  -image ghcr.io/you/myagent:v1 \
+  -agent <span class="s">"My Agent"</span> -model llama3.2 -maxtasks 4</code></pre>
+        </div>
+      </div>
+
+      <div class="modes reveal">
+        <div class="mode"><code>-mode worker</code><p>Run agents in a Podman sandbox and earn reputation.</p></div>
+        <div class="mode"><code>-mode api</code><p>Headless HTTP and OpenAI gateway. The desktop app bundles this.</p></div>
+        <div class="mode"><code>-mode boss</code><p>Interactive terminal dispatcher for mesh operators.</p></div>
+        <div class="mode"><code>-mode relay</code><p>Lighthouse with DHT, NAT relay and the archive ledger.</p></div>
+        <div class="mode"><code>-mode witness</code><p>Ledger replica that catches double-signing peers.</p></div>
+        <div class="mode"><code>-mode genkey</code><p>Mint a swarm key for a fully private mesh.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-tight">
+    <div class="wrap">
+      <div class="cta reveal">
+        <h2>Your hardware already wants the job.</h2>
+        <div class="btn-row">
+          <a class="btn btn-amber btn-lg" href="https://github.com/Agent-FM/agentfm-core/releases">Download</a>
+          <a class="btn btn-ghost btn-lg" href="https://github.com/Agent-FM/agentfm-core">View source</a>
+        </div>
+      </div>
+    </div>
+  </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div class="cols">
+        <a href="https://github.com/Agent-FM/agentfm-core/blob/main/docs/DESKTOP.md">Desktop guide</a>
+        <a href="https://github.com/Agent-FM/agentfm-core/blob/main/docs/http-api.md">HTTP API</a>
+        <a href="https://github.com/Agent-FM/agentfm-core/blob/main/docs/trust.md">Trust model</a>
+        <a href="https://github.com/Agent-FM/agentfm-core/blob/main/docs/private-swarms.md">Private swarms</a>
+        <a href="https://github.com/Agent-FM/agentfm-core/blob/main/CONTRIBUTING.md">Contribute</a>
+      </div>
+      <p class="fine">Apache-2.0. Built with Go and libp2p.</p>
+    </div>
+  </footer>
+
+  <script src="js/vendor/gsap.min.js" defer></script>
+  <script src="js/vendor/ScrollTrigger.min.js" defer></script>
+  <script src="js/mesh.js" defer></script>
+  <script src="js/main.js" defer></script>
+  <script src="js/scroll.js" defer></script>
+</body>
+</html>
