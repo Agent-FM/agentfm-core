@@ -289,7 +289,7 @@ html.js .step.active span { color: var(--text-1); }
   background: var(--bg-2);
 }
 .frame-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line-strong); display: block; }
-.frame img { width: 100%; display: block; }
+.frame img { width: 100%; height: auto; display: block; }
 .shot-row { margin-top: 18px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
 .shot {
   border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden;
@@ -297,9 +297,31 @@ html.js .step.active span { color: var(--text-1); }
   transition: transform .25s cubic-bezier(0.16, 1, 0.3, 1), border-color .25s ease;
 }
 .shot:hover { transform: translateY(-4px); border-color: var(--amber-line); }
-.shot img { width: 100%; display: block; }
+.shot img { width: 100%; height: auto; display: block; }
+.shot a { display: block; cursor: zoom-in; }
 .shot figcaption { padding: 12px 16px; font-size: 13.5px; color: var(--text-1); border-top: 1px solid var(--line); }
 .shot b { color: var(--text-0); }
+.lightbox {
+  margin: auto; padding: 0;
+  border: 1px solid var(--line-strong); border-radius: var(--r-lg);
+  background: var(--bg-1);
+  max-width: min(1200px, 92vw);
+  cursor: zoom-out;
+}
+.lightbox img { display: block; max-width: 100%; max-height: 86vh; border-radius: inherit; }
+.lightbox::backdrop { background: rgba(10, 11, 14, 0.82); backdrop-filter: blur(6px); }
+.lightbox[open] { animation: lightbox-in 0.22s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes lightbox-in { from { opacity: 0; transform: scale(0.97); } }
+@media (prefers-reduced-motion: reduce) { .lightbox[open] { animation: none; } }
+.lightbox-close {
+  position: absolute; top: 10px; right: 10px;
+  width: 34px; height: 34px; display: grid; place-items: center;
+  border: 1px solid var(--line-strong); border-radius: 50%;
+  background: rgba(10, 11, 14, 0.7); color: var(--text-0);
+  font-family: inherit; font-size: 19px; line-height: 1; cursor: pointer;
+}
+.lightbox-close:hover { border-color: var(--amber-line); color: var(--amber); }
+body:has(.lightbox[open]) { overflow: hidden; }
 
 /* --------------------------------------------------------------- trust */
 .trust {

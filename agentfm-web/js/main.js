@@ -91,6 +91,27 @@
     });
   }
 
+  const shotLinks = Array.from(document.querySelectorAll('.shot a'));
+  if (shotLinks.length && typeof HTMLDialogElement === 'function') {
+    const box = document.createElement('dialog');
+    box.className = 'lightbox';
+    box.innerHTML = '<button class="lightbox-close" aria-label="Close image">&times;</button><img alt="" />';
+    document.body.appendChild(box);
+    const full = box.querySelector('img');
+    shotLinks.forEach((a) => {
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        const thumb = a.querySelector('img');
+        full.src = a.href;
+        full.alt = thumb ? thumb.alt : '';
+        box.setAttribute('aria-label', full.alt);
+        box.showModal();
+      });
+    });
+    box.addEventListener('click', () => box.close());
+    box.addEventListener('close', () => full.removeAttribute('src'));
+  }
+
   // Live GitHub stars with graceful fallback.
   fetch('https://api.github.com/repos/Agent-FM/agentfm-core')
     .then((r) => (r.ok ? r.json() : null))

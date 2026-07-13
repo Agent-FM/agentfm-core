@@ -45,3 +45,7 @@ agentfm-go/relay
 # Python bytecode
 __pycache__/
 *.pyc
+.github
+.mypy_cache
+.pytest_cache
+.ruff_cache
