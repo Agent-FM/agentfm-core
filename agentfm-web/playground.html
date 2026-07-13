@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <title>Playground — AgentFM</title>
+  <meta name="description" content="Talk to live agents on the AgentFM public mesh. Pick an agent, dispatch a task, watch it stream back, download the artifacts." />
+  <link rel="icon" type="image/png" href="assets/img/favicon.png" />
+  <link rel="apple-touch-icon" href="assets/img/favicon.png" />
+  <link rel="preload" href="assets/fonts/space-grotesk-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="assets/fonts/space-grotesk-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/playground.css" />
+  <script>document.documentElement.classList.add('js')</script>
+</head>
+<body>
+  <div class="grid-bg" aria-hidden="true"></div>
+
+  <nav class="nav">
+    <div class="wrap">
+      <a class="brand" href="index.html" aria-label="AgentFM home">
+        <img src="assets/img/logo.png" alt="AgentFM" width="120" height="26" />
+      </a>
+      <div class="nav-links">
+        <a href="index.html#desktop">Desktop</a>
+        <a href="index.html#how">How it works</a>
+        <a href="index.html#trust">Trust</a>
+        <a href="https://github.com/Agent-FM/agentfm-core/tree/main/docs">Docs</a>
+      </div>
+      <div class="nav-cta">
+        <a class="gh-pill" href="https://github.com/Agent-FM/agentfm-core" aria-label="AgentFM on GitHub">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          <span>Star</span>
+        </a>
+        <span class="pg-live mono" data-mesh-count hidden>&#9679; mesh online</span>
+      </div>
+    </div>
+  </nav>
+
+  <main class="pg-main">
+    <section class="pg-view pg-radar-view" id="view-radar" aria-label="Scanning the mesh">
+      <div class="radar" aria-hidden="true">
+        <div class="radar-ring r1"></div>
+        <div class="radar-ring r2"></div>
+        <div class="radar-ring r3"></div>
+        <div class="radar-cross"></div>
+        <div class="radar-sweep"></div>
+        <div class="radar-core"></div>
+        <div class="radar-blip" style="--a: 40deg; --r: 34%; --d: 0.20s"></div>
+        <div class="radar-blip" style="--a: 132deg; --r: 60%; --d: 0.85s"></div>
+        <div class="radar-blip" style="--a: 208deg; --r: 45%; --d: 1.40s"></div>
+        <div class="radar-blip" style="--a: 291deg; --r: 68%; --d: 1.95s"></div>
+        <div class="radar-blip" style="--a: 338deg; --r: 26%; --d: 2.30s"></div>
+      </div>
+      <div class="radar-log mono" id="radar-log" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="pg-view pg-agents-view wrap" id="view-agents" hidden>
+      <header class="pg-head">
+        <p class="kicker">Playground</p>
+        <h1>Pick an agent.</h1>
+        <p class="pg-sub">Live agents on the public mesh &mdash; telemetry refreshes every few seconds.
+          <span class="pg-live mono"><span class="pg-live-dot"></span><span id="agents-count">0 online</span></span>
+        </p>
+      </header>
+      <div class="agent-grid" id="agent-grid"></div>
+      <div class="pg-empty mono" id="agents-empty" hidden>
+        <p>&gt; no agents answering on the mesh right now</p>
+        <p class="pg-empty-hint">Run one yourself: <code>curl -fsSL https://api.agentfm.net/install.sh | bash</code></p>
+      </div>
+    </section>
+
+    <section class="pg-view pg-chat-view wrap" id="view-chat" hidden>
+      <div class="chat-shell">
+        <header class="chat-head">
+          <button class="chat-back mono" id="chat-back" type="button">&larr; agents</button>
+          <span class="ac-avatar" id="chat-avatar">A</span>
+          <div class="chat-id">
+            <h2 id="chat-name">Agent</h2>
+            <span class="mono" id="chat-cap">capability</span>
+          </div>
+          <div class="chat-tele mono" id="chat-tele"></div>
+        </header>
+        <div class="chat-log" id="chat-log" aria-live="polite"></div>
+        <form class="chat-form" id="chat-form">
+          <textarea id="chat-input" rows="1" placeholder="Describe a task for this agent&hellip;" aria-label="Task prompt"></textarea>
+          <button class="btn btn-amber" id="chat-send" type="submit">Send</button>
+        </form>
+        <p class="chat-note mono">each message runs in a fresh podman sandbox on this agent &middot; artifacts stream back as a zip</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/vendor/gsap.min.js" defer></script>
+  <script src="js/playground.js" defer></script>
+</body>
+</html>
