@@ -2,6 +2,20 @@
 
 .pg-main { position: relative; z-index: 1; min-height: calc(100dvh - 64px); }
 .pg-view[hidden] { display: none; }
+.pg-topbar { padding-top: 20px; }
+.pg-topbar[hidden] { display: none; }
+.pg-home {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-1);
+  text-decoration: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  padding: 6px 12px;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+.pg-home:hover { color: var(--amber); border-color: var(--amber-line); }
 
 .pg-live {
   display: inline-flex;
@@ -23,7 +37,7 @@
 
 /* ------------------------------------------------------------- radar */
 .pg-radar-view {
-  min-height: calc(100dvh - 64px);
+  min-height: calc(100dvh - 128px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -130,7 +144,7 @@
 }
 
 /* ------------------------------------------------------------- agents */
-.pg-agents-view { padding: 72px 24px 110px; }
+.pg-agents-view { padding: 44px 24px 110px; }
 .pg-head h1 {
   font-size: clamp(34px, 4.6vw, 54px);
   letter-spacing: -0.03em;
@@ -164,9 +178,10 @@
   cursor: pointer;
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease;
 }
-.agent-card:hover:not(:disabled) { transform: translateY(-4px); border-color: var(--amber-line); }
-.agent-card:disabled { cursor: not-allowed; opacity: 0.55; }
-.ac-head { display: flex; align-items: center; gap: 12px; }
+.agent-card:hover:not(.disabled) { transform: translateY(-4px); border-color: var(--amber-line); }
+.agent-card:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.agent-card.disabled { cursor: not-allowed; opacity: 0.55; }
+.ac-head { display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; }
 .ac-avatar {
   flex-shrink: 0;
   width: 40px; height: 40px;
@@ -178,12 +193,14 @@
   font-weight: 700;
   font-size: 17px;
 }
-.ac-id { min-width: 0; flex: 1; }
+.ac-id { min-width: 0; flex: 0 1 auto; max-width: 100%; }
 .ac-id h3 {
   font-size: 17.5px;
   letter-spacing: -0.01em;
   line-height: 1.25;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .ac-cap {
   font-family: var(--mono);
@@ -212,6 +229,24 @@
   line-height: 1.55;
   min-height: 44px;
 }
+.ac-desc.clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ac-more {
+  margin-top: 7px;
+  padding: 0;
+  background: none;
+  border: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--amber);
+  cursor: pointer;
+}
+.ac-more:hover { text-decoration: underline; text-underline-offset: 3px; }
 .ac-meters { margin-top: 16px; display: grid; gap: 9px; }
 .meter {
   display: grid;
@@ -437,8 +472,16 @@
 }
 
 @media (max-width: 640px) {
-  .agent-grid { grid-template-columns: 1fr; }
-  .chat-shell { height: calc(100dvh - 116px); }
+  .agent-grid { grid-template-columns: 1fr; gap: 14px; margin-top: 32px; }
+  .pg-agents-view { padding: 52px 16px 80px; }
+  .chat-shell { height: calc(100dvh - 108px); min-height: 420px; border-radius: var(--r-md); }
   .chat-tele { display: none; }
-  .pg-chat-view { padding: 18px 12px 24px; }
+  .pg-chat-view { padding: 14px 10px 20px; }
+  .chat-head { padding: 11px 13px; gap: 10px; }
+  .chat-log { padding: 16px 13px; }
+  .chat-rep { padding: 9px 13px; }
+  .chat-rep .rep-row { white-space: normal; overflow: visible; }
+  .chat-form { padding: 11px 12px; }
+  .msg-user { max-width: 90%; }
+  .radar-log { font-size: 11.5px; }
 }

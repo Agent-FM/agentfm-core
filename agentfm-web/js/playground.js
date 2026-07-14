@@ -31,6 +31,8 @@
 
   function show(name) {
     Object.entries(views).forEach(([k, el]) => { el.hidden = k !== name; });
+    const topbar = document.querySelector('.pg-topbar');
+    if (topbar) topbar.hidden = name === 'chat';
     if (name === 'agents' && window.gsap && !reduce) {
       gsap.fromTo('.agent-card', { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.6, stagger: 0.09, ease: 'power3.out', clearProps: 'all' });
     }
@@ -190,6 +192,8 @@
 
   function cardHTML(a) {
     const st = statusOf(a);
+    const desc = a.description || 'No description advertised.';
+    const needsMore = desc.length > 150;
     const gpu = a.has_gpu
       ? '<div class="meter m-gpu gpu"><span>gpu</span><div class="bar"><i style="width:' + pct(a.gpu_usage_pct) + '%"></i></div><b>' + pct(a.gpu_usage_pct) + '%</b></div>'
       : '<div class="meter m-gpu gpu"><span>gpu</span><span class="none">—</span><b class="none">none</b></div>';
@@ -201,7 +205,8 @@
         '<span class="ac-cap">' + esc(a.agent_capability || 'general') + '</span>' +
         '<span class="ac-status ' + st.key + '">' + st.label + '</span>' +
       '</div>' +
-      '<p class="ac-desc">' + esc(a.description || 'No description advertised.') + '</p>' +
+      '<p class="ac-desc' + (needsMore ? ' clamped' : '') + '">' + esc(desc) + '</p>' +
+      (needsMore ? '<button type="button" class="ac-more">see more</button>' : '') +
       '<div class="ac-meters">' +
         '<div class="meter m-cpu"><span>cpu</span><div class="bar"><i style="width:' + pct(a.cpu_usage_pct) + '%"></i></div><b>' + pct(a.cpu_usage_pct) + '%</b></div>' +
         gpu +
@@ -226,14 +231,32 @@
       let card;
       try {
         const st = statusOf(a);
-        card = document.createElement('button');
-        card.type = 'button';
-        card.className = 'agent-card';
-        card.disabled = st.disabled;
+        card = document.createElement('div');
+        card.className = 'agent-card' + (st.disabled ? ' disabled' : '');
+        card.setAttribute('role', 'button');
+        card.tabIndex = st.disabled ? -1 : 0;
+        if (st.disabled) card.setAttribute('aria-disabled', 'true');
         card.dataset.peer = a.peer_id;
         card.dataset.gpu = a.has_gpu ? '1' : '0';
         card.innerHTML = cardHTML(a);
-        card.addEventListener('click', () => openChat(a.peer_id));
+        const open = () => { if (!card.classList.contains('disabled')) openChat(a.peer_id); };
+        card.addEventListener('click', (e) => {
+          if (e.target.closest('.ac-more')) return;
+          open();
+        });
+        card.addEventListener('keydown', (e) => {
+          if (e.target.closest('.ac-more')) return;
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+        });
+        const more = card.querySelector('.ac-more');
+        if (more) {
+          more.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const d = card.querySelector('.ac-desc');
+            const nowClamped = d.classList.toggle('clamped');
+            more.textContent = nowClamped ? 'see more' : 'see less';
+          });
+        }
         grid.appendChild(card);
       } catch (e) {
         if (card) card.remove();
@@ -252,7 +275,10 @@
     online.forEach((a) => {
       const card = grid.querySelector('[data-peer="' + CSS.escape(a.peer_id) + '"]');
       const st = statusOf(a);
-      card.disabled = st.disabled;
+      card.classList.toggle('disabled', st.disabled);
+      card.tabIndex = st.disabled ? -1 : 0;
+      if (st.disabled) card.setAttribute('aria-disabled', 'true');
+      else card.removeAttribute('aria-disabled');
       const cpuBar = card.querySelector('.m-cpu .bar i');
       const cpuNum = card.querySelector('.m-cpu b');
       if (cpuBar) cpuBar.style.width = pct(a.cpu_usage_pct) + '%';
