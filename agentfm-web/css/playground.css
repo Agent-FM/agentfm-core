@@ -55,7 +55,21 @@
   position: absolute; inset: 0;
   border-radius: 50%;
   background: conic-gradient(from 0deg, rgba(240, 161, 46, 0.4), rgba(240, 161, 46, 0.05) 70deg, transparent 90deg);
-  animation: radar-spin 2.4s linear infinite;
+  animation: radar-spin 3.2s linear infinite;
+}
+.radar-pulse {
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(240, 161, 46, 0.55);
+  transform: scale(0.05);
+  opacity: 0;
+  animation: radar-pulse 4s ease-out infinite;
+}
+.radar-pulse.p2 { animation-delay: 2s; }
+@keyframes radar-pulse {
+  0% { transform: scale(0.05); opacity: 0.85; }
+  70% { opacity: 0; }
+  100% { transform: scale(1); opacity: 0; }
 }
 @keyframes radar-spin { to { transform: rotate(360deg); } }
 .radar-core {
@@ -111,6 +125,7 @@
 @media (prefers-reduced-motion: reduce) {
   .radar-sweep { animation: none; opacity: 0.4; }
   .radar-blip, .radar-blip::after { animation: none; opacity: 0.8; }
+  .radar-pulse { animation: none; }
   .pg-live-dot { animation: none; }
 }
 
@@ -167,9 +182,8 @@
 .ac-id h3 {
   font-size: 17.5px;
   letter-spacing: -0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 .ac-cap {
   font-family: var(--mono);
@@ -294,6 +308,28 @@
 }
 .chat-tele .ok { color: var(--ok); }
 .chat-tele .full { color: #e5645a; }
+
+.chat-rep {
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-1);
+  font-size: 11px;
+  line-height: 1.95;
+  color: var(--text-2);
+}
+.chat-rep[hidden] { display: none; }
+.chat-rep .rep-head { color: var(--text-1); letter-spacing: 0.07em; display: block; }
+.chat-rep .rep-row {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-rep .rep-score { color: var(--ok); }
+.chat-rep .rep-score.neg { color: #e5645a; }
+.chat-rep .rep-quote { color: var(--text-1); }
+.chat-rep .rep-note a { color: var(--amber); }
+.chat-rep .rep-note a:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 .chat-log {
   flex: 1;

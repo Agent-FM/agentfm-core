@@ -58,7 +58,7 @@
         i += 1 + (Math.random() * 2 | 0);
         ln.textContent = text.slice(0, i);
         ln.appendChild(cursor);
-        if (i < text.length) setTimeout(tick, 14);
+        if (i < text.length) setTimeout(tick, 22);
         else { cursor.remove(); done(); }
       };
       tick();
@@ -97,16 +97,69 @@
       return;
     }
     const online = list.filter((a) => a.online);
-    const wait = Math.max(0, (reduce ? 300 : 2400) - (performance.now() - t0));
+    if (!reduce) await new Promise((r) => setTimeout(r, 700));
+    for (const a of online.slice(0, 4)) {
+      await typeLine('> found ' + (a.name || 'agent').toLowerCase() + ' · ' + String(a.peer_id).slice(0, 10) + '… · ' + (a.agent_capability || 'general'));
+      markOk('');
+      if (!reduce) await new Promise((r) => setTimeout(r, 240));
+    }
+    const wait = Math.max(0, (reduce ? 300 : 4600) - (performance.now() - t0));
     await new Promise((r) => setTimeout(r, wait));
     await typeLine('> ' + online.length + ' agent' + (online.length === 1 ? '' : 's') + ' answering');
     markOk('signal locked');
-    await new Promise((r) => setTimeout(r, reduce ? 150 : 650));
+    await new Promise((r) => setTimeout(r, reduce ? 150 : 700));
     agents = list;
     renderAgents();
+    if (window.gsap && !reduce) {
+      await new Promise((done) => {
+        gsap.timeline({ onComplete: done })
+          .to('.radar', { scale: 0.86, autoAlpha: 0, duration: 0.65, ease: 'power2.in' }, 0)
+          .to('.radar-log', { autoAlpha: 0, y: 14, duration: 0.5, ease: 'power2.in' }, 0.1);
+      });
+      gsap.set(['.radar', '.radar-log'], { clearProps: 'all' });
+    }
     show('agents');
     schedulePoll();
     setBadge(online.length + ' on mesh', false);
+  }
+
+  const repCache = new Map();
+  function loadRep(peer) {
+    if (repCache.has(peer)) return repCache.get(peer);
+    const p = (async () => {
+      const rep = await (await fetch(API + '/rep/' + encodeURIComponent(peer))).json();
+      let entries = [];
+      try {
+        const log = await (await fetch(API + '/replog/' + encodeURIComponent(peer))).json();
+        entries = (log.entries || []).slice(0, 12);
+        const comments = entries.filter((e) => e.kind === 'Comment' && e.text_cid).slice(0, 3);
+        await Promise.all(comments.map(async (c) => {
+          try {
+            const body = await (await fetch(API + '/comment/' + encodeURIComponent(peer) + '/' + encodeURIComponent(c.text_cid))).json();
+            c.body = body.body;
+          } catch (e) {}
+        }));
+      } catch (e) {}
+      return { count: num(rep.rating_count), weighted: num(rep.scores && rep.scores.honesty), entries };
+    })();
+    repCache.set(peer, p);
+    p.catch(() => repCache.delete(peer));
+    return p;
+  }
+
+  function hydrateRepChip(peer) {
+    loadRep(peer).then((r) => {
+      const chip = grid.querySelector('[data-peer="' + CSS.escape(peer) + '"] .chip-rep');
+      if (chip) chip.textContent = '★ ' + r.count + ' rating' + (r.count === 1 ? '' : 's');
+    }).catch(() => {});
+  }
+
+  function timeAgo(iso) {
+    const s = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (!Number.isFinite(s) || s < 0) return '';
+    if (s < 3600) return Math.max(1, Math.round(s / 60)) + 'm ago';
+    if (s < 86400) return Math.round(s / 3600) + 'h ago';
+    return Math.round(s / 86400) + 'd ago';
   }
 
   function setBadge(text, stale) {
@@ -135,11 +188,6 @@
     return m || null;
   }
 
-  function trustChip(a) {
-    const s = num(a.honesty_score);
-    return 'trust ' + (s >= 0 ? '+' : '') + s.toFixed(2);
-  }
-
   function cardHTML(a) {
     const st = statusOf(a);
     const gpu = a.has_gpu
@@ -161,7 +209,7 @@
       '</div>' +
       '<div class="ac-foot">' +
         '<span class="ac-chip chip-tasks' + (num(a.current_tasks) >= num(a.max_tasks) ? ' warn' : '') + '">tasks ' + num(a.current_tasks) + '/' + num(a.max_tasks) + '</span>' +
-        '<span class="ac-chip">' + esc(trustChip(a)) + '</span>' +
+        '<span class="ac-chip chip-rep">★ …</span>' +
         (model ? '<span class="ac-chip">' + esc(model) + '</span>' : '') +
         '<span class="ac-chip">' + esc(hardwareChip(a)) + '</span>' +
         '<span class="ac-open">' + (st.disabled ? 'unavailable' : 'chat →') + '</span>' +
@@ -191,6 +239,7 @@
         if (card) card.remove();
       }
     });
+    online.forEach((a) => hydrateRepChip(a.peer_id));
   }
 
   function updateCards() {
@@ -269,10 +318,56 @@
     if (!transcripts.has(peerId)) {
       meta('connected to ' + (a.name || 'agent') + ' · ' + peerId.slice(0, 12) + '… · fresh sandbox per task');
     }
+    renderRepStrip(peerId);
     updateChatTele();
     show('chat');
     scrollLog();
     chatInput.focus();
+  }
+
+  function renderRepStrip(peerId) {
+    const strip = document.getElementById('chat-rep');
+    strip.hidden = true;
+    strip.innerHTML = '';
+    loadRep(peerId).then((r) => {
+      if (activeAgent && activeAgent.peer_id !== peerId) return;
+      const head = document.createElement('span');
+      head.className = 'rep-head';
+      const w = r.weighted;
+      head.textContent = 'signed ledger · ' + r.count + ' rating' + (r.count === 1 ? '' : 's') +
+        ' · weighted by this node ' + (w >= 0 ? '+' : '') + w.toFixed(2);
+      strip.appendChild(head);
+      const comments = r.entries.filter((e) => e.kind === 'Comment' && e.body).slice(0, 2);
+      const ratings = r.entries.filter((e) => e.kind === 'Rating').slice(0, 2);
+      const shown = comments.concat(ratings)
+        .sort((x, y) => new Date(y.received_at) - new Date(x.received_at))
+        .slice(0, 4);
+      shown.forEach((e) => {
+        const row = document.createElement('span');
+        row.className = 'rep-row';
+        if (e.kind === 'Rating') {
+          const s = num(e.score);
+          const score = document.createElement('span');
+          score.className = 'rep-score' + (s < 0 ? ' neg' : '');
+          score.textContent = '★ ' + (s >= 0 ? '+' : '') + s.toFixed(2);
+          row.appendChild(score);
+          const ctx = String(e.context || '').startsWith('task:') ? 'automated' : (e.context || 'rating');
+          row.appendChild(document.createTextNode(' · ' + ctx + ' · ' + timeAgo(e.received_at) + ' · sig ok'));
+        } else {
+          const q = document.createElement('span');
+          q.className = 'rep-quote';
+          q.textContent = '“' + e.body + '”';
+          row.appendChild(q);
+          row.appendChild(document.createTextNode(' · ' + timeAgo(e.received_at) + ' · sig ok'));
+        }
+        strip.appendChild(row);
+      });
+      const note = document.createElement('span');
+      note.className = 'rep-row rep-note';
+      note.innerHTML = 'scores are weighed by each node — to rate this agent or leave feedback, use the <a href="index.html#desktop">desktop app</a> →';
+      strip.appendChild(note);
+      strip.hidden = false;
+    }).catch(() => {});
   }
 
   function setInputEnabled(on) {
