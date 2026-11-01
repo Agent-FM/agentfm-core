@@ -1,0 +1,39 @@
+# Dependency update PRs, batched weekly so they stay reviewable.
+# Security updates are separate: enable "Dependabot security updates" in
+# Settings → Code security for those to open as soon as an advisory lands.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /agentfm-go
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      go-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /agentfm-desktop
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      desktop-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: pip
+    directory: /agentfm-python
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      python-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
