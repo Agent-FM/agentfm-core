@@ -16,6 +16,7 @@ The `agentfm` binary is multi-mode — one binary covers every role (worker, api
 | `-maxtasks` | `1` | Max concurrent tasks (1-1000) |
 | `-maxcpu` | `80.0` | Reject tasks above this CPU % (0-99) |
 | `-maxgpu` | `80.0` | Reject tasks above this GPU VRAM % (0-99) |
+| `-sandbox-network` | `none` (public mesh), `host` (with `-swarmkey`) | Task container network. `none`: no route to the host, cloud metadata or the internet. `host`: shares the worker's network namespace, needed by agents that call a local model over HTTP. See [Security](security.md). |
 | `-apiport` | `8080` | Port for `-mode api` HTTP gateway |
 | `-api-bind` | `127.0.0.1` | Bind host for `-mode api`. Loopback by default; pass `0.0.0.0` to expose off-host (also requires `AGENTFM_API_KEYS` or `AGENTFM_ALLOW_UNAUTH_PUBLIC=1`) |
 | `-prom-listen` | mode default | Prometheus `/metrics` bind. `-` disables |
@@ -104,9 +105,11 @@ Runs a permanent lighthouse — the single relay path (there is no separate rela
 ## Examples
 
 ```bash
-# Worker for a public-mesh image-gen agent
+# Worker for a public-mesh image-gen agent. It calls a model server on this
+# machine, so it opts in to host networking (read docs/security.md first).
 agentfm -mode worker -agentdir ./flux-agent -image flux-agent:v1 \
-  -agent "FLUX 4k" -model "FLUX.2 [dev]" -maxtasks 4 -maxgpu 95
+  -agent "FLUX 4k" -model "FLUX.2 [dev]" -maxtasks 4 -maxgpu 95 \
+  -sandbox-network host
 
 # Headless API gateway, off-host with auth
 AGENTFM_API_KEYS=$(openssl rand -hex 32) agentfm -mode api \
@@ -114,7 +117,8 @@ AGENTFM_API_KEYS=$(openssl rand -hex 32) agentfm -mode api \
 
 # Local test (no libp2p)
 agentfm -mode test -agentdir ./my-agent -image my-agent:v1 \
-  -agent "My Bot" -model "llama3.2" -prompt "Write a haiku."
+  -agent "My Bot" -model "llama3.2" -prompt "Write a haiku." \
+  -sandbox-network host  # the agent calls Ollama on this machine
 
 # Generate private-mesh PSK
 agentfm -mode genkey  # → ./swarm.key

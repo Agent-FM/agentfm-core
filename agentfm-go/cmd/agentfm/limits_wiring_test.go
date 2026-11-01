@@ -83,3 +83,58 @@ func TestValidateOperatorConfig_AppliesDefaultPidsLimit(t *testing.T) {
 		t.Errorf("CPU and memory must stay unlimited by default, got %+v", cfg.Limits)
 	}
 }
+
+// -sandbox-network travels the same path as the -task-* ceilings, so it gets
+// the same end-to-end check: flag value and swarm key in, podman argv out. The
+// public-mesh case is the one that matters — an operator who passes nothing
+// and no -swarmkey must get --network none.
+func TestResolveSandboxNetwork_ReachesTheContainerArgv(t *testing.T) {
+	tests := []struct {
+		name     string
+		flag     string
+		swarmKey string
+		want     string
+	}{
+		{"public mesh default", "", "", "none"},
+		{"private swarm default", "", "./swarm.key", "host"},
+		{"public mesh explicit host", "host", "", "host"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := worker.Config{}
+			if err := resolveSandboxNetwork(&cfg, tc.flag, tc.swarmKey); err != nil {
+				t.Fatalf("resolveSandboxNetwork: %v", err)
+			}
+
+			args, err := worker.BuildRunArgs(worker.SandboxSpec{
+				ContainerName: "c",
+				Image:         "img",
+				OutputDir:     "/out",
+				Network:       cfg.Network,
+			})
+			if err != nil {
+				t.Fatalf("BuildRunArgs: %v", err)
+			}
+
+			var got string
+			for i, a := range args {
+				if a == "--network" && i+1 < len(args) {
+					got = args[i+1]
+				}
+			}
+			if got != tc.want {
+				t.Errorf("--network = %q, want %q (argv %q)", got, tc.want, args)
+			}
+		})
+	}
+}
+
+func TestResolveSandboxNetwork_RejectsUnknownValue(t *testing.T) {
+	cfg := worker.Config{}
+	if err := resolveSandboxNetwork(&cfg, "bridge", ""); err == nil {
+		t.Fatal("resolveSandboxNetwork accepted \"bridge\"; want an error")
+	}
+	if cfg.Network != "" {
+		t.Errorf("cfg.Network = %q after a rejected value; want it left unset", cfg.Network)
+	}
+}

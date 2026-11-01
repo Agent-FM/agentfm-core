@@ -69,6 +69,7 @@ func TestHandleTaskStream_NotRunIsNotASuccess(t *testing.T) {
 		MaxGPU:             90,
 		ImageName:          "agentfm-test:v1",
 		ModelName:          "test-model",
+		Network:            NetworkHost,
 		AgentDir:           t.TempDir(),
 	})
 	t.Setenv("PATH", t.TempDir()) // no podman anywhere on PATH
@@ -146,6 +147,7 @@ func TestHandleTaskStream_ArtifactsSurviveNonZeroExit(t *testing.T) {
 		MaxGPU:             90,
 		ImageName:          "agentfm-test:v1",
 		ModelName:          "test-model",
+		Network:            NetworkHost,
 		AgentDir:           t.TempDir(),
 	})
 

@@ -106,9 +106,11 @@ curl -fsSL https://ollama.com/install.sh | sh && ollama run llama3.2
 # 2. Install AgentFM (or grab a binary from Releases)
 curl -fsSL https://api.agentfm.net/install.sh | bash
 
-# 3. Start a worker
+# 3. Start a worker. This agent calls Ollama on your machine, so it needs host
+#    networking; public-mesh workers default to none (see docs/security.md).
 agentfm -mode worker -agentdir ./agent-example/sick-leave-generator/agent \
-  -image agentfm-sick-leave:v1 -model llama3.2 -agent "HR Assistant" -maxtasks 10
+  -image agentfm-sick-leave:v1 -model llama3.2 -agent "HR Assistant" -maxtasks 10 \
+  -sandbox-network host
 
 # 4. In another terminal, start the API gateway and hit it with any OpenAI client
 agentfm -mode api -apiport 8080 &
@@ -175,6 +177,8 @@ podman build -t ghcr.io/you/myagent:v1 ./my-agent && podman push ghcr.io/you/mya
 agentfm -mode worker -agentdir ./my-agent -image ghcr.io/you/myagent:v1 \
   -agent "My Agent" -capability "research-assistant" -model llama3.2
 ```
+
+On the public mesh, task containers get **no network** by default (`-sandbox-network none`), because anyone can send your agent a prompt. If your agent calls a local model server, pass `-sandbox-network host` after reading [Security](docs/security.md), or run a private swarm.
 
 The public lighthouse is baked in:
 `/ip4/78.47.21.107/tcp/4001/p2p/12D3KooWQHw8mVQkx17kLTNiRTbYckU2cAGcAwFFLzVJhhmBs5zL`

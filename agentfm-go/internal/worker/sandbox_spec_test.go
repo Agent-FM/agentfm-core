@@ -112,6 +112,17 @@ func TestBuildRunArgs_Golden(t *testing.T) {
 				"agentfm-test:v1", "draft a sick-leave email",
 			},
 		},
+		{
+			name:   "network none (S4)",
+			mutate: func(s *SandboxSpec) { s.Network = NetworkNone },
+			want: []string{
+				"run", "--rm", "--name", "agentfm-sandbox-deadbeef",
+				"--network", "none",
+				"-v", "/tmp/agentfm/run_deadbeef:/tmp/output:z",
+				"-e", "AGENTFM_MODEL=llama3.2",
+				"agentfm-test:v1", "draft a sick-leave email",
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -250,7 +261,7 @@ func TestBuildRunArgs_OmitsOptionalFlagsWhenUnset(t *testing.T) {
 // zero value, which is what a caller that forgets the field produces — must be
 // an error and never fall through to a permissive namespace.
 func TestBuildRunArgs_RejectsUnknownNetworkMode(t *testing.T) {
-	for _, mode := range []NetworkMode{"", "bridge", "none", "HOST"} {
+	for _, mode := range []NetworkMode{"", "bridge", "NONE", "HOST"} {
 		t.Run(string(mode), func(t *testing.T) {
 			_, err := BuildRunArgs(SandboxSpec{
 				ContainerName: "c",
@@ -262,6 +273,38 @@ func TestBuildRunArgs_RejectsUnknownNetworkMode(t *testing.T) {
 				t.Fatalf("network mode %q: got error %v, want ErrUnsupportedNetwork", mode, err)
 			}
 		})
+	}
+}
+
+// The default must follow who can send this worker a prompt: anyone on the
+// public mesh (none), only swarm-key holders on a private swarm (host). An
+// explicit flag wins either way, and an unknown value is an error rather than
+// a fallback.
+func TestResolveNetworkMode(t *testing.T) {
+	tests := []struct {
+		flag    string
+		private bool
+		want    NetworkMode
+	}{
+		{"", false, NetworkNone},
+		{"", true, NetworkHost},
+		{"host", false, NetworkHost},
+		{"none", true, NetworkNone},
+	}
+	for _, tc := range tests {
+		got, err := ResolveNetworkMode(tc.flag, tc.private)
+		if err != nil {
+			t.Fatalf("ResolveNetworkMode(%q, private=%v): unexpected error %v", tc.flag, tc.private, err)
+		}
+		if got != tc.want {
+			t.Errorf("ResolveNetworkMode(%q, private=%v) = %q, want %q", tc.flag, tc.private, got, tc.want)
+		}
+	}
+
+	for _, bad := range []string{"bridge", "HOST", "slirp4netns", " none"} {
+		if _, err := ResolveNetworkMode(bad, false); !errors.Is(err, ErrInvalidNetworkFlag) {
+			t.Errorf("ResolveNetworkMode(%q): got error %v, want ErrInvalidNetworkFlag", bad, err)
+		}
 	}
 }
 

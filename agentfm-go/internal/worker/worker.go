@@ -31,6 +31,12 @@ type Config struct {
 	// container is running. Limits is what actually bounds a task.
 	Limits ResourceLimits
 
+	// Network is the task container's network namespace (roadmap S4),
+	// resolved from -sandbox-network by ResolveNetworkMode. The zero value
+	// is rejected by BuildRunArgs, so a caller that forgets to set it gets a
+	// failed task rather than a permissive default.
+	Network NetworkMode
+
 	// IsWitness reports whether this worker process should advertise
 	// the P2-2 witness role and (in P2-2) register the WitnessProtocol
 	// stream handler. Set from the --witness flag on cmd/agentfm.
@@ -67,18 +73,29 @@ func New(node *network.MeshNode, cfg Config) *Worker {
 	return &Worker{node: node, config: cfg}
 }
 
-// printHostNetworkWarning surfaces the --network host security caveat
-// to the operator. Called from both Worker.Start (long-lived worker)
-// and RunLocalTest (single-shot test mode) so a workshop attendee
-// running `agentfm -mode test` against a developer laptop sees the
-// same loopback-exposure warning the production worker prints.
-func printHostNetworkWarning() {
-	pterm.Warning.Println(
-		"Containers run with --network host: the agent has full access to this " +
-			"machine's network namespace, including loopback (127.0.0.1) services like " +
-			"Ollama, internal admin endpoints, and cloud metadata (169.254.169.254). " +
-			"Treat agent images as TRUSTED CODE; review their Dockerfiles before running.",
-	)
+// printNetworkPosture tells the operator which network namespace task
+// containers get. Called from both Worker.Start (long-lived worker) and
+// RunLocalTest (single-shot test mode) so a workshop attendee running
+// `agentfm -mode test` against a developer laptop sees the same posture
+// the production worker would run with.
+func printNetworkPosture(mode NetworkMode) {
+	switch mode {
+	case NetworkNone:
+		pterm.Info.Println(
+			"Containers run with --network none: the agent cannot reach this machine's " +
+				"services, cloud metadata, or the internet. Agents that call a model over " +
+				"HTTP (Ollama, vLLM) need -sandbox-network host.",
+		)
+	default:
+		pterm.Warning.Println(
+			"Containers run with --network host: the agent has full access to this " +
+				"machine's network namespace, including loopback (127.0.0.1) services like " +
+				"Ollama, internal admin endpoints, and cloud metadata (169.254.169.254). " +
+				"The prompt driving the agent comes from whoever dispatched the task, so a " +
+				"prompt-injected agent can be steered into any of these. Use a private " +
+				"swarm (-swarmkey) unless every peer that can reach this worker is trusted.",
+		)
+	}
 }
 
 // RunLocalTest allows users to test their dockerfile/script locally without libp2p
@@ -89,7 +106,7 @@ func RunLocalTest(ctx context.Context, cfg Config, prompt string) error {
 		return err
 	}
 
-	printHostNetworkWarning()
+	printNetworkPosture(w.config.Network)
 
 	fmt.Printf("\n🤖 Sending Prompt: '%s'\n", pterm.LightGreen(prompt))
 	fmt.Println("--------------------------------------------------")
@@ -140,7 +157,7 @@ func (w *Worker) Start(ctx context.Context) {
 		w.capability = KebabCapability(w.config.AgentName)
 	}
 
-	printHostNetworkWarning()
+	printNetworkPosture(w.config.Network)
 
 	// Surface the ceilings that will actually be applied. Without this an
 	// operator has no way to confirm their -task-* flags took effect short of

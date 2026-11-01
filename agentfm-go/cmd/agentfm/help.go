@@ -41,6 +41,7 @@ func setupHelpMenu() {
 			{pterm.Cyan("-maxtasks"), pterm.LightMagenta("int"), "Max concurrent tasks this worker accepts (1-1000)", pterm.Gray(`"1"`)},
 			{pterm.Cyan("-maxcpu"), pterm.LightMagenta("float"), "Max CPU usage % before rejecting tasks (0-99)", pterm.Gray(`"80.0"`)},
 			{pterm.Cyan("-maxgpu"), pterm.LightMagenta("float"), "Max GPU VRAM usage % before rejecting tasks (0-99)", pterm.Gray(`"80.0"`)},
+			{pterm.Cyan("-sandbox-network"), pterm.LightMagenta("string"), "Task container network: 'host' or 'none'", pterm.Gray("none (public mesh) / host (-swarmkey)")},
 			{pterm.Cyan("-author"), pterm.LightMagenta("string"), "Name of the agent author/creator (max 50 chars)", pterm.Gray(`"Anonymous"`)},
 			// v1.3 verifiable agent mesh flags.
 			{pterm.Cyan("-witness"), pterm.LightMagenta("bool"), "v1.3 — serve the witness co-sign role on this peer", pterm.Gray("false")},
@@ -57,7 +58,8 @@ func setupHelpMenu() {
 		pterm.Println(pterm.White("   ./agentfm -mode test \\"))
 		pterm.Println(pterm.White("     -agentdir \"../agents/crewai/hr-specialist\" -image \"agentfm-hr:latest\" \\"))
 		pterm.Println(pterm.White("     -model \"llama3.2\" -agent \"HR Specialist\" \\"))
-		pterm.Println(pterm.White("     -desc \"Handles sick leave policies and corporate comms.\" -maxtasks 10\n"))
+		pterm.Println(pterm.White("     -desc \"Handles sick leave policies and corporate comms.\" -maxtasks 10 \\"))
+		pterm.Println(pterm.White("     -sandbox-network host  # agent calls Ollama on this machine\n"))
 
 		pterm.Println(pterm.Yellow("2. Generate a Private Swarm Key (For closed enterprise darknets)"))
 		pterm.Println(pterm.White("   ./agentfm -mode genkey\n"))
@@ -69,7 +71,8 @@ func setupHelpMenu() {
 		pterm.Println(pterm.White("   ./agentfm -mode worker \\"))
 		pterm.Println(pterm.White("     -agentdir \"../agents/crewai/hr-specialist\" -image \"agentfm-hr:latest\" \\"))
 		pterm.Println(pterm.White("     -model \"llama3.2\" -agent \"HR Specialist\" \\"))
-		pterm.Println(pterm.White("     -desc \"Handles sick leave policies.\" -maxtasks 10 -maxcpu 90 -maxgpu 95\n"))
+		pterm.Println(pterm.White("     -desc \"Handles sick leave policies.\" -maxtasks 10 -maxcpu 90 -maxgpu 95 \\"))
+		pterm.Println(pterm.White("     -sandbox-network host  # opt-in: any peer can prompt this agent; see docs/security.md\n"))
 
 		pterm.Println(pterm.Yellow("5. Start a Private Darknet Worker (Requires Swarm Key & Relay Bootstrap)"))
 		pterm.Println(pterm.White("   ./agentfm -mode worker \\"))
