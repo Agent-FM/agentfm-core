@@ -8,12 +8,14 @@
   [![Podman](https://img.shields.io/badge/Podman-Sandboxed-892CA0?style=for-the-badge&logo=podman)](https://podman.io)
   [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=for-the-badge)](LICENSE)
 
-  <h3>Run AI agents on a peer-to-peer mesh of idle machines.</h3>
-  <p><b>AI Agents, but distributed.</b> Package an agent as a container, drop it on the mesh, and dispatch tasks to it from a desktop app, a <code>curl</code> one-liner, or any OpenAI SDK — end-to-end encrypted, no cloud account, no data egress.</p>
+  <h3>Run your AI agents on machines you already own, as one private network.</h3>
+  <p>Package an agent as a container, run it on any Mac or Linux box with spare capacity, and send it work from a desktop app, a <code>curl</code> one-liner, or any OpenAI SDK. Traffic is end-to-end encrypted, there is no cloud account, and on a private swarm your prompts and files only travel between machines in your swarm.</p>
 
   <p>
     <a href="#-desktop-app"><b>Desktop App</b></a> ·
     <a href="#-what-is-agentfm"><b>What is it</b></a> ·
+    <a href="#-who-its-for"><b>Who it's for</b></a> ·
+    <a href="#-how-it-compares"><b>Compare</b></a> ·
     <a href="#-quick-start"><b>Quick Start</b></a> ·
     <a href="#-python-sdk"><b>Python SDK</b></a> ·
     <a href="#-documentation">Docs</a> ·
@@ -50,7 +52,7 @@ The easiest way in. A calm, native mesh console for **Mac & Linux** (Windows in 
 
 ## 🌐 What is AgentFM
 
-A peer-to-peer compute grid that turns idle hardware into a decentralized AI supercomputer. **Three cooperating roles, one binary** — pick the role with `-mode`.
+AgentFM connects the computers you already have (office Macs, a gaming PC with a GPU, a spare Linux server) into one peer-to-peer mesh. Each machine runs an agent in a sandbox and advertises its live hardware; you send a task to the mesh and it goes to a machine that can take it. **Three cooperating roles, one binary** — pick the role with `-mode`.
 
 ```mermaid
 flowchart LR
@@ -81,6 +83,43 @@ flowchart LR
 1. **OpenAI-compatible** — point any OpenAI SDK at your local mesh and it just works.
 2. **Hardware-aware** — workers broadcast CPU/GPU/RAM/queue every ~2 s; the matcher routes each task to the least-loaded peer.
 3. **Trust without a middleman** — every rating and comment is Ed25519-signed, with the pubkey derived *from the rater's peer id*, so identity and signature are cryptographically bound. Ratings land on a per-peer append-only Merkle log (RFC 6962 inclusion proofs); reputation is EigenTrust-lite; equivocators are caught by witnesses and floored mesh-wide. No allow-lists, no central authority, no blockchain. → [Trust & Verification](docs/trust.md)
+
+---
+
+## 👥 Who it's for
+
+- **Small teams with idle hardware** who want AI agents running on their own machines: no per-token bill, and no prompts sent to an AI provider.
+- **Developers already using the OpenAI SDK** who want to point existing code at their own hardware by changing the base URL.
+- **Agent builders** who want to publish an agent on the public mesh and let its reputation grow from signed, verifiable ratings.
+
+### What people use it for
+
+| Use case | How it works with AgentFM |
+|---|---|
+| **A team assistant on one shared machine** | A Mac running Ollama hosts an HR or docs agent. Colleagues send requests from the desktop app and get files back. See [`sick-leave-generator`](agent-example/sick-leave-generator). |
+| **Batch work across every idle machine** | `client.tasks.scatter` spreads hundreds of prompts over all available workers with failover and retry. See [`02_batch_scatter_gather.py`](agentfm-python/examples/02_batch_scatter_gather.py). |
+| **Sharing the one GPU in the office** | One machine runs an image-generation agent; everyone else dispatches to it. See [`image-generator`](agent-example/image-generator). |
+| **Existing apps, new hardware** | Anything that speaks the OpenAI API can call the gateway at `/v1/chat/completions`. See [OpenAI-compatible API](docs/openai.md). |
+
+---
+
+## ⚖️ How it compares
+
+| | Cloud AI API | A model server on one machine (e.g. Ollama) | **AgentFM** |
+|---|---|---|---|
+| Where it runs | The provider's servers | One machine | Any machines you add to the mesh |
+| Where your prompts go | To the provider | Stay on that machine | Private swarm: only machines in your swarm. Public mesh: the worker that runs the task |
+| Unit of work | A model call | A model call | A whole agent in a container: its own code and tools, with files returned |
+| OpenAI SDK compatible | Yes | Yes | Yes |
+| Shares hardware across people | — | No | Yes, routed by live CPU/GPU/RAM load |
+| Cost | Per token | Your hardware | Your hardware |
+
+AgentFM does not replace a model server: a worker usually runs one (Ollama, vLLM) next to its agent.
+
+**What AgentFM is not:**
+- **Not a way to split one model across machines.** Each task runs on a single worker; the mesh spreads *many* tasks, not one big one.
+- **Not a paid compute marketplace.** Nobody pays anybody; reputation is the only currency.
+- **Not private on the public mesh.** A task's prompt is visible to the worker that runs it. For confidential work, use a [private swarm](docs/private-swarms.md).
 
 ---
 
@@ -218,6 +257,15 @@ Full per-flag reference: [docs/cli.md](docs/cli.md).
 | 📊 Observability | [docs/observability.md](docs/observability.md) |
 | ⚙️ CLI reference | [docs/cli.md](docs/cli.md) |
 | 🧑‍💻 Build from source / contribute | [docs/development.md](docs/development.md) · [CONTRIBUTING.md](CONTRIBUTING.md) |
+
+---
+
+## 💬 Community
+
+- **Questions, ideas, show-and-tell:** [GitHub Discussions](https://github.com/Agent-FM/agentfm-core/discussions)
+- **Bugs and feature requests:** [Issues](https://github.com/Agent-FM/agentfm-core/issues)
+- **Security reports:** please report privately as described in [SECURITY.md](SECURITY.md), not in a public issue.
+- **Contributing:** start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
