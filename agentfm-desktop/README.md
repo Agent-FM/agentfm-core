@@ -22,8 +22,8 @@ Browse agents, dispatch tasks, leave signed feedback, manage your reputation gat
 ### From source (development)
 
 ```bash
-git clone https://github.com/Agent-FM/agentfm-desktop.git
-cd agentfm-desktop
+git clone https://github.com/Agent-FM/agentfm-core.git
+cd agentfm-core/agentfm-desktop
 npm install
 ./scripts/dev.sh
 ```
