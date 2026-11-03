@@ -1,64 +1,33 @@
-import { test, expect, _electron as electron, ElectronApplication, Page } from '@playwright/test'
-import path from 'node:path'
+import { test, expect, Page } from '@playwright/test'
+import { launchApp, navLink, Launched } from './launch'
 
-let app: ElectronApplication
+let launched: Launched
 let page: Page
 
 test.beforeAll(async () => {
-  app = await electron.launch({
-    args: ['.'],
-    env: {
-      ...process.env,
-      AGENTFM_BIN: path.resolve(
-        __dirname, '..', '..', '..', 'agentfm-core', 'agentfm-go', 'agentfm',
-      ),
-    },
-    cwd: path.resolve(__dirname, '..', '..'),
-  })
-  page = await app.firstWindow()
-  await page.waitForLoadState('domcontentloaded')
-
-  await page.waitForFunction(
-    async () => {
-      const api = (window as unknown as {
-        api?: { backend: { health: () => Promise<{ ok: boolean }> } }
-      }).api
-      if (!api) return false
-      try {
-        const r = await api.backend.health()
-        return r.ok === true
-      } catch {
-        return false
-      }
-    },
-    { timeout: 30_000, polling: 500 },
-  )
-
-  const wizard = page.locator('h2:has-text("New project")')
-  if (await wizard.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await page.locator('input[placeholder*="Team Mesh"]').fill('E2E Dashboard')
-    await page.locator('button:has-text("Create project")').click()
-    await wizard.waitFor({ state: 'hidden', timeout: 15_000 })
-  }
+  launched = await launchApp({ project: 'E2E Dashboard' })
+  page = launched.page
 })
 
 test.afterAll(async () => {
-  await app?.close()
+  await launched?.close()
 })
 
-test('dashboard tab is reachable and renders the TASKS section', async () => {
-  await page.locator('a[href="#/dashboard"]').click()
+test('dashboard tab is reachable and renders the task totals', async () => {
+  await navLink(page, 'Dashboard').click()
 
-  await expect(page.locator('text=/TASKS/i').first()).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByRole('heading', { name: 'Live mesh' })).toBeVisible({ timeout: 10_000 })
+  await expect(page.locator('text=/\\d+ tasks since start/')).toBeVisible({ timeout: 10_000 })
 
+  // The "Total tasks" card shows a numeric counter once metrics arrive.
   await expect(async () => {
-    const heroText = await page.locator('text=/TASKS · LAST 5 MIN/i').locator('..').textContent()
-    expect(heroText).toMatch(/\d+/)
+    const cardText = await page.getByText('Total tasks', { exact: true }).locator('..').textContent()
+    expect(cardText).toMatch(/\d+/)
   }).toPass({ timeout: 15_000 })
 })
 
 test('dashboard surfaces assets built tile, success rate card, and freshness header', async () => {
-  await page.locator('a[href="#/dashboard"]').click()
+  await navLink(page, 'Dashboard').click()
 
   await expect(
     page.locator('text=Assets built').first(),
