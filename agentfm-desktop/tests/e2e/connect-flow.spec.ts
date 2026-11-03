@@ -1,5 +1,5 @@
-import { test, expect, _electron as electron, ElectronApplication, Page } from '@playwright/test';
-import path from 'node:path';
+import { test, expect, Page } from '@playwright/test';
+import { launchApp, Launched } from './launch';
 
 // This test reproduces the renderer→backend fetch path that the user's
 // "Test connection" button exercises. It launches the prod-build Electron
@@ -7,47 +7,16 @@ import path from 'node:path';
 // reaches the agentfm HTTP backend — the case that was breaking due to a
 // CSP that whitelisted localhost:* but not 127.0.0.1:*.
 
-let app: ElectronApplication;
+let launched: Launched;
 let page: Page;
 
 test.beforeAll(async () => {
-  app = await electron.launch({
-    args: ['.'],
-    env: {
-      ...process.env,
-      AGENTFM_BIN: path.resolve(__dirname, '..', '..', '..', 'agentfm-core', 'agentfm-go', 'agentfm'),
-    },
-    cwd: path.resolve(__dirname, '..', '..'),
-  });
-  page = await app.firstWindow();
-  await page.waitForLoadState('domcontentloaded');
-
-  // Wait until the backend has bound and is healthy from the renderer's
-  // perspective (this goes through IPC, not subject to CSP).
-  await page.waitForFunction(
-    async () => {
-      const api = (window as unknown as { api?: { backend: { health: () => Promise<{ ok: boolean }> } } }).api;
-      if (!api) return false;
-      try {
-        const r = await api.backend.health();
-        return r.ok === true;
-      } catch {
-        return false;
-      }
-    },
-    { timeout: 30000, polling: 500 },
-  );
-
-  const wizard = page.locator('h2:has-text("New project")');
-  if (await wizard.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await page.locator('input[placeholder*="Team Mesh"]').fill('E2E Connect');
-    await page.locator('button:has-text("Create project")').click();
-    await wizard.waitFor({ state: 'hidden', timeout: 15000 });
-  }
+  launched = await launchApp({ project: 'E2E Connect' });
+  page = launched.page;
 });
 
 test.afterAll(async () => {
-  await app?.close();
+  await launched?.close();
 });
 
 test('renderer can fetch /v1/about over HTTP (CSP allows 127.0.0.1)', async () => {

@@ -1,105 +1,51 @@
-import { test, expect, _electron as electron, ElectronApplication, Page } from '@playwright/test';
-import path from 'node:path';
+import { test, expect, Page } from '@playwright/test';
+import { launchApp, navLink, Launched } from './launch';
 
-let app: ElectronApplication;
+let launched: Launched;
 let page: Page;
 
 test.beforeAll(async () => {
-  app = await electron.launch({
-    args: ['.'],
-    env: {
-      ...process.env,
-      AGENTFM_BIN: path.resolve(__dirname, '..', '..', '..', 'agentfm-core', 'agentfm-go', 'agentfm'),
-    },
-    cwd: path.resolve(__dirname, '..', '..'),
-  });
-  page = await app.firstWindow();
-  await page.waitForLoadState('domcontentloaded');
-
-  // Wait until the backend is healthy from the renderer's perspective.
-  // The BackendManager spawns the binary in parallel with window creation,
-  // so we poll window.api.backend.health() before asserting on UI text.
-  await page.waitForFunction(
-    async () => {
-      const api = (window as unknown as { api?: { backend: { health: () => Promise<{ ok: boolean }> } } }).api;
-      if (!api) return false;
-      try {
-        const r = await api.backend.health();
-        return r.ok === true;
-      } catch {
-        return false;
-      }
-    },
-    { timeout: 30000, polling: 500 },
-  );
-
-  const wizard = page.locator('h2:has-text("New project")');
-  if (await wizard.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await page.locator('input[placeholder*="Team Mesh"]').fill('E2E Default');
-    await page.locator('button:has-text("Create project")').click();
-    await wizard.waitFor({ state: 'hidden', timeout: 15000 });
-  }
-
-  // The ErrorBoundary or per-route loading state may show on initial mount
-  // if a fetch fired before the backend was ready. Click Retry if visible,
-  // and give a couple of attempts to settle.
-  for (let i = 0; i < 3; i++) {
-    const retry = page.locator('button:has-text("Retry")');
-    if (await retry.isVisible().catch(() => false)) {
-      await retry.click();
-      await page.waitForTimeout(500);
-    }
-    const radarHeading = page.locator('h1:has-text("Your mesh")').first();
-    if (await radarHeading.isVisible().catch(() => false)) break;
-    await page.waitForTimeout(500);
-  }
+  launched = await launchApp({ project: 'E2E Default' });
+  page = launched.page;
 });
 
 test.afterAll(async () => {
-  await app?.close();
+  await launched?.close();
 });
 
 test('app boots and renders the Radar shell', async () => {
-  // The radar sidebar nav must be present and route is /radar (default).
-  await expect(page.locator('a[href="#/radar"]')).toBeVisible();
-  // The route content is either the radar grid header or the loading state.
-  // We accept either: both prove the route mounted without crashing.
+  // The navigator must be present and the default route is /radar.
+  await expect(navLink(page, 'Mesh Radar')).toBeVisible();
+  // The route content is either the radar header or its loading state.
+  // Either proves the route mounted without crashing.
   const radarHeading = page.locator('h1:has-text("Your mesh")');
-  const loading = page.locator('text=Loading agents…');
-  await expect(async () => {
-    const r = await radarHeading.isVisible().catch(() => false);
-    const l = await loading.isVisible().catch(() => false);
-    expect(r || l).toBe(true);
-  }).toPass({ timeout: 15000 });
+  const loading = page.locator('text=Scanning the mesh…');
+  await expect(radarHeading.or(loading).first()).toBeVisible({ timeout: 15000 });
 });
 
-test('settings sheet opens from footer with theme control', async () => {
-  await page.locator('footer button:has-text("Settings")').click();
+test('settings sheet opens from Cmd+, with theme control', async () => {
+  await page.keyboard.press('Meta+,');
   await expect(page.locator('h2:has-text("Settings")')).toBeVisible({ timeout: 5000 });
   await expect(page.locator('text=Theme').first()).toBeVisible();
   await page.locator('button[aria-label="close"]').click();
+  await expect(page.locator('h2:has-text("Settings")')).toBeHidden();
 });
 
 test('status dashboard renders friendly view', async () => {
-  await page.locator('a[href="#/status"]').click();
-  await expect(page.locator('text=STATUS').first()).toBeVisible({ timeout: 5000 });
-  const hero = page.locator('text=/All systems healthy|Backend is down/i');
+  await navLink(page, 'Status').click();
+  await expect(page.getByRole('heading', { name: 'System status' })).toBeVisible({ timeout: 5000 });
+  const hero = page.locator('text=/All systems healthy|Backend up, relay not connected|Backend is down/');
   await expect(hero).toBeVisible();
-  for (const tile of ['BOSS', 'AGENTS', 'RELAY', 'TRUST']) {
-    await expect(page.locator(`text=${tile}`).first()).toBeVisible();
+  for (const tile of ['Boss', 'Agents', 'Relay', 'Ledger']) {
+    await expect(page.locator('main').getByText(tile, { exact: true }).first()).toBeVisible();
   }
 });
 
 test('activity screen renders with grouped layout or empty state', async () => {
   await page.keyboard.press('Meta+3');
   await expect(page.locator('h1:has-text("My activity")')).toBeVisible({ timeout: 5000 });
-  // The route should show either the empty state copy or at least one date
-  // bucket heading. Either is healthy.
-  const empty = page.locator('text=No outgoing entries yet.');
-  const buckets = page.locator('h2:has-text("Today"), h2:has-text("Yesterday"), h2:has-text("Older")');
-  await expect(async () => {
-    const e = await empty.isVisible().catch(() => false);
-    const b = (await buckets.count()) > 0;
-    expect(e || b).toBe(true);
-  }).toPass({ timeout: 5000 });
+  // Either the empty state copy or at least one date bucket heading is healthy.
+  const empty = page.getByText('No outgoing entries yet', { exact: true });
+  const buckets = page.locator('main').getByText(/^(Today|Yesterday|Older)$/);
+  await expect(empty.or(buckets).first()).toBeVisible({ timeout: 5000 });
 });
