@@ -1,0 +1,77 @@
+name: desktop-e2e
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agentfm-desktop/**"
+      - "agentfm-go/**"
+      - ".github/workflows/desktop-e2e.yml"
+  pull_request:
+    paths:
+      - "agentfm-desktop/**"
+      - "agentfm-go/**"
+      - ".github/workflows/desktop-e2e.yml"
+
+concurrency:
+  group: desktop-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # macOS: the specs press Meta+N and the app is developed on macOS.
+    runs-on: macos-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: agentfm-desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agentfm-go/go.mod
+          cache-dependency-path: agentfm-go/go.sum
+
+      - name: Build backend binary
+        working-directory: agentfm-go
+        # tests/e2e/launch.ts defaults AGENTFM_BIN to agentfm-go/agentfm.
+        run: go build -o agentfm ./cmd/agentfm
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: agentfm-desktop/package-lock.json
+
+      # Electron 42+ fetches its binary on first run instead of during npm ci.
+      - name: Cache Electron binary
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/electron
+          key: electron-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('agentfm-desktop/package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Install
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Unit tests (vitest)
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # dispatch-from-ui stays skipped: it needs AGENTFM_E2E_LIVE_MESH=1 and a live worker.
+      - name: E2E (Playwright)
+        run: npx playwright test
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-e2e-test-results
+          path: agentfm-desktop/test-results/
+          if-no-files-found: ignore
