@@ -17,7 +17,7 @@ Peer to peer, end-to-end encrypted, no cloud account, no data leaving your machi
 [![License](https://img.shields.io/badge/license-Apache_2.0-7d8590?style=flat-square&labelColor=0b0d12)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/Agent-FM/agentfm-core?style=flat-square&labelColor=0b0d12&color=f0a12e)](https://github.com/Agent-FM/agentfm-core/stargazers)
 
-**[5-minute quest](#the-5-minute-quest)** · **[How it works](#how-it-works)** · **[What you can build](#what-you-can-build)** · **[Python SDK](#python-sdk)** · **[Docs](#docs)** · **[agentfm.net](https://agentfm.net)**
+**[5-minute quest](#-the-5-minute-quest)** · **[How it works](#-how-it-works)** · **[What you can build](#-what-you-can-build)** · **[Python SDK](#-python-sdk)** · **[Docs](#-docs)** · **[agentfm.net](https://agentfm.net)**
 
 </div>
 
