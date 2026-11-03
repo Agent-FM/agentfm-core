@@ -291,6 +291,15 @@ AgentFM is a monorepo: the Go node in [`agentfm-go/`](agentfm-go), the Electron 
 
 <br>
 
+## 💬 Community
+
+- **Questions, ideas, show-and-tell:** [GitHub Discussions](https://github.com/Agent-FM/agentfm-core/discussions)
+- **Bugs and feature requests:** [Issues](https://github.com/Agent-FM/agentfm-core/issues)
+- **Security reports:** please report privately as described in [SECURITY.md](SECURITY.md), not in a public issue.
+- **Contributing:** start with [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
 <div align="center">
 <a href="https://github.com/Agent-FM/agentfm-core/stargazers">
 <picture>
