@@ -12,8 +12,8 @@ jobs:
       run:
         working-directory: agentfm-python
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install build tools
@@ -21,7 +21,7 @@ jobs:
       - name: Build sdist + wheel
         run: python -m build
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist
           path: agentfm-python/dist/
@@ -33,8 +33,8 @@ jobs:
       run:
         working-directory: agentfm-python
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install
@@ -58,7 +58,7 @@ jobs:
       id-token: write  # OIDC for PyPI Trusted Publishing
     steps:
       - name: Download dist artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
