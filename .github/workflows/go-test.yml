@@ -1,0 +1,46 @@
+name: go-test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agentfm-go/**"
+      - ".github/workflows/go-test.yml"
+  pull_request:
+    paths:
+      - "agentfm-go/**"
+      - ".github/workflows/go-test.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    defaults:
+      run:
+        working-directory: agentfm-go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agentfm-go/go.mod
+          cache-dependency-path: agentfm-go/go.sum
+      - name: Format (gofmt)
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: Vet
+        run: go vet ./...
+      - name: Build
+        run: go build ./...
+      - name: Test
+        run: go test ./...
