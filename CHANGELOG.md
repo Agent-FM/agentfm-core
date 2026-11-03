@@ -70,6 +70,7 @@ The v1.3 release adds a tamper-evident reputation ledger plus runtime verificati
 
 ### Fixed
 
+- `agentfm-go` builds again after the go-libp2p 0.51 / go-libp2p-kad-dht 0.43 update (#80). kad-dht 0.43 removed the context argument from `dht.New`, and its DHT now runs until `Close`. `initRoutingAndPubSub` closes it when the node's context ends, which is what cancelling that context did before, and also on a failed `Bootstrap`.
 - `internal/network/constants.go` is under version control again. It had been excluded by a `.gitignore` rule since the initial commit, so `agentfm-go` could not be compiled from a clean clone — which is also why the module had no CI. The 16 affected symbols (5 stream protocol IDs, 3 GossipSub topics, 4 timeouts, `MaxArtifactBytes`, `PublicLighthouse`, `RendezvousString`, `MDNSServiceTag`) were reconstructed from the documentation, each with its source cited inline. See `docs/security/AUDIT-2026-08-10.md` §2.
 - Desktop: Cmd+, (Ctrl+, on Windows/Linux) opens the Settings sheet again. The hotkey was registered as `'mod+,'`, which react-hotkeys-hook splits on the comma into two hotkeys that never match. Since the footer Settings button was removed, the sheet (theme, backend logs) had no way to open.
 

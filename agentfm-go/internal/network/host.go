@@ -151,11 +151,16 @@ func initRoutingAndPubSub(ctx context.Context, h host.Host, isWorker bool) (*pub
 	} else {
 		dhtOptions = append(dhtOptions, dht.Mode(dht.ModeServer))
 	}
-	kademliaDHT, err := dht.New(ctx, h, dhtOptions...)
+	kademliaDHT, err := dht.New(h, dhtOptions...)
 	if err != nil {
 		return nil, nil, err
 	}
+	// Since kad-dht v0.43, New takes no context and the DHT runs until
+	// Close. Before, cancelling ctx stopped it; AfterFunc keeps that
+	// lifetime so a cancelled node does not leave DHT goroutines behind.
+	context.AfterFunc(ctx, func() { _ = kademliaDHT.Close() })
 	if err = kademliaDHT.Bootstrap(ctx); err != nil {
+		_ = kademliaDHT.Close()
 		return nil, nil, err
 	}
 	return ps, kademliaDHT, nil
