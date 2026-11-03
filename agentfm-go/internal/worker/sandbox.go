@@ -148,7 +148,7 @@ func (w *Worker) executePodman(ctx context.Context, prompt string, outStream, er
 		Prompt:        prompt,
 		OutputDir:     absOutputDir,
 		ModelName:     w.config.ModelName,
-		Network:       NetworkHost,
+		Network:       w.config.Network,
 		Limits:        w.config.Limits,
 	}
 

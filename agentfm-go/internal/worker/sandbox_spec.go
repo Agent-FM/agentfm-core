@@ -25,22 +25,57 @@ import (
 // NetworkMode selects the network namespace the task container runs in.
 //
 // It is a closed enum validated by BuildRunArgs: an unrecognised value is an
-// error, never a silent fallback. Today only NetworkHost is implemented, which
-// mirrors the long-standing behaviour. NetworkNone and an egress allowlist
-// arrive with roadmap item S4; the deny-by-default switch below is what makes
-// adding them a compile-and-test event rather than a silent default change.
+// error, never a silent fallback. NetworkHost mirrors the long-standing
+// behaviour; NetworkNone is the first half of roadmap item S4. The egress
+// allowlist (reach the model endpoint and nothing else) is the second half and
+// is not implemented yet.
 type NetworkMode string
 
 const (
 	// NetworkHost shares the worker host's network namespace with the task
-	// container. This is the historical — and currently only — mode.
+	// container.
 	//
 	// It is deliberately permissive: the container reaches loopback services
 	// (Ollama on 127.0.0.1:11434, admin endpoints) and cloud instance
-	// metadata on 169.254.169.254. printHostNetworkWarning (worker.go)
-	// surfaces this to the operator at startup. See docs/security.md.
+	// metadata on 169.254.169.254. On the public mesh the prompt driving the
+	// agent comes from an arbitrary peer, so a prompt-injected agent can be
+	// steered into any of those. printNetworkPosture (worker.go) surfaces
+	// this to the operator at startup. See docs/security.md.
 	NetworkHost NetworkMode = "host"
+
+	// NetworkNone gives the task container a network namespace with only its
+	// own loopback interface: no route to the worker host, its loopback
+	// services, cloud metadata or the internet. Agents that call a model over
+	// HTTP (Ollama, vLLM) cannot run in this mode.
+	NetworkNone NetworkMode = "none"
 )
+
+// ErrInvalidNetworkFlag is returned by ResolveNetworkMode for a
+// -sandbox-network value that names no mode.
+var ErrInvalidNetworkFlag = errors.New("sandbox network: must be \"host\" or \"none\"")
+
+// ResolveNetworkMode turns the operator's -sandbox-network value into a mode.
+//
+// An explicit value always wins. An empty value means "pick the default for
+// this mesh": a worker on a private swarm only receives tasks from holders of
+// the swarm key, so it keeps the historical host networking; a worker on the
+// public mesh receives prompts from anyone, so it defaults to NetworkNone and
+// the operator must opt back in to host networking knowingly.
+func ResolveNetworkMode(flagValue string, privateSwarm bool) (NetworkMode, error) {
+	switch flagValue {
+	case "":
+		if privateSwarm {
+			return NetworkHost, nil
+		}
+		return NetworkNone, nil
+	case string(NetworkHost):
+		return NetworkHost, nil
+	case string(NetworkNone):
+		return NetworkNone, nil
+	default:
+		return "", fmt.Errorf("%w, got %q", ErrInvalidNetworkFlag, flagValue)
+	}
+}
 
 // defaultGPUDevice is the CDI device string used when the host exposes an
 // NVIDIA GPU. It grants the container every GPU on the machine with no VRAM
@@ -141,12 +176,13 @@ func BuildRunArgs(spec SandboxSpec) ([]string, error) {
 	args := []string{"run", "--rm", "--name", spec.ContainerName}
 
 	// Closed switch, no default fallthrough to a permissive mode: an
-	// unrecognised NetworkMode is an error. When S4 adds NetworkNone this
-	// switch is where it lands, and the golden tests below force the change
-	// to be reviewed rather than absorbed silently.
+	// unrecognised NetworkMode is an error. The golden tests pin each mode's
+	// argv so a change here is reviewed rather than absorbed silently.
 	switch spec.Network {
 	case NetworkHost:
 		args = append(args, "--network", "host")
+	case NetworkNone:
+		args = append(args, "--network", "none")
 	default:
 		return nil, fmt.Errorf("network mode %q: %w", spec.Network, ErrUnsupportedNetwork)
 	}

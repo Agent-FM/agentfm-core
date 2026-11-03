@@ -45,11 +45,18 @@ ENV PYTHONUNBUFFERED=1
 
 ## Container security caveat
 
-Workers launch containers with `--network host` so the agent can reach a local Ollama at `127.0.0.1:11434`, vLLM, or other loopback services. The flip side: **the agent container has full access to the worker host's network namespace**, including loopback (Ollama, internal admin endpoints, cloud metadata at `169.254.169.254`).
+`-sandbox-network` picks the task container's network namespace:
 
-Treat agent images as **trusted code**; review their Dockerfiles before running. The worker prints a startup warning to this effect.
+| Value | What the agent can reach | Default when |
+|---|---|---|
+| `none` | Nothing: only the container's own loopback. No host services, no cloud metadata, no internet. | the worker is on the **public mesh** (no `-swarmkey`) |
+| `host` | Everything the worker host can: loopback (Ollama at `127.0.0.1:11434`, vLLM, internal admin endpoints), cloud metadata at `169.254.169.254`, the LAN and the internet. | the worker is on a **private swarm** (`-swarmkey` set) |
 
-If you need a stricter sandbox, run the worker inside a VM or a hardware-isolated container runtime.
+Agents that call a model over HTTP, like the reference `sick-leave-generator` (Ollama via `host.containers.internal:11434`), need `-sandbox-network host`.
+
+**Why the public mesh defaults to `none`:** a reviewed, trusted agent image is not enough. The prompt that drives the agent comes from whichever peer dispatched the task, and on the public mesh that is anyone. A prompt-injected agent with host networking can be steered into calling your loopback services or your cloud metadata endpoint. Before passing `-sandbox-network host` on the public mesh, make sure nothing on this machine's network is reachable that a stranger should not use, or move the worker to a [private swarm](private-swarms.md).
+
+An egress allowlist (reach the model endpoint and nothing else) is planned and not implemented yet. Until then, if you need host networking for untrusted prompts, run the worker inside a VM or a hardware-isolated container runtime.
 
 ## Local sandbox testing
 
@@ -61,7 +68,7 @@ agentfm -mode test -agentdir "./my-agent" -image "my-agent:v1" \
   -prompt "Write a haiku about compilers."
 ```
 
-`-mode test` runs the same Podman command and prints the same `--network host` warning, but bypasses libp2p entirely. Useful for validating an agent image on a developer laptop before publishing it to the mesh.
+`-mode test` runs the same Podman command with the same `-sandbox-network` default (so `none` unless you pass `-swarmkey` or `-sandbox-network host`), but bypasses libp2p entirely. Useful for validating an agent image on a developer laptop before publishing it to the mesh.
 
 ## Capacity tuning
 

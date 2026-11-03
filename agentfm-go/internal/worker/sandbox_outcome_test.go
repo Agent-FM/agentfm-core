@@ -28,6 +28,7 @@ func newSandboxTestWorker(t *testing.T, image string) *Worker {
 	return &Worker{config: Config{
 		ImageName: image,
 		ModelName: "test-model",
+		Network:   NetworkHost,
 		AgentDir:  t.TempDir(), // no .env inside, so none is passed through
 	}}
 }
@@ -261,6 +262,7 @@ func TestRunLocalTest_PropagatesSandboxFailure(t *testing.T) {
 		AgentDir:  agentDir,
 		ImageName: "agentfm-test:v1",
 		ModelName: "test-model",
+		Network:   NetworkHost,
 	}, "prompt")
 
 	if err == nil {

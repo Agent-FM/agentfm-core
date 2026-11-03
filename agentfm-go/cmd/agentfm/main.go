@@ -84,6 +84,11 @@ func main() {
 	taskMemory := flag.String("task-memory", "", "Per-task memory ceiling, e.g. 512m or 2g (swap disabled at the same value). Empty = unlimited")
 	taskPids := flag.Int64("task-pids-limit", worker.DefaultPidsLimit, "Per-task process/thread ceiling. 0 = unlimited")
 
+	// Task container network namespace (roadmap S4). Empty picks the default
+	// for the mesh this worker joins: none on the public mesh, where any peer
+	// can send a prompt, host on a private swarm.
+	sandboxNetwork := flag.String("sandbox-network", "", "Task container network: 'host' or 'none'. Default: none on the public mesh, host with -swarmkey")
+
 	// Verifiable-mesh roles (v1.3). Plain workers default off; the
 	// flag is wired here so an operator can opt a worker into the
 	// witness role explicitly. The actual handler registration lives
@@ -124,6 +129,9 @@ func main() {
 		// worker would then run with no ceilings while its documentation
 		// promised otherwise.
 		validateOperatorConfig(&cfg, *taskCPUs, *taskMemory, *taskPids)
+		if err := resolveSandboxNetwork(&cfg, *sandboxNetwork, *swarmKey); err != nil {
+			pterm.Fatal.Printfln("❌ Invalid config: -sandbox-network: %v", err)
+		}
 	}
 
 	ctx := context.Background()
@@ -179,6 +187,19 @@ func main() {
 		pterm.Error.Println("Invalid mode. Use 'boss', 'worker', 'relay', 'witness', 'api', 'test', or 'genkey'.")
 		os.Exit(1)
 	}
+}
+
+// resolveSandboxNetwork sets cfg.Network from the -sandbox-network flag and
+// whether the worker joins a private swarm. Like the -task-* ceilings it writes
+// through a pointer, and limits_wiring_test.go pins that the result reaches the
+// container argv.
+func resolveSandboxNetwork(cfg *worker.Config, flagValue, swarmKeyPath string) error {
+	mode, err := worker.ResolveNetworkMode(flagValue, swarmKeyPath != "")
+	if err != nil {
+		return err
+	}
+	cfg.Network = mode
+	return nil
 }
 
 // validateOperatorConfig bounds every operator-supplied limit up front.
