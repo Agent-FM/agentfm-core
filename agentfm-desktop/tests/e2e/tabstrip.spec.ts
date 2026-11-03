@@ -1,52 +1,22 @@
-import { test, expect, _electron as electron, ElectronApplication, Page } from '@playwright/test';
-import path from 'node:path';
+import { test, expect, Page } from '@playwright/test';
+import { launchApp, navLink, Launched } from './launch';
 
-let app: ElectronApplication;
+let launched: Launched;
 let page: Page;
 
 test.beforeAll(async () => {
-  app = await electron.launch({
-    args: ['.'],
-    env: {
-      ...process.env,
-      AGENTFM_BIN: path.resolve(__dirname, '..', '..', '..', 'agentfm-core', 'agentfm-go', 'agentfm'),
-    },
-    cwd: path.resolve(__dirname, '..', '..'),
-  });
-  page = await app.firstWindow();
-  await page.waitForLoadState('domcontentloaded');
-
-  await page.waitForFunction(
-    async () => {
-      const api = (window as unknown as { api?: { backend: { health: () => Promise<{ ok: boolean }> } } }).api;
-      if (!api) return false;
-      try {
-        const r = await api.backend.health();
-        return r.ok === true;
-      } catch {
-        return false;
-      }
-    },
-    { timeout: 30000, polling: 500 },
-  );
-
-  const wizard = page.locator('h2:has-text("New project")');
-  if (await wizard.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await page.locator('input[placeholder*="Team Mesh"]').fill('TabStrip Test');
-    await page.locator('button:has-text("Create project")').click();
-    await wizard.waitFor({ state: 'hidden', timeout: 15000 });
-  }
+  launched = await launchApp({ project: 'TabStrip Test' });
+  page = launched.page;
 });
 
 test.afterAll(async () => {
-  await app?.close();
+  await launched?.close();
 });
 
-test('clicking each tab navigates and highlights', async () => {
-  for (const label of ['Chat', 'Activity', 'Status', 'Radar']) {
-    await page.locator(`a:has-text("${label}")`).click();
-    const active = page.locator(`a:has-text("${label}")`).first();
-    await expect(active).toHaveClass(/font-semibold/);
+test('clicking each navigator row navigates and highlights', async () => {
+  for (const label of ['Chat', 'Activity', 'Status', 'Mesh Radar']) {
+    await navLink(page, label).click();
+    await expect(navLink(page, label)).toHaveAttribute('aria-current', 'page');
   }
 });
 
@@ -55,12 +25,10 @@ test('Cmd+1..4 navigate through tabs', async () => {
     { key: 'Meta+2', label: 'Chat' },
     { key: 'Meta+3', label: 'Activity' },
     { key: 'Meta+4', label: 'Status' },
-    { key: 'Meta+1', label: 'Radar' },
+    { key: 'Meta+1', label: 'Mesh Radar' },
   ];
   for (const c of cases) {
     await page.keyboard.press(c.key);
-    await page.waitForTimeout(80);
-    const active = page.locator(`a:has-text("${c.label}")`).first();
-    await expect(active).toHaveClass(/font-semibold/);
+    await expect(navLink(page, c.label)).toHaveAttribute('aria-current', 'page');
   }
 });

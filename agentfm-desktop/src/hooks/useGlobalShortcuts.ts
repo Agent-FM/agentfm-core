@@ -13,7 +13,9 @@ export function useGlobalShortcuts() {
   useHotkeys('meta+3, ctrl+3', () => navigate('/activity'));
   useHotkeys('meta+4, ctrl+4', () => navigate('/status'));
 
-  useHotkeys('mod+,', (e) => {
+  // 'comma', not ',': react-hotkeys-hook splits hotkey lists on ',' so
+  // 'mod+,' never matches.
+  useHotkeys('mod+comma', (e) => {
     e.preventDefault();
     useUIStore.getState().openSettingsSheet();
   }, []);

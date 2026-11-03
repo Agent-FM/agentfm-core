@@ -63,6 +63,33 @@ if ! curl -fSL "$APP_URL" -o "$TMP_APP"; then
     exit 1
 fi
 
+# Verify the download against the release's SHA256SUMS before it goes
+# anywhere near sudo. Releases published before checksums existed have no
+# SHA256SUMS: we warn and continue, unless AGENTFM_REQUIRE_CHECKSUM=1.
+SUMS_URL="https://github.com/${REPO}/releases/download/${LATEST_VERSION}/SHA256SUMS"
+if curl -fsSL "$SUMS_URL" -o "${TMP_DIR}/SHA256SUMS" 2>/dev/null; then
+    EXPECTED=$(awk -v f="$APP_FILENAME" '$2 == f || $2 == "*"f { print $1 }' "${TMP_DIR}/SHA256SUMS")
+    if command -v sha256sum >/dev/null 2>&1; then
+        ACTUAL=$(sha256sum "$TMP_APP" | awk '{ print $1 }')
+    else
+        ACTUAL=$(shasum -a 256 "$TMP_APP" | awk '{ print $1 }')
+    fi
+    if [ -z "$EXPECTED" ] || [ "$EXPECTED" != "$ACTUAL" ]; then
+        echo "${RED}❌ Checksum verification failed for ${APP_FILENAME}. Not installing.${NC}"
+        echo "   expected: ${EXPECTED:-<not listed in SHA256SUMS>}"
+        echo "   actual:   ${ACTUAL}"
+        rm -rf "$TMP_DIR"
+        exit 1
+    fi
+    echo "🔐 Checksum verified (sha256 ${ACTUAL})"
+elif [ "${AGENTFM_REQUIRE_CHECKSUM:-0}" = "1" ]; then
+    echo "${RED}❌ Release ${LATEST_VERSION} has no SHA256SUMS and AGENTFM_REQUIRE_CHECKSUM=1. Not installing.${NC}"
+    rm -rf "$TMP_DIR"
+    exit 1
+else
+    echo "⚠️  ${YELLOW}Release ${LATEST_VERSION} publishes no SHA256SUMS; the download could not be verified.${NC}"
+fi
+
 chmod +x "$TMP_APP"
 
 echo "🔑 Moving binaries to ${INSTALL_DIR} (may require sudo password)..."
