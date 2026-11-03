@@ -86,8 +86,11 @@ Three new HTTP endpoints land in `agentfm-core` to support this UI:
 
 ## Tech stack
 
-Electron 30 · React 18 · TypeScript 5 · Vite 5 · TailwindCSS 3 · Framer Motion 11 ·
-TanStack Query 5 · Zustand 4 · react-hook-form + zod · sonner · vitest · Playwright.
+Electron 45 · React 18 · React Router 7 · TypeScript 5 · Vite 7 · TailwindCSS 3 · Framer Motion 11 ·
+TanStack Query 5 · Zustand 4 · sonner · vitest · Playwright.
+
+Electron 45 needs macOS 13 or later and 64-bit Windows or Linux. Since Electron 42, `npm install`
+no longer downloads the Electron binary; it is fetched on the first `npm run dev` or `npm run test:e2e`.
 
 ## License
 
