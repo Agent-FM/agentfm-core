@@ -486,6 +486,24 @@ ICONS = {
         "...d........d...", ".oooo......oooo.", ".oaao......oaao.", ".oooo.dddd.oooo.",
         "................", "................", "................", "................",
     ],
+    "people": [
+        "................", ".........ooo....", "...aaa..ooooo...", "..aaaaa.ooooo...",
+        "..aaaaa.ooooo...", "..aaaaa..ooo....", "...aaa..........", "........ooooooo.",
+        ".aaaaaaaoooooooo", "aaaaaaaaaooooooo", "aaaaaaaaaooooooo", "aaaaaaaaaooooooo",
+        "aaaaaaaaa.......", "................", "................", "................",
+    ],
+    "scale": [
+        "................", ".......oo.......", ".......oo.......", ".oooooooooooooo.",
+        ".d.....oo.....d.", "d.d....oo....d.d", "d..d...oo...d..d", "aaaaa..oo..aaaaa",
+        ".aaa...oo...aaa.", ".......oo.......", ".......oo.......", ".......oo.......",
+        "....oooooooo....", "....oooooooo....", "................", "................",
+    ],
+    "chat": [
+        "................", "................", ".oooooooooooooo.", ".oaaaaaaaaaaaao.",
+        ".oaddddddddaaao.", ".oaaaaaaaaaaaao.", ".oaddddddaaaaao.", ".oaaaaaaaaaaaao.",
+        ".oooooooooooooo.", "...oaao.........", "...oao..........", "...oo...........",
+        "................", "................", "................", "................",
+    ],
 }
 ICON_COLORS = {"o": "#f57c1f", "a": "#fbbf24", "d": "#8b93a1", "w": "#fff4d6"}
 

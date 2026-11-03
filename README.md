@@ -7,8 +7,8 @@
 
 <h3>Run your AI agents on machines you already own, as one private network.</h3>
 
-Package an agent as a container, drop it on the mesh, and call it from a desktop app, `curl`, or any OpenAI SDK.<br>
-Peer to peer, end-to-end encrypted, no cloud account, no data leaving your machines.
+Package an agent as a container, run it on any Mac or Linux box with spare capacity, and send it work from a desktop app, a `curl` one-liner, or any OpenAI SDK.<br>
+Traffic is end-to-end encrypted, there is no cloud account, and on a private swarm your prompts and files only travel between machines in your swarm.
 
 [![Release](https://img.shields.io/github/v/release/Agent-FM/agentfm-core?style=flat-square&label=release&labelColor=0b0d12&color=f0a12e)](https://github.com/Agent-FM/agentfm-core/releases)
 [![Go tests](https://img.shields.io/github/actions/workflow/status/Agent-FM/agentfm-core/go-test.yml?branch=main&style=flat-square&label=go%20tests&labelColor=0b0d12)](https://github.com/Agent-FM/agentfm-core/actions/workflows/go-test.yml)
@@ -17,7 +17,7 @@ Peer to peer, end-to-end encrypted, no cloud account, no data leaving your machi
 [![License](https://img.shields.io/badge/license-Apache_2.0-7d8590?style=flat-square&labelColor=0b0d12)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/Agent-FM/agentfm-core?style=flat-square&labelColor=0b0d12&color=f0a12e)](https://github.com/Agent-FM/agentfm-core/stargazers)
 
-**[5-minute quest](#-the-5-minute-quest)** · **[How it works](#-how-it-works)** · **[What you can build](#-what-you-can-build)** · **[Python SDK](#-python-sdk)** · **[Docs](#-docs)** · **[agentfm.net](https://agentfm.net)**
+**[Who it's for](#-who-its-for)** · **[5-minute quest](#-the-5-minute-quest)** · **[How it works](#-how-it-works)** · **[Compare](#-how-it-compares)** · **[Python SDK](#-python-sdk)** · **[Docs](#-docs)** · **[Community](#-community)** · **[agentfm.net](https://agentfm.net)**
 
 </div>
 
@@ -27,12 +27,25 @@ Peer to peer, end-to-end encrypted, no cloud account, no data leaving your machi
 
 You probably have more compute than you think. The laptop you're reading this on. The desktop with a GPU that sits idle most of the day. A homelab box, a teammate's workstation, the old server in the corner. Meanwhile your agents run on someone else's cloud, billed per token, with your prompts and files leaving the building.
 
-AgentFM turns those machines into **one mesh**. Install one binary (or the desktop app) on each machine and they find each other: instantly over mDNS on the same Wi-Fi, through a relay lighthouse everywhere else, even behind NAT. Agents run in throwaway Podman sandboxes on whichever machine has room, and you talk to the whole mesh as if it were one OpenAI endpoint.
+AgentFM turns those machines into **one mesh**. Install one binary (or the desktop app) on each machine and they find each other: instantly over mDNS on the same Wi-Fi, through a relay lighthouse everywhere else, even behind NAT. Each agent runs in a throwaway Podman sandbox on one machine that has room, and you talk to the whole mesh as if it were one OpenAI endpoint.
 
 - **Your hardware, pooled.** Workers report CPU, GPU, RAM and queue depth every ~2 s, and each task goes to the least-loaded machine that can run it.
-- **Your data stays on your mesh.** Tasks go peer to peer over encrypted libp2p streams. Add a swarm key and only your own machines can even see the network.
+- **Your data stays on your machines, on a private swarm.** Tasks go peer to peer over encrypted libp2p streams. Add a swarm key and only your own machines can even see the network. On the public mesh, the worker that runs a task sees its prompt.
 - **Your code already works.** The gateway speaks the OpenAI wire format, so LangChain, LlamaIndex, LiteLLM, Open WebUI and the `openai` SDKs just need a new `base_url`.
 - **Trust without a middleman.** Every rating is Ed25519-signed and lands in a per-peer, append-only Merkle log. Reputation is computed from that log, and peers caught rewriting history are blocked mesh-wide. No allow-lists, no central server, no blockchain. → [How trust works](docs/trust.md)
+
+## <img src=".github/assets/icons/people.svg" width="28" height="28" alt=""> Who it's for
+
+- **Small teams with idle hardware** who want AI agents running on their own machines: no per-token bill, and no prompts sent to an AI provider.
+- **Developers already using the OpenAI SDK** who want to point existing code at their own hardware by changing the base URL.
+- **Agent builders** who want to publish an agent on the public mesh and let its reputation grow from signed, verifiable ratings.
+
+| Use case | How it works with AgentFM |
+|---|---|
+| **A team assistant on one shared machine** | A Mac running Ollama hosts an HR or docs agent. Colleagues send requests from the desktop app and get files back. See [`sick-leave-generator`](agent-example/sick-leave-generator). |
+| **Batch work across every idle machine** | `client.tasks.scatter` spreads hundreds of prompts over all available workers with failover and retry. See [`02_batch_scatter_gather.py`](agentfm-python/examples/02_batch_scatter_gather.py). |
+| **Sharing the one GPU in the office** | One machine runs an image-generation agent; everyone else dispatches to it. See [`image-generator`](agent-example/image-generator). |
+| **Existing apps, new hardware** | Anything that speaks the OpenAI API can call the gateway at `/v1/chat/completions`. See [OpenAI-compatible API](docs/openai.md). |
 
 ## <img src=".github/assets/icons/play.svg" width="28" height="28" alt=""> The 5-minute quest
 
@@ -162,58 +175,23 @@ sequenceDiagram
 Wire protocols and internals: [docs/architecture.md](docs/architecture.md).
 </details>
 
-## <img src=".github/assets/icons/blocks.svg" width="28" height="28" alt=""> What you can build
+## <img src=".github/assets/icons/scale.svg" width="28" height="28" alt=""> How it compares
 
-<table>
-<tr>
-<td width="50%" valign="top">
+| | Cloud AI API | A model server on one machine (e.g. Ollama) | **AgentFM** |
+|---|---|---|---|
+| Where it runs | The provider's servers | One machine | Any machines you add to the mesh |
+| Where your prompts go | To the provider | Stay on that machine | Private swarm: only machines in your swarm. Public mesh: the worker that runs the task |
+| Unit of work | A model call | A model call | A whole agent in a container: its own code and tools, with files returned |
+| OpenAI SDK compatible | Yes | Yes | Yes |
+| Shares hardware across people | — | No | Yes, routed by live CPU/GPU/RAM load |
+| Cost | Per token | Your hardware | Your hardware |
 
-**Pool your team's GPUs**<br>
-Run a worker on every workstation. Tasks go to whichever box is free, and nobody has to SSH anywhere.<br>
-→ [Run a worker](docs/worker.md)
+AgentFM does not replace a model server: a worker usually runs one (Ollama, vLLM) next to its agent.
 
-</td>
-<td width="50%" valign="top">
-
-**A private, invite-only mesh**<br>
-`agentfm -mode genkey`, then start every node with `-swarmkey`. Machines without the key can't even see the network.<br>
-→ [Private swarms](docs/private-swarms.md)
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-**Local models behind the OpenAI API**<br>
-Point LangChain, LiteLLM, Continue or Open WebUI at your mesh and keep your prompts on your own hardware.<br>
-→ [OpenAI-compatible API](docs/openai.md)
-
-</td>
-<td valign="top">
-
-**Fan out batch jobs**<br>
-`tasks.scatter` sends hundreds of prompts across workers with failover. Failures come back as results, not exceptions.<br>
-→ [Python SDK](agentfm-python/README.md#batch-dispatch-scatter-gather)
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-**Share an agent with the world**<br>
-Publish a container on the public mesh. Signed ratings follow it, so good agents earn reputation.<br>
-→ [Trust & verification](docs/trust.md)
-
-</td>
-<td valign="top">
-
-**Audit who did what**<br>
-Every rating is signed and provable with Merkle inclusion proofs. Check any peer with `agentfm reputation show <peer_id>`.<br>
-→ [Security model](docs/security.md)
-
-</td>
-</tr>
-</table>
+**What AgentFM is not:**
+- **Not a way to split one model across machines.** Each task runs on a single worker; the mesh spreads *many* tasks, not one big one.
+- **Not a paid compute marketplace.** Nobody pays anybody; reputation is the only currency.
+- **Not private on the public mesh.** A task's prompt is visible to the worker that runs it. For confidential work, use a [private swarm](docs/private-swarms.md).
 
 ## <img src=".github/assets/icons/monitor.svg" width="28" height="28" alt=""> Desktop app
 
@@ -287,11 +265,11 @@ AgentFM is a monorepo: the Go node in [`agentfm-go/`](agentfm-go), the Electron 
 
 - Start with an issue labelled [**good first issue**](https://github.com/Agent-FM/agentfm-core/labels/good%20first%20issue), or build a new example agent.
 - Branch as `feature/…`, `bugfix/…` or `docs/…`, and read [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/development.md) to build from source.
-- Found a vulnerability? Follow [SECURITY.md](SECURITY.md) instead of opening an issue. Everyone here follows the [Code of Conduct](CODE_OF_CONDUCT.md).
+- Everyone here follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 <br>
 
-## 💬 Community
+## <img src=".github/assets/icons/chat.svg" width="28" height="28" alt=""> Community
 
 - **Questions, ideas, show-and-tell:** [GitHub Discussions](https://github.com/Agent-FM/agentfm-core/discussions)
 - **Bugs and feature requests:** [Issues](https://github.com/Agent-FM/agentfm-core/issues)
