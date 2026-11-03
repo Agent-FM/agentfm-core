@@ -43,7 +43,7 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@tanstack/react-query": "^5.105.0",
     "electron-store": "^8.2.0",
-    "framer-motion": "^11.2.12",
+    "framer-motion": "^14.9.0",
     "lucide-react": "^0.460.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
