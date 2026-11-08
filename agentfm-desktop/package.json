@@ -49,7 +49,7 @@
     "react-dom": "^18.3.1",
     "react-hotkeys-hook": "^5.3.3",
     "react-router-dom": "^7.18.5",
-    "sonner": "^1.5.0",
+    "sonner": "^2.0.8",
     "zustand": "^5.0.16"
   },
   "build": {
